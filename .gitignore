@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+ENV/
+env/
+.venv/
+
+# SQLite database
+*.sqlite
+
+# Environment variables
+.env
+
+# Data exports and cache
+db_export/
+scripts/data-collection/contexts/
+*.csv
+
+# Jupyter/IPython
+.ipynb_checkpoints/
+
+# OS files
+.DS_Store
+Thumbs.db 
