@@ -34,7 +34,7 @@ import json
 import signal
 from typing import List
 from enrich_with_openai import enrich_with_openai, save_enrichment
-from prepare_context import prepare_context, format_context, SubnetContext, get_all_netuids, compute_context_hash
+from prepare_context import prepare_context_with_fallback, format_context, SubnetContext, get_all_netuids, compute_context_hash
 from models import SubnetMeta
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -78,7 +78,7 @@ def process_subnet(netuid: int, force: bool = False) -> bool:
         print(f"{'='*50}")
         
         # Get context
-        context = prepare_context(netuid)
+        context = prepare_context_with_fallback(netuid)
         if not context:
             print(f"Failed to prepare context for subnet {netuid}")
             return False

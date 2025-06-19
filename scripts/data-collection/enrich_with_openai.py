@@ -50,7 +50,7 @@ sys.path.insert(0, str(project_root))
 
 from models import ScreenerRaw, SubnetMeta
 from config import DB_URL, OPENAI_KEY, OPENAI_MODEL, CATEGORY_CHOICES, ALLOW_MODEL_KNOWLEDGE, MIN_CONTEXT_TOKENS, MODEL_ONLY_MAX_CONF, PRIMARY_CATEGORIES, normalize_tags
-from prepare_context import prepare_context, format_context, SubnetContext, get_all_netuids, compute_context_hash
+from prepare_context import prepare_context_with_fallback, format_context, SubnetContext, get_all_netuids, compute_context_hash
 
 # Initialize OpenAI client
 client = OpenAI(api_key=OPENAI_KEY)
@@ -287,6 +287,16 @@ def enrich_with_openai(context: SubnetContext) -> Optional[Dict[str, Any]]:
             result["confidence"] = max(current_confidence - 5, 0)
             print(f"⚠️  Provenance penalty: confidence reduced by 5 (model-derived category)")
         
+        # Apply thin-context penalty for low context with model provenance
+        if context.token_count < 100 and provenance.get("primary_category") == "model":
+            current_confidence = result.get("confidence", 0)
+            result["confidence"] = max(current_confidence - 15, 0)  # Additional penalty for thin context
+            print(f"⚠️  Thin-context penalty: confidence reduced by 15 (low context + model provenance)")
+        
+        # Flag for manual review if confidence is low after penalties
+        if result.get("confidence", 0) <= 70:
+            print(f"🔴 FLAG: Low confidence ({result.get('confidence', 0)}) - consider manual review")
+        
         # Add context token count
         result["context_tokens"] = context.token_count
         
@@ -359,7 +369,7 @@ def main():
                 print(f"Failed to load context from {args.context_file}")
                 continue
         else:
-            context = prepare_context(netuid)
+            context = prepare_context_with_fallback(netuid)
             if not context:
                 print(f"Failed to prepare context for subnet {netuid}")
                 continue

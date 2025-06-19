@@ -51,7 +51,7 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from models import ScreenerRaw
-from config import DB_URL
+from config import DB_URL, MIN_CONTEXT_TOKENS
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
@@ -223,6 +223,54 @@ def get_all_netuids() -> List[int]:
     with Session(engine) as session:
         return [row.netuid for row in session.query(ScreenerRaw).all()]
 
+def fetch_github_issues(owner: str, repo: str, max_issues: int = 5) -> Optional[str]:
+    """Fetch recent GitHub issues as fallback context."""
+    try:
+        # Use GitHub API to get recent issues
+        api_url = f"https://api.github.com/repos/{owner}/{repo}/issues?state=open&per_page={max_issues}"
+        response = requests.get(api_url, timeout=10)
+        
+        if response.status_code == 200:
+            issues = response.json()
+            if issues:
+                # Extract titles and bodies from issues
+                issue_texts = []
+                for issue in issues:
+                    title = issue.get('title', '')
+                    body = issue.get('body', '')
+                    if title or body:
+                        issue_texts.append(f"ISSUE: {title}\n{body}")
+                
+                if issue_texts:
+                    combined_text = "\n\n".join(issue_texts)
+                    return clean_text(combined_text[:MAX_README_CHARS])
+    except Exception as e:
+        print(f"Error fetching GitHub issues: {e}")
+    return None
+
+def fetch_wayback_snapshot(url: str) -> Optional[str]:
+    """Try to fetch content from Wayback Machine as fallback."""
+    try:
+        # Try to get the latest snapshot from Wayback Machine
+        wayback_url = f"https://web.archive.org/web/{url}"
+        response = requests.get(wayback_url, timeout=15, headers=get_headers())
+        
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Remove unwanted elements
+            for element in soup(['script', 'style', 'nav', 'header', 'footer', 'iframe', 'noscript']):
+                element.decompose()
+            
+            text = soup.get_text(separator=' ', strip=True)
+            text = clean_text(text)
+            
+            if text and len(text) > 100:  # Only return if we got meaningful content
+                return text[:MAX_WEBSITE_CHARS]
+    except Exception as e:
+        print(f"Error fetching Wayback snapshot: {e}")
+    return None
+
 def prepare_context(netuid: int) -> Optional[SubnetContext]:
     """Prepare context for a subnet."""
     engine = create_engine(DB_URL)
@@ -365,6 +413,48 @@ def save_context(context: SubnetContext, output_file: Optional[str] = None) -> N
             session.commit()
             print(f"Updated context hash in database for subnet {context.netuid}")
 
+def prepare_context_with_fallback(netuid: int) -> Optional[SubnetContext]:
+    """Prepare context with fallback strategies for zero-token cases."""
+    context = prepare_context(netuid)
+    
+    # If we got good context, return it
+    if context and context.token_count >= MIN_CONTEXT_TOKENS:
+        return context
+    
+    # If we have zero or very low context, try fallbacks
+    if context and context.token_count < MIN_CONTEXT_TOKENS:
+        print(f"⚠️  Low context for subnet {netuid} ({context.token_count} tokens), trying fallbacks...")
+        
+        # Try GitHub issues if we have a repo
+        if context.github_repo and "github.com" in context.github_repo:
+            parts = context.github_repo.rstrip("/").split("/")
+            if len(parts) >= 5:
+                owner, repo = parts[-2], parts[-1]
+                issues_content = fetch_github_issues(owner, repo)
+                if issues_content:
+                    print(f"✅ Found {len(issues_content)} characters from GitHub issues")
+                    context.readme_content = issues_content
+                    context.token_count = count_tokens(issues_content)
+                    context.relevant_ngrams = extract_relevant_ngrams(issues_content)
+                    return context
+        
+        # Try Wayback Machine if we have a website
+        if context.website_url:
+            wayback_content = fetch_wayback_snapshot(context.website_url)
+            if wayback_content:
+                print(f"✅ Found {len(wayback_content)} characters from Wayback Machine")
+                context.website_content = wayback_content
+                context.token_count = count_tokens(wayback_content)
+                context.relevant_ngrams = extract_relevant_ngrams(wayback_content)
+                return context
+    
+    # If all fallbacks failed, return None (will be skipped)
+    if context and context.token_count < MIN_CONTEXT_TOKENS:
+        print(f"❌ All fallbacks failed for subnet {netuid}, skipping enrichment")
+        return None
+    
+    return context
+
 if __name__ == "__main__":
     import argparse
     
@@ -384,7 +474,7 @@ if __name__ == "__main__":
     # Process each netuid
     for netuid in netuids:
         print(f"\nProcessing subnet {netuid}...")
-        context = prepare_context(netuid)
+        context = prepare_context_with_fallback(netuid)
         if context:
             print(f"Prepared context ({context.token_count} estimated tokens):")
             print("\n" + "="*80)
