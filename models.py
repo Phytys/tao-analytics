@@ -1,6 +1,6 @@
 from sqlalchemy import (
     create_engine, Column, Integer, String, Float,
-    JSON, Text, DateTime, func
+    JSON, Text, DateTime, func, Boolean
 )
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -15,6 +15,7 @@ class ScreenerRaw(Base):
     netuid = Column(Integer, primary_key=True)
     raw_json = Column(JSON)
     fetched_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
 
 class SubnetMeta(Base):
     __tablename__ = "subnet_meta"
@@ -24,12 +25,13 @@ class SubnetMeta(Base):
     # — fields to be filled by the LLM —
     tagline = Column(String)
     what_it_does = Column(Text)
-    category = Column(String)
-    tags = Column(String)   # comma-sep string to stay simple
+    primary_category = Column(String(32))  # New granular category
+    secondary_tags = Column(Text)  # CSV string of normalized tags
     confidence = Column(Float)
     context_hash = Column(String)  # MD5 hash of the context JSON
     context_tokens = Column(Integer, default=0)  # How much context was available
     provenance = Column(Text)  # JSON string tracking where each field came from
+    privacy_security_flag = Column(Boolean, default=False)  # Privacy/security focus flag
 
     # — timestamps —
     last_enriched_at = Column(DateTime)  # When LLM fields were last updated

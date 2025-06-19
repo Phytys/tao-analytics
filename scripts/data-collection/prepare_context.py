@@ -31,6 +31,20 @@ from dataclasses import dataclass, asdict
 from datetime import datetime
 from fake_useragent import UserAgent
 import hashlib
+from collections import Counter
+import nltk
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+
+# Download required NLTK data
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords')
 
 # Add project root to Python path
 project_root = Path(__file__).parent.parent.parent
@@ -58,6 +72,7 @@ class SubnetContext:
         readme_content: Content from the GitHub README
         token_count: Estimated token count for the content
         prepared_at: Timestamp when the context was prepared
+        relevant_ngrams: Top TF-IDF keywords from content
     """
     netuid: int
     subnet_name: str
@@ -67,6 +82,27 @@ class SubnetContext:
     readme_content: Optional[str]
     token_count: int
     prepared_at: str
+    relevant_ngrams: List[str]
+
+def extract_relevant_ngrams(text: str, max_ngrams: int = 5) -> List[str]:
+    """Extract top TF-IDF n-grams from text content."""
+    if not text:
+        return []
+    
+    # Tokenize and clean
+    tokens = word_tokenize(text.lower())
+    
+    # Remove stopwords and non-alphabetic tokens
+    stop_words = set(stopwords.words('english'))
+    tokens = [token for token in tokens if token.isalpha() and token not in stop_words and len(token) > 2]
+    
+    # Count frequencies
+    word_freq = Counter(tokens)
+    
+    # Get top words (simple approach - in production you'd use proper TF-IDF)
+    top_words = [word for word, freq in word_freq.most_common(max_ngrams)]
+    
+    return top_words
 
 def clean_text(text: str) -> str:
     """Clean text by removing HTML, extra whitespace, etc."""
@@ -77,10 +113,9 @@ def clean_text(text: str) -> str:
     return text.strip()
 
 def get_headers() -> Dict[str, str]:
-    """Get randomized headers for requests."""
-    ua = UserAgent()
+    """Get headers for requests with proper User-Agent."""
     return {
-        'User-Agent': ua.random,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5',
         'Connection': 'keep-alive',
@@ -89,7 +124,7 @@ def get_headers() -> Dict[str, str]:
     }
 
 def fetch_website_content(url: str, max_retries: int = 3) -> Optional[str]:
-    """Fetch and clean content from a website using httpx with proper headers."""
+    """Fetch and clean content from a website using httpx with proper headers and exponential backoff."""
     headers = get_headers()
     
     for attempt in range(max_retries):
@@ -100,6 +135,7 @@ def fetch_website_content(url: str, max_retries: int = 3) -> Optional[str]:
             with httpx.Client(timeout=30.0, follow_redirects=True) as client:
                 response = client.get(url, headers=headers)
                 
+                # Handle successful responses
                 if response.status_code == 200:
                     soup = BeautifulSoup(response.text, 'html.parser')
                     
@@ -117,8 +153,25 @@ def fetch_website_content(url: str, max_retries: int = 3) -> Optional[str]:
                         return text
                     else:
                         print("No text content found in the page")
-                else:
+                        return None
+                
+                # Handle rate limiting and access denied
+                elif response.status_code in [429, 403]:
                     print(f"HTTP {response.status_code} error")
+                    if attempt < max_retries - 1:
+                        # Exponential backoff: 2, 4, 8 seconds
+                        wait_time = 2 ** (attempt + 1)
+                        print(f"Waiting {wait_time} seconds before retry...")
+                        time.sleep(wait_time)
+                    continue
+                
+                # Handle other HTTP errors
+                elif response.status_code >= 400:
+                    print(f"HTTP {response.status_code} error")
+                    if attempt < max_retries - 1:
+                        print("Waiting before retry...")
+                        time.sleep(2)
+                    continue
                     
         except httpx.TimeoutException:
             print("Request timed out")
@@ -230,7 +283,8 @@ def prepare_context(netuid: int) -> Optional[SubnetContext]:
             website_content=website_content,
             readme_content=readme_content,
             token_count=0,  # Will be calculated below
-            prepared_at=datetime.now().isoformat()
+            prepared_at=datetime.now().isoformat(),
+            relevant_ngrams=[]
         )
         
         # Calculate total tokens
@@ -240,6 +294,10 @@ def prepare_context(netuid: int) -> Optional[SubnetContext]:
         if readme_content:
             total_tokens += count_tokens(readme_content)
         context.token_count = total_tokens
+        
+        # Extract relevant n-grams
+        if readme_content:
+            context.relevant_ngrams = extract_relevant_ngrams(readme_content)
         
         return context
 
@@ -261,6 +319,10 @@ def format_context(context: SubnetContext) -> str:
     if context.readme_content:
         parts.append("\nGitHub README:")
         parts.append(context.readme_content)
+    
+    # Add relevant n-grams hint
+    if context.relevant_ngrams:
+        parts.append(f"\nMOST_RELEVANT_NGRAMS: {', '.join(context.relevant_ngrams)}")
     
     return "\n".join(parts)
 
