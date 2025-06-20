@@ -10,6 +10,7 @@ This project provides a robust pipeline for collecting, enriching, and analyzing
 - **Batch processing**: Efficient processing of multiple subnets with cost control
 - **Quality control**: Confidence scoring and context token tracking
 - **Standardized categories**: Predefined taxonomy for consistent classification
+- **Interactive Dashboard**: Web-based Subnet Explorer with filtering and visualization
 
 ---
 
@@ -208,6 +209,23 @@ Export enriched data:
 ```bash
 python scripts/export_db_table.py --table subnet_meta
 ```
+
+### 8. **Run the Subnet Explorer Dashboard**
+
+```bash
+# 1. install deps & activate .env
+pip install -r requirements.txt
+export FLASK_APP=app.py
+
+# 2. launch Flask + Dash
+flask run          # → http://127.0.0.1:5000/dash/
+```
+
+The dashboard provides:
+- **Filterable subnet cards** with market cap, categories, and tags
+- **Interactive charts** showing subnet distribution and market cap by category
+- **Search functionality** across subnet names and tags
+- **Real-time KPI metrics** including privacy-focused subnet percentage
 
 ---
 
