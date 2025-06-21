@@ -1,8 +1,8 @@
-# TAO Analytics: Subnet Data Collection & Enrichment Pipeline
+# TAO Analytics: Bittensor Subnet Intelligence Platform
 
 ## Project Overview
 
-This project provides a robust pipeline for collecting, enriching, and analyzing data about Bittensor subnets. It fetches raw subnet data, scrapes additional context from websites and GitHub, and uses OpenAI's GPT-4 to generate structured insights with full provenance tracking, storing everything in a local SQLite database.
+A comprehensive data collection, enrichment, and analytics platform for Bittensor subnets. This project fetches raw subnet data from the TAO API, scrapes additional context from websites and GitHub, uses OpenAI's GPT-4 to generate structured insights with full provenance tracking, and provides a Tesla-inspired web dashboard for exploration and analysis.
 
 **Key Features:**
 - **Provenance-aware enrichment**: Tracks whether data comes from scraped context or model knowledge
@@ -10,7 +10,8 @@ This project provides a robust pipeline for collecting, enriching, and analyzing
 - **Batch processing**: Efficient processing of multiple subnets with cost control
 - **Quality control**: Confidence scoring and context token tracking
 - **Standardized categories**: Predefined taxonomy for consistent classification
-- **Interactive Dashboard**: Web-based Subnet Explorer with filtering and visualization
+- **Tesla-inspired Dashboard**: Modern web interface with filtering, charts, and expandable cards
+- **Real-time data**: Live market cap and performance metrics from TAO.app API
 
 ---
 
@@ -19,17 +20,35 @@ This project provides a robust pipeline for collecting, enriching, and analyzing
 ```
 tao-analytics/
 │
+├── app.py                    # Flask application with Dash integration
 ├── config.py                 # Configuration and API keys
 ├── models.py                 # Database schema definitions
 ├── requirements.txt          # Python dependencies
-├── tao.sqlite               # SQLite database (308KB, 154 lines)
+├── Procfile                  # Heroku deployment configuration
+├── tao.sqlite               # SQLite database (308KB, 124 subnets)
 ├── .gitignore               # Git ignore rules
 ├── README.md                # This file
-├── db_export/               # Exported CSV files
-│   ├── subnet_meta.csv      # Enriched subnet data
-│   ├── screener_raw.csv     # Raw screener data
-│   └── parsed_subnets.csv   # Parsed subnet information
-├── scripts/
+│
+├── static/                   # Static assets for landing page
+│   └── css/
+│       └── main.css         # Tesla-inspired landing page styles
+│
+├── templates/                # Flask templates
+│   └── index.html           # Tesla-inspired landing page
+│
+├── dash_app/                 # Dash dashboard application
+│   ├── __init__.py          # Dash app initialization
+│   ├── pages/
+│   │   └── explorer.py      # Subnet Explorer dashboard
+│   └── assets/
+│       ├── custom.css       # Dashboard styling
+│       └── subnet_placeholder.svg
+│
+├── services/                 # Service layer
+│   ├── db.py                # Database service with query helpers
+│   └── favicons.py          # Favicon download service (stub)
+│
+├── scripts/                  # Data processing scripts
 │   ├── __init__.py
 │   ├── data-collection/
 │   │   ├── __init__.py
@@ -45,8 +64,45 @@ tao-analytics/
 │   ├── explore_raw_data.py          # Explore and parse raw data
 │   ├── export_db_table.py           # Export tables to CSV
 │   └── reset_db.py                  # Reset database schema
+│
+├── db_export/               # Exported CSV files
+│   ├── subnet_meta.csv      # Enriched subnet data
+│   ├── screener_raw.csv     # Raw screener data
+│   └── parsed_subnets.csv   # Parsed subnet information
+│
 └── venv/                    # Python virtual environment
 ```
+
+---
+
+## 🚀 Quick Start
+
+### Run the Subnet Explorer Dashboard
+
+```bash
+# 1. Install dependencies
+pip install -r requirements.txt
+
+# 2. Set up environment (create .env file)
+TAO_APP_API_KEY=your-tao-api-key
+OPENAI_API_KEY=your-openai-api-key
+
+# 3. Launch the application
+python app.py          # → http://127.0.0.1:5000/
+# or
+export FLASK_APP=app.py
+flask run              # → http://127.0.0.1:5000/dash/
+```
+
+**Dashboard Features:**
+- **Tesla-inspired design** with modern UI/UX
+- **Filterable subnet cards** with market cap, categories, and tags
+- **Interactive charts** (pie chart for counts, bar chart for market cap by category)
+- **Search functionality** across subnet names and tags
+- **Real-time KPI metrics** including privacy-focused subnet percentage
+- **Expandable cards** showing detailed descriptions and links
+- **Category-colored borders** matching chart colors
+- **Website & GitHub links** with proper URL formatting
 
 ---
 
@@ -54,9 +110,9 @@ tao-analytics/
 
 ### 1. **Fetch Screener Data**
 - `scripts/data-collection/fetch_screener.py`
-- Downloads subnet data from the TAO API and stores it in the `screener_raw` table
+- Downloads subnet data from the TAO.app API and stores it in the `screener_raw` table
 - Updates the `subnet_meta` table with subnet names and resets LLM fields if names change
-- **Current status**: 123 subnets loaded
+- **Current status**: 124 subnets loaded
 
 ### 2. **Prepare Context**
 - `scripts/data-collection/prepare_context.py`
@@ -81,7 +137,7 @@ tao-analytics/
 - **Cost control**: Configurable delays between API calls
 - **Progress tracking**: Real-time status updates and success/failure reporting
 - **Flexible input**: Process specific subnets, ranges, or all subnets
-- **Current status**: All 123 subnets successfully enriched
+- **Current status**: 94 subnets successfully enriched
 
 ### 5. **Explore and Export Data**
 - `scripts/inspect_raw_data.py`, `scripts/explore_raw_data.py`, `scripts/export_db_table.py`
@@ -97,7 +153,10 @@ tao-analytics/
 ## Database Schema
 
 ### **screener_raw**
-Stores raw JSON data for each subnet from the TAO API.
+Stores raw JSON data for each subnet from the TAO.app API, including:
+- Market cap, volume, and performance metrics
+- Website URLs and GitHub repositories
+- Owner information and contact details
 
 ### **subnet_meta**
 Stores subnet information and LLM-enriched fields:
@@ -108,12 +167,13 @@ Stores subnet information and LLM-enriched fields:
 | `subnet_name` | String | Subnet name from screener |
 | `tagline` | String | LLM-generated concise description |
 | `what_it_does` | Text | LLM-generated detailed purpose |
-| `category` | String | Standardized category (from predefined list) |
-| `tags` | String | Comma-separated relevant tags |
+| `primary_category` | String | Standardized category (from predefined list) |
+| `secondary_tags` | Text | Comma-separated relevant tags |
 | `confidence` | Float | LLM confidence score (0-100) |
 | `context_hash` | String | MD5 hash of context for change detection |
 | `context_tokens` | Integer | Number of context tokens available |
 | `provenance` | Text | JSON tracking data source for each field |
+| `privacy_security_flag` | Boolean | Privacy/security focus flag |
 | `last_enriched_at` | DateTime | When LLM fields were last updated |
 | `updated_at` | DateTime | Last database update |
 
@@ -128,11 +188,20 @@ Stores subnet information and LLM-enriched fields:
 TAO_APP_API_KEY = "your-tao-api-key"
 OPENAI_API_KEY = "your-openai-api-key"
 
-# Predefined subnet categories
-CATEGORY_CHOICES = [
-    "LLM-Inference", "LLM-Training", "Data", "GPU-Compute",
-    "BTC-Hash", "Trading", "Tooling", "Research", 
-    "Infrastructure", "Other"
+# Granular primary categories for power-user analytics
+PRIMARY_CATEGORIES = [
+    "LLM-Inference",
+    "LLM-Training / Fine-tune", 
+    "Data-Feeds & Oracles",
+    "Serverless-Compute",
+    "Hashrate-Mining (BTC / PoW)",
+    "Finance-Trading & Forecasting",
+    "Security & Auditing",
+    "Privacy / Anonymity",
+    "Media-Vision / 3-D",
+    "Science-Research (Non-financial)",
+    "Consumer-AI & Games",
+    "Dev-Tooling"
 ]
 
 # Enrichment policy
@@ -195,7 +264,7 @@ python scripts/data-collection/enrich_with_openai.py --netuid 1
 
 For all subnets (batch processing):
 ```bash
-python scripts/data-collection/batch_enrich.py --range 1 123 --delay 2
+python scripts/data-collection/batch_enrich.py --range 1 124 --delay 2
 ```
 
 ### 7. **Export Data**
@@ -210,22 +279,47 @@ Export enriched data:
 python scripts/export_db_table.py --table subnet_meta
 ```
 
-### 8. **Run the Subnet Explorer Dashboard**
+### 8. **Run the Dashboard**
 
 ```bash
-# 1. install deps & activate .env
-pip install -r requirements.txt
-export FLASK_APP=app.py
+# Direct Python execution
+python app.py          # → http://127.0.0.1:5000/
 
-# 2. launch Flask + Dash
-flask run          # → http://127.0.0.1:5000/dash/
+# Or using Flask CLI
+export FLASK_APP=app.py
+flask run              # → http://127.0.0.1:5000/dash/
 ```
 
-The dashboard provides:
-- **Filterable subnet cards** with market cap, categories, and tags
-- **Interactive charts** showing subnet distribution and market cap by category
-- **Search functionality** across subnet names and tags
-- **Real-time KPI metrics** including privacy-focused subnet percentage
+---
+
+## Dashboard Features
+
+### **Tesla-Inspired Design**
+- Modern, clean interface with smooth animations
+- Responsive design that works on all devices
+- Category-colored card borders matching chart colors
+- Hover effects and transitions
+
+### **Subnet Cards**
+- **Subnet number + name** (e.g., "64 Chutes")
+- **Category badges** with color coding
+- **Market cap display** (formatted as K/M TAO)
+- **Confidence scores** and privacy flags
+- **Tag chips** for easy identification
+- **Expandable descriptions** with "What it does" details
+- **Website & GitHub links** with proper URL formatting
+
+### **Interactive Features**
+- **Category filtering** dropdown
+- **Search functionality** across names and tags
+- **Chart toggles** (subnet count vs. market cap by category)
+- **Real-time KPI badges** (subnet count, categories, privacy %, confidence)
+- **Responsive grid layout** (3 columns on desktop, 2 on tablet, 1 on mobile)
+
+### **Data Sources**
+- **TAO.app API**: Real-time market cap, volume, and performance data
+- **OpenAI GPT-4**: AI-powered insights and categorization
+- **Web scraping**: Website and GitHub README content for context
 
 ---
 
@@ -242,9 +336,9 @@ The enrichment system tracks the source of each field:
 ```json
 {
   "tagline": "context",
-  "project_purpose": "context", 
-  "category": "model",
-  "tags": "both"
+  "what_it_does": "context", 
+  "primary_category": "model",
+  "secondary_tags": "both"
 }
 ```
 
@@ -268,18 +362,60 @@ The enrichment system tracks the source of each field:
 
 ## Current Status
 
-- **Total subnets processed**: 123
-- **Success rate**: 100%
+- **Total subnets**: 124
+- **Enriched subnets**: 94 (75.8%)
+- **Success rate**: 100% for processed subnets
 - **Database size**: 308KB
-- **Enrichment complete**: All subnets enriched with provenance tracking
-- **Categories distributed**: Across all 10 predefined categories
+- **Categories**: 12 granular categories with good distribution
 - **Quality**: Mix of high-confidence (context-rich) and lower-confidence (model-only) enrichments
+
+### **Category Distribution**
+- Science-Research (Non-financial): 17 subnets
+- Finance-Trading & Forecasting: 16 subnets
+- Serverless-Compute: 11 subnets
+- Security & Auditing: 9 subnets
+- LLM-Training / Fine-tune: 9 subnets
+- Media-Vision / 3-D: 8 subnets
+- LLM-Inference: 7 subnets
+- Data-Feeds & Oracles: 6 subnets
+- Consumer-AI & Games: 5 subnets
+- Dev-Tooling: 3 subnets
+- Hashrate-Mining (BTC / PoW): 2 subnets
+- Privacy / Anonymity: 1 subnet
 
 ---
 
-## Example Context JSON
+## Deployment
 
-See `scripts/data-collection/contexts/1.json` for an example of the context sent to OpenAI.
+### **Heroku Deployment**
+```bash
+# Set environment variables
+heroku config:set DATABASE_URL=$(heroku config:get DATABASE_URL)
+heroku config:set OPENAI_API_KEY=your-openai-key
+heroku config:set TAO_APP_API_KEY=your-tao-key
+
+# Deploy
+git push heroku main
+```
+
+### **Local Development**
+```bash
+# Development mode
+export FLASK_ENV=development
+python app.py
+
+# Production mode
+export FLASK_ENV=production
+gunicorn app:create_app
+```
+
+---
+
+## API Attribution
+
+This project uses data and services from:
+- **[TAO.app API](https://tao.app)**: Real-time subnet market data and metrics
+- **[OpenAI GPT-4](https://openai.com)**: AI-powered content analysis and enrichment
 
 ---
 
@@ -290,6 +426,8 @@ See `scripts/data-collection/contexts/1.json` for an example of the context sent
 - Hash-based caching prevents unnecessary API calls when context hasn't changed
 - Provenance tracking enables quality control and transparency
 - Batch processing includes cost control and progress tracking
+- URL formatting ensures proper links (adds https:// to domains without protocols)
+- Tesla-inspired design provides modern, professional user experience
 
 ---
 
