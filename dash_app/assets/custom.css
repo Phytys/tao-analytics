@@ -1,6 +1,325 @@
-.subt-chip {
-  font-size: 0.75rem;
+/* Tesla-inspired Dashboard Design */
+:root {
+    --primary-color: #171a20;
+    --secondary-color: #393c41;
+    --accent-color: #3e6ae1;
+    --text-primary: #171a20;
+    --text-secondary: #5c5e62;
+    --text-light: #ffffff;
+    --background-primary: #ffffff;
+    --background-secondary: #f4f4f4;
+    --border-color: #d0d1d2;
+    --shadow-light: 0 2px 4px rgba(0, 0, 0, 0.1);
+    --shadow-medium: 0 4px 12px rgba(0, 0, 0, 0.15);
+    --shadow-heavy: 0 8px 24px rgba(0, 0, 0, 0.2);
+    --border-radius: 8px;
+    --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* Category Colors - matching pie chart */
+.category-LLM-Inference { border-left: 4px solid #1f77b4; }
+.category-LLM-Training { border-left: 4px solid #ff7f0e; }
+.category-Data-Feeds { border-left: 4px solid #2ca02c; }
+.category-Serverless-Compute { border-left: 4px solid #d62728; }
+.category-Hashrate-Mining { border-left: 4px solid #9467bd; }
+.category-Finance-Trading { border-left: 4px solid #8c564b; }
+.category-Security { border-left: 4px solid #e377c2; }
+.category-Privacy { border-left: 4px solid #7f7f7f; }
+.category-Media-Vision { border-left: 4px solid #bcbd22; }
+.category-Science-Research { border-left: 4px solid #17becf; }
+.category-Consumer-AI { border-left: 4px solid #ff9896; }
+.category-Dev-Tooling { border-left: 4px solid #98df8a; }
+
+/* Card Styling */
+.subnet-card {
+    background: var(--background-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-light);
+    transition: var(--transition);
+    overflow: hidden;
+    min-height: 280px;
+    display: flex;
+    flex-direction: column;
+}
+
+.subnet-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-medium);
+}
+
+.subnet-card .card-header {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--background-secondary);
+}
+
+.subnet-card .card-body {
+    padding: 1rem;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.subnet-card .card-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+    line-height: 1.3;
+}
+
+.subnet-card .card-tagline {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    line-height: 1.4;
+    margin-bottom: 1rem;
+    flex-grow: 1;
+}
+
+.subnet-card .card-description {
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+    display: none;
+}
+
+.subnet-card.expanded .card-description {
+    display: block;
+}
+
+.subnet-card .card-footer {
+    padding: 1rem;
+    border-top: 1px solid var(--border-color);
+    background: var(--background-secondary);
+}
+
+/* Tag Chips */
+.subt-chip {
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: var(--accent-color);
+    color: var(--text-light);
+    border-radius: 12px;
+    padding: 0.25rem 0.5rem;
+    margin: 0.125rem;
+    display: inline-block;
+}
+
+/* Privacy Badge */
+.privacy-badge {
+    background: #dc3545;
+    color: var(--text-light);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    margin-left: 0.5rem;
+}
+
+/* Expand Button */
+.expand-btn {
+    background: none;
+    border: none;
+    color: var(--accent-color);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0.5rem 0;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.expand-btn:hover {
+    color: #2d5bb8;
+}
+
+.expand-btn svg {
+    transition: var(--transition);
+}
+
+.expand-btn.expanded svg {
+    transform: rotate(180deg);
+}
+
+/* Market Cap Display */
+.market-cap {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--accent-color);
+    margin-bottom: 0.5rem;
+}
+
+/* Confidence Score */
+.confidence-score {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+/* Expandable Details Styling */
+details {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 0.75rem;
+    margin: 0.5rem 0;
+    background: var(--background-secondary);
+}
+
+details summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--accent-color);
+    transition: var(--transition);
+}
+
+details summary:hover {
+    color: #2d5bb8;
+}
+
+details summary::-webkit-details-marker {
+    color: var(--accent-color);
+}
+
+details[open] summary {
+    margin-bottom: 0.5rem;
+}
+
+details p {
+    margin: 0;
+    line-height: 1.5;
+    color: var(--text-primary);
+}
+
+/* Link buttons in details */
+details .btn {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    text-decoration: none;
+    transition: var(--transition);
+}
+
+details .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-light);
+}
+
+details .btn-outline-primary {
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+}
+
+details .btn-outline-primary:hover {
+    background-color: var(--accent-color);
+    border-color: var(--accent-color);
+}
+
+details .btn-outline-secondary {
+    border-color: var(--text-secondary);
+    color: var(--text-secondary);
+}
+
+details .btn-outline-secondary:hover {
+    background-color: var(--text-secondary);
+    border-color: var(--text-secondary);
+    color: var(--text-light);
+}
+
+/* Card Improvements */
+.card {
+    transition: var(--transition);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-light);
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-medium);
+}
+
 .card-title {
-  font-weight: 600;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.card-text {
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+/* Header Styling */
+.dashboard-header {
+    background: var(--background-primary);
+    border-bottom: 1px solid var(--border-color);
+    padding: 1.5rem 0;
+    margin-bottom: 2rem;
+}
+
+.dashboard-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.dashboard-subtitle {
+    color: var(--text-secondary);
+    font-size: 1rem;
+}
+
+/* Filter Controls */
+.filter-controls {
+    background: var(--background-secondary);
+    padding: 1.5rem;
+    border-radius: var(--border-radius);
+    margin-bottom: 2rem;
+    border: 1px solid var(--border-color);
+}
+
+/* KPI Badges */
+.kpi-badge {
+    background: var(--accent-color);
+    color: var(--text-light);
+    font-weight: 600;
+    padding: 0.5rem 1rem;
+    border-radius: var(--border-radius);
+    margin-right: 1rem;
+    margin-bottom: 0.5rem;
+    display: inline-block;
+}
+
+/* Chart Container */
+.chart-container {
+    background: var(--background-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: var(--shadow-light);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .subnet-card {
+        min-height: 240px;
+    }
+    
+    .dashboard-title {
+        font-size: 1.5rem;
+    }
+    
+    .filter-controls {
+        padding: 1rem;
+    }
+    
+    details {
+        padding: 0.5rem;
+    }
 } 

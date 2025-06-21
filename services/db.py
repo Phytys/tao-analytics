@@ -9,7 +9,9 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, future=True)
 BASE_QUERY = """
 SELECT sm.*,
        COALESCE(json_extract(sr.raw_json,'$.market_cap_tao'), 0)      AS mcap_tao,
-       COALESCE(json_extract(sr.raw_json,'$.net_volume_tao_24h'), 0) AS flow_24h
+       COALESCE(json_extract(sr.raw_json,'$.net_volume_tao_24h'), 0) AS flow_24h,
+       json_extract(sr.raw_json,'$.github_repo')                    AS github_url,
+       json_extract(sr.raw_json,'$.subnet_url')                     AS website_url
 FROM   subnet_meta sm
 LEFT JOIN screener_raw sr USING(netuid)
 """

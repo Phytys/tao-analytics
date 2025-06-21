@@ -1,17 +1,14 @@
-from flask import Flask, render_template_string
+from flask import Flask, render_template
 from dash_app import create_dash
 
 def create_app():
     server = Flask(__name__)
     server.config["JSONIFY_PRETTYPRINT_REGULAR"] = False
 
-    # simple landing page
+    # Tesla-inspired landing page
     @server.route("/")
     def index():
-        return render_template_string(
-            "<h3>TAO-Analytics prototype</h3>"
-            "<p><a href='/dash/'>Open Subnet Explorer</a></p>"
-        )
+        return render_template("index.html")
 
     create_dash(server)      # mounts at /dash/
     return server
