@@ -27,4 +27,27 @@ scripts/data-collection/contexts/
 
 # OS files
 .DS_Store
-Thumbs.db 
+Thumbs.db
+
+# IDE/Editor files
+.cursor/
+.vscode/
+.idea/
+
+# Large binary files
+*.AppImage
+*.app
+*.dmg
+*.exe
+
+# Generated/processed data files
+processed_netuids.json
+=2.9
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp 
