@@ -12,12 +12,19 @@
         <nav class="navbar">
             <div class="nav-container">
                 <div class="nav-logo">
-                    <span class="logo-text">TAO</span>
-                    <span class="logo-subtitle">Analytics</span>
+                    <a href="/" class="logo-link">
+                        <span class="logo-text">TAO</span>
+                        <span class="logo-subtitle">Analytics</span>
+                    </a>
                 </div>
                 <div class="nav-links">
-                    <a href="/dash/" class="nav-link">Dashboard</a>
-                    <a href="/dash/metrics" class="nav-link">Metrics</a>
+                    <a href="/dash/explorer" class="nav-link">Explorer</a>
+                    {% if session.admin_authenticated %}
+                    <a href="/admin/system-info" class="nav-link">System Info</a>
+                    <a href="/admin/logout" class="nav-link">Logout</a>
+                    {% else %}
+                    <a href="/admin/login" class="nav-link">Admin Login</a>
+                    {% endif %}
                     <a href="#about" class="nav-link">About</a>
                 </div>
             </div>
@@ -46,7 +53,7 @@
                     <span class="stat-label">Avg Confidence</span>
                 </div>
             </div>
-            <a href="/dash/" class="cta-button">
+            <a href="/dash/explorer" class="cta-button">
                 <span>Explore Subnets</span>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M5 12h14M12 5l7 7-7 7"/>

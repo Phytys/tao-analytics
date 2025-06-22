@@ -7,6 +7,7 @@ from sqlalchemy import func, desc, and_, or_
 from sqlalchemy.orm import Session
 from typing import Dict, List, Any, Optional
 import pandas as pd
+import json
 
 from .db import get_db
 from .cache import cached, db_cache
@@ -59,14 +60,18 @@ class MetricsService:
                 func.sum(json_field(ScreenerRaw.raw_json, 'market_cap_tao'))
             ).scalar() or 0
             
+            # Convert to basic Python types
+            total_market_cap = float(total_market_cap) if total_market_cap is not None else 0.0
+            avg_confidence = float(avg_confidence) if avg_confidence is not None else 0.0
+            
             return {
-                'total_subnets': total_subnets,
-                'enriched_subnets': enriched_subnets,
-                'enrichment_rate': round((enriched_subnets / total_subnets * 100), 1) if total_subnets > 0 else 0,
-                'categories': len(categories),
+                'total_subnets': int(total_subnets),
+                'enriched_subnets': int(enriched_subnets),
+                'enrichment_rate': round((enriched_subnets / total_subnets * 100), 1) if total_subnets > 0 else 0.0,
+                'categories': int(len(categories)),
                 'avg_confidence': round(avg_confidence, 1),
-                'high_confidence': high_confidence,
-                'high_confidence_rate': round((high_confidence / enriched_subnets * 100), 1) if enriched_subnets > 0 else 0,
+                'high_confidence': int(high_confidence),
+                'high_confidence_rate': round((high_confidence / enriched_subnets * 100), 1) if enriched_subnets > 0 else 0.0,
                 'total_market_cap': round(total_market_cap, 2)
             }
         finally:
@@ -100,11 +105,11 @@ class MetricsService:
             
             return [
                 {
-                    'category': stat.primary_category,
-                    'count': stat.count,
-                    'avg_confidence': round(stat.avg_confidence or 0, 1),
-                    'avg_market_cap': round(stat.avg_market_cap or 0, 2),
-                    'total_market_cap': round(stat.total_market_cap or 0, 2)
+                    'category': str(stat.primary_category or ''),
+                    'count': int(stat.count),
+                    'avg_confidence': round(float(stat.avg_confidence or 0), 1),
+                    'avg_market_cap': round(float(stat.avg_market_cap or 0), 2),
+                    'total_market_cap': round(float(stat.total_market_cap or 0), 2)
                 }
                 for stat in stats
             ]
@@ -172,17 +177,17 @@ class MetricsService:
                 func.avg(SubnetMeta.context_tokens).label('avg_tokens'),
                 func.min(SubnetMeta.context_tokens).label('min_tokens'),
                 func.max(SubnetMeta.context_tokens).label('max_tokens')
-            ).scalar()
+            ).first()
             
             return {
                 'provenance_counts': [
-                    {'provenance': p.provenance, 'count': p.count}
+                    {'provenance': str(p.provenance or ''), 'count': int(p.count)}
                     for p in provenance_counts
                 ],
                 'context_tokens': {
-                    'avg': round(context_stats.avg_tokens or 0, 1),
-                    'min': context_stats.min_tokens or 0,
-                    'max': context_stats.max_tokens or 0
+                    'avg': round(float(context_stats.avg_tokens or 0), 1),
+                    'min': int(context_stats.min_tokens or 0),
+                    'max': int(context_stats.max_tokens or 0)
                 }
             }
         finally:
@@ -222,18 +227,31 @@ class MetricsService:
             
             results = query.limit(limit).all()
             
-            return [
-                {
-                    'netuid': result[0].netuid,
-                    'name': result[0].subnet_name,
-                    'category': result[0].primary_category,
-                    'confidence_score': result[0].confidence,
-                    'market_cap': json_field(result[1].raw_json, 'market_cap_tao'),
-                    'context_tokens': result[0].context_tokens,
-                    'provenance': result[0].provenance
-                }
-                for result in results
-            ]
+            subnets = []
+            for result in results:
+                subnet_meta, screener_raw = result
+                
+                # Extract market cap safely
+                try:
+                    if isinstance(screener_raw.raw_json, dict):
+                        raw_data = screener_raw.raw_json
+                    else:
+                        raw_data = json.loads(screener_raw.raw_json) if screener_raw.raw_json else {}
+                    market_cap = raw_data.get('market_cap_tao', 0)
+                except (json.JSONDecodeError, AttributeError):
+                    market_cap = 0
+                
+                subnets.append({
+                    'netuid': int(subnet_meta.netuid),
+                    'name': str(subnet_meta.subnet_name or ''),
+                    'category': str(subnet_meta.primary_category or ''),
+                    'confidence_score': float(subnet_meta.confidence or 0),
+                    'market_cap': float(market_cap),
+                    'context_tokens': int(subnet_meta.context_tokens or 0),
+                    'provenance': str(subnet_meta.provenance or '')
+                })
+            
+            return subnets
         finally:
             db.close()
     
@@ -267,17 +285,30 @@ class MetricsService:
                 )
             ).limit(limit).all()
             
-            return [
-                {
-                    'netuid': result[0].netuid,
-                    'name': result[0].subnet_name,
-                    'category': result[0].primary_category,
-                    'confidence_score': result[0].confidence,
-                    'market_cap': json_field(result[1].raw_json, 'market_cap_tao'),
-                    'tags': result[0].secondary_tags
-                }
-                for result in results
-            ]
+            search_results = []
+            for result in results:
+                subnet_meta, screener_raw = result
+                
+                # Extract market cap safely
+                try:
+                    if isinstance(screener_raw.raw_json, dict):
+                        raw_data = screener_raw.raw_json
+                    else:
+                        raw_data = json.loads(screener_raw.raw_json) if screener_raw.raw_json else {}
+                    market_cap = raw_data.get('market_cap_tao', 0)
+                except (json.JSONDecodeError, AttributeError):
+                    market_cap = 0
+                
+                search_results.append({
+                    'netuid': int(subnet_meta.netuid),
+                    'name': str(subnet_meta.subnet_name or ''),
+                    'category': str(subnet_meta.primary_category or ''),
+                    'confidence_score': float(subnet_meta.confidence or 0),
+                    'market_cap': float(market_cap),
+                    'tags': str(subnet_meta.secondary_tags or '')
+                })
+            
+            return search_results
         finally:
             db.close()
 

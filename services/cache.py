@@ -29,10 +29,10 @@ class LRUCache:
     
     def _generate_key(self, *args, **kwargs) -> str:
         """Generate cache key from function arguments."""
-        # Create a hash of the arguments
+        # Create a hash of the arguments, handling non-serializable objects
         key_data = {
-            'args': args,
-            'kwargs': sorted(kwargs.items())
+            'args': [str(arg) if not isinstance(arg, (int, float, str, bool, type(None))) else arg for arg in args],
+            'kwargs': {k: str(v) if not isinstance(v, (int, float, str, bool, type(None))) else v for k, v in sorted(kwargs.items())}
         }
         key_str = json.dumps(key_data, sort_keys=True)
         return hashlib.md5(key_str.encode()).hexdigest()

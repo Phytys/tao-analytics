@@ -1,6 +1,6 @@
 """
-Metrics Dashboard for TAO Analytics.
-Provides detailed analytics and performance metrics.
+System Information Dashboard for TAO Analytics.
+Provides detailed system analytics and performance metrics for administrators.
 """
 
 import dash_bootstrap_components as dbc
@@ -8,7 +8,7 @@ from dash import html, dcc, Input, Output, callback
 import plotly.express as px
 import plotly.graph_objects as go
 from services.metrics import metrics_service
-from services.cache import cache_stats, clear_all_caches, cleanup_all_caches
+from services.cache import cache_stats
 import pandas as pd
 from datetime import datetime
 
@@ -40,13 +40,17 @@ CONFIDENCE_COLORS = {
 layout = dbc.Container([
     # Header
     html.Div([
-        html.H1("Analytics Dashboard", className="dashboard-title"),
-        html.P("Performance metrics and detailed insights", className="dashboard-subtitle"),
+        html.H1("System Information Dashboard", className="dashboard-title"),
+        html.P("Administrative overview of system performance and data quality", className="dashboard-subtitle"),
+        html.Div([
+            html.Span("🔐 Admin Access", className="badge bg-primary me-2"),
+            html.A("Logout", href="/admin/logout", className="btn btn-outline-secondary btn-sm")
+        ], className="mt-2")
     ], className="dashboard-header mb-4"),
     
     # Control buttons
     html.Div([
-        dbc.Button("Refresh Metrics", id="refresh-btn", color="primary", className="me-2"),
+        dbc.Button("Refresh Data", id="refresh-btn", color="primary", className="me-2"),
         dbc.Button("Clear Cache", id="clear-cache-btn", color="warning", className="me-2"),
         dbc.Button("Cleanup Cache", id="cleanup-cache-btn", color="info"),
     ], className="mb-4"),
@@ -81,18 +85,18 @@ layout = dbc.Container([
     html.Div(id="performance-metrics", className="mb-4"),
     
     # Store for data
-    dcc.Store(id="metrics-data"),
+    dcc.Store(id="system-data"),
     dcc.Interval(id="refresh-interval", interval=30000, n_intervals=0),  # 30 second refresh
 ], fluid=True, className="px-4")
 
 @callback(
-    Output("metrics-data", "data"),
-    Input("refresh-btn", "n_clicks"),
+    Output("system-data", "data"),
     Input("refresh-interval", "n_intervals"),
     prevent_initial_call=False
 )
-def load_metrics_data(n_clicks, n_intervals):
-    """Load all metrics data."""
+def load_system_data(n_intervals):
+    """Load all system data."""
+    print(f"[DEBUG] Loading system data, interval: {n_intervals}")
     try:
         # Get all metrics
         landing_kpis = metrics_service.get_landing_kpis()
@@ -112,12 +116,12 @@ def load_metrics_data(n_clicks, n_intervals):
             'timestamp': datetime.now().isoformat()
         }
     except Exception as e:
-        print(f"Error loading metrics: {e}")
+        print(f"Error loading system data: {e}")
         return {}
 
 @callback(
     Output("kpi-cards", "children"),
-    Input("metrics-data", "data")
+    Input("system-data", "data")
 )
 def render_kpi_cards(data):
     """Render KPI cards."""
@@ -169,7 +173,7 @@ def render_kpi_cards(data):
 
 @callback(
     Output("category-chart", "children"),
-    Input("metrics-data", "data")
+    Input("system-data", "data")
 )
 def render_category_chart(data):
     """Render category distribution chart."""
@@ -198,7 +202,7 @@ def render_category_chart(data):
 
 @callback(
     Output("confidence-chart", "children"),
-    Input("metrics-data", "data")
+    Input("system-data", "data")
 )
 def render_confidence_chart(data):
     """Render confidence distribution chart."""
@@ -227,7 +231,7 @@ def render_confidence_chart(data):
 
 @callback(
     Output("provenance-chart", "children"),
-    Input("metrics-data", "data")
+    Input("system-data", "data")
 )
 def render_provenance_chart(data):
     """Render provenance distribution chart."""
@@ -254,7 +258,7 @@ def render_provenance_chart(data):
 
 @callback(
     Output("cache-stats", "children"),
-    Input("metrics-data", "data")
+    Input("system-data", "data")
 )
 def render_cache_stats(data):
     """Render cache statistics."""
@@ -293,7 +297,7 @@ def render_cache_stats(data):
 
 @callback(
     Output("top-subnets", "children"),
-    Input("metrics-data", "data")
+    Input("system-data", "data")
 )
 def render_top_subnets(data):
     """Render top subnets table."""
@@ -333,7 +337,7 @@ def render_top_subnets(data):
 
 @callback(
     Output("performance-metrics", "children"),
-    Input("metrics-data", "data")
+    Input("system-data", "data")
 )
 def render_performance_metrics(data):
     """Render performance metrics."""
@@ -366,30 +370,6 @@ def render_performance_metrics(data):
         html.H3("Performance Metrics", className="mb-3"),
         dbc.Row([dbc.Col(card, md=3) for card in metric_cards], className="g-3")
     ])
-
-@callback(
-    Output("clear-cache-btn", "children"),
-    Input("clear-cache-btn", "n_clicks"),
-    prevent_initial_call=True
-)
-def clear_cache(n_clicks):
-    """Clear all caches."""
-    if n_clicks:
-        clear_all_caches()
-        return "Cache Cleared!"
-    return "Clear Cache"
-
-@callback(
-    Output("cleanup-cache-btn", "children"),
-    Input("cleanup-cache-btn", "n_clicks"),
-    prevent_initial_call=True
-)
-def cleanup_cache(n_clicks):
-    """Clean up expired cache items."""
-    if n_clicks:
-        result = cleanup_all_caches()
-        return f"Cleaned {result['api_cache_expired'] + result['db_cache_expired']} items"
-    return "Cleanup Cache"
 
 def register_callbacks(dash_app):
     """Register all callbacks with the dash app."""

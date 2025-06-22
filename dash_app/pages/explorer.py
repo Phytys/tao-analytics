@@ -184,7 +184,7 @@ def render_chart(json_df, mode):
             df.groupby('confidence_bin').size().reset_index(name='count'),
             x='confidence_bin',
             y='count',
-            title="Confidence Score Distribution",
+            title="AI Model Confidence in Subnet Classification",
             color='confidence_bin',
             color_discrete_map={
                 '0-20': '#dc3545',
@@ -232,6 +232,29 @@ def render_cards(json_df):
         
         # If it's a relative path, skip it
         return None
+    
+    def format_provenance(provenance_str):
+        """Format provenance data for display."""
+        if pd.isna(provenance_str) or not provenance_str:
+            return None
+        
+        try:
+            import json
+            provenance_data = json.loads(provenance_str)
+            context_fields = sum(1 for v in provenance_data.values() if v == 'context')
+            model_fields = sum(1 for v in provenance_data.values() if v == 'model')
+            total_fields = len(provenance_data)
+            
+            if context_fields == total_fields:
+                return "📄 AI analyzed website/GitHub data"
+            elif model_fields == total_fields:
+                return "🤖 AI used prior knowledge"
+            elif context_fields > model_fields:
+                return f"📄 AI mostly used website/GitHub data"
+            else:
+                return f"🤖 AI mostly used prior knowledge"
+        except:
+            return "📊 Data source available"
     
     def make_card(row):
         # Handle secondary_tags as comma-separated string
@@ -345,7 +368,10 @@ def render_cards(json_df):
             ], className="mb-2"),
             
             # Provenance info
-            html.Small(f"Source: {row.provenance}", className="text-muted d-block") if pd.notna(row.provenance) else html.Div()
+            html.Small(
+                format_provenance(row.provenance) if pd.notna(row.provenance) else "",
+                className="text-muted d-block"
+            ) if pd.notna(row.provenance) else html.Div()
         ]
         
         return dbc.Col(
