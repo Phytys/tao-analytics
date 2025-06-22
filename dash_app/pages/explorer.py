@@ -3,6 +3,9 @@ from dash import html, dcc, Input, Output, State, callback, callback_context
 import plotly.express as px
 import plotly.graph_objects as go
 from services.db import load_subnet_frame
+from services.metrics import metrics_service
+from services.favicons import favicon_service
+from services.cache import cache_stats
 import pandas as pd, datetime as dt, json, os
 from io import StringIO
 
@@ -25,6 +28,22 @@ CATEGORY_COLORS = {
     "Consumer-AI & Games": "#ff9896",
     "Dev-Tooling": "#98df8a"
 }
+
+# Confidence ribbon colors
+CONFIDENCE_COLORS = {
+    'high': '#28a745',      # Green for 90-100
+    'medium': '#ffc107',    # Yellow for 70-89
+    'low': '#dc3545'        # Red for 0-69
+}
+
+def get_confidence_color(score):
+    """Get confidence ribbon color based on score."""
+    if score >= 90:
+        return CONFIDENCE_COLORS['high']
+    elif score >= 70:
+        return CONFIDENCE_COLORS['medium']
+    else:
+        return CONFIDENCE_COLORS['low']
 
 layout = dbc.Container(
     [
@@ -75,6 +94,7 @@ layout = dbc.Container(
                 children=[
                     dcc.Tab(label="Subnets per Category", value="count"),
                     dcc.Tab(label="Market-cap by Category", value="mcap"),
+                    dcc.Tab(label="Confidence Distribution", value="confidence"),
                 ],
                 className="nav-tabs"
             ),
@@ -114,11 +134,15 @@ def render_kpis(json_df):
     privacy = (df["privacy_security_flag"] == True).mean() * 100
     avg_confidence = df["confidence"].mean()
     
+    # Get cache stats
+    cache_info = cache_stats()
+    
     badges = [
         html.Span(f"{total} Subnets", className="kpi-badge"),
         html.Span(f"{cats} Categories", className="kpi-badge"),
         html.Span(f"{privacy:.0f}% Privacy-Focused", className="kpi-badge"),
         html.Span(f"{avg_confidence:.0f}% Avg Confidence", className="kpi-badge"),
+        html.Span(f"Cache: {cache_info['api_cache']['size']}/{cache_info['api_cache']['max_size']}", className="kpi-badge"),
     ]
     return html.Div(badges)
 
@@ -141,7 +165,7 @@ def render_chart(json_df, mode):
             title="Subnets per Category",
             color_discrete_map=CATEGORY_COLORS
         )
-    else:
+    elif mode == "mcap":
         fig = px.bar(
             df.groupby("primary_category")["mcap_tao"].sum().reset_index(),
             x="primary_category",
@@ -149,6 +173,27 @@ def render_chart(json_df, mode):
             title="Total Market-cap (TAO) by Category",
             color="primary_category",
             color_discrete_map=CATEGORY_COLORS
+        )
+    else:  # confidence
+        # Create confidence distribution
+        confidence_bins = [0, 20, 40, 60, 80, 90, 100]
+        confidence_labels = ['0-20', '20-40', '40-60', '60-80', '80-90', '90-100']
+        df['confidence_bin'] = pd.cut(df['confidence'], bins=confidence_bins, labels=confidence_labels, include_lowest=True)
+        
+        fig = px.bar(
+            df.groupby('confidence_bin').size().reset_index(name='count'),
+            x='confidence_bin',
+            y='count',
+            title="Confidence Score Distribution",
+            color='confidence_bin',
+            color_discrete_map={
+                '0-20': '#dc3545',
+                '20-40': '#fd7e14',
+                '40-60': '#ffc107',
+                '60-80': '#20c997',
+                '80-90': '#17a2b8',
+                '90-100': '#28a745'
+            }
         )
     
     fig.update_layout(
@@ -255,7 +300,25 @@ def render_cards(json_df):
                 )
             )
         
-        # Card structure with expandable description
+        # Confidence ribbon
+        confidence_score = row.confidence if pd.notna(row.confidence) else 0
+        confidence_color = get_confidence_color(confidence_score)
+        confidence_ribbon = html.Div(
+            f"{confidence_score:.0f}%",
+            style={
+                'position': 'absolute',
+                'top': '0',
+                'right': '0',
+                'background': confidence_color,
+                'color': 'white',
+                'padding': '2px 8px',
+                'font-size': '12px',
+                'font-weight': 'bold',
+                'border-radius': '0 4px 0 4px'
+            }
+        )
+        
+        # Card structure with expandable description and confidence ribbon
         card_body = [
             # Header with market cap
             html.Div([
@@ -281,16 +344,19 @@ def render_cards(json_df):
                 html.Div(links, className="mt-2") if links else html.Div()
             ], className="mb-2"),
             
-            # Confidence score
-            html.Small(f"Confidence: {row.confidence:.0f}%", className="text-muted"),
+            # Provenance info
+            html.Small(f"Source: {row.provenance}", className="text-muted d-block") if pd.notna(row.provenance) else html.Div()
         ]
         
         return dbc.Col(
-            dbc.Card(
-                dbc.CardBody(card_body),
-                className=f"h-100 {category_class}",
-                style={"border-left": "4px solid #3e6ae1"}
-            ),
+            html.Div([
+                confidence_ribbon,
+                dbc.Card(
+                    dbc.CardBody(card_body),
+                    className=f"h-100 {category_class}",
+                    style={"border-left": "4px solid #3e6ae1"}
+                )
+            ], style={'position': 'relative'}),
             lg=4, md=6, className="mb-4"
         )
     

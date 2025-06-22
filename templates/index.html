@@ -17,6 +17,7 @@
                 </div>
                 <div class="nav-links">
                     <a href="/dash/" class="nav-link">Dashboard</a>
+                    <a href="/dash/metrics" class="nav-link">Metrics</a>
                     <a href="#about" class="nav-link">About</a>
                 </div>
             </div>
@@ -29,16 +30,20 @@
             </p>
             <div class="hero-stats">
                 <div class="stat-item">
-                    <span class="stat-number">124</span>
+                    <span class="stat-number">{{ kpis.total_subnets }}</span>
                     <span class="stat-label">Subnets</span>
                 </div>
                 <div class="stat-item">
-                    <span class="stat-number">12</span>
+                    <span class="stat-number">{{ kpis.categories }}</span>
                     <span class="stat-label">Categories</span>
                 </div>
                 <div class="stat-item">
-                    <span class="stat-number">94</span>
+                    <span class="stat-number">{{ kpis.enriched_subnets }}</span>
                     <span class="stat-label">Enriched</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">{{ "%.1f"|format(kpis.avg_confidence) }}%</span>
+                    <span class="stat-label">Avg Confidence</span>
                 </div>
             </div>
             <a href="/dash/" class="cta-button">
@@ -68,6 +73,11 @@
                     <div class="feature-icon">🔍</div>
                     <h3>Smart Filtering</h3>
                     <p>Search and filter by category, tags, and performance metrics</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Performance Optimized</h3>
+                    <p>LRU caching and intelligent data management for fast, responsive analytics</p>
                 </div>
             </div>
         </div>
