@@ -270,7 +270,7 @@ def save_enrichment(netuid: int, enrichment: Dict[str, Any], context: SubnetCont
         enriched.context_hash = compute_context_hash(context)
         
         # Save new fields
-        enriched.context_tokens = enrichment.get('context_tokens', 0)
+        enriched.context_tokens = context.token_count  # Use actual context token count
         enriched.provenance = json.dumps(enrichment.get('provenance', {}))
         
         session.commit()

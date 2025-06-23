@@ -13,7 +13,7 @@ TAO_ENDPOINT = "https://api.tao.app/api/beta/subnet_screener"
 
 DB_PATH = BASE_DIR / "tao.sqlite"
 DB_URL = f"sqlite:///{DB_PATH}"
-OPENAI_MODEL = "gpt-4-turbo-preview"  # Using the latest model
+OPENAI_MODEL = "gpt-4o"  # Optimal balance of quality and cost for enrichment
 
 # Granular primary categories for power-user analytics
 PRIMARY_CATEGORIES = [
