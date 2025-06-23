@@ -27,6 +27,7 @@ from services.db import get_db
 from services.cache import clear_all_caches
 from models import SubnetMeta, ScreenerRaw
 from scripts.data_collection.enrich_with_openai import enrich_subnet
+from scripts.data_collection.parameter_settings import AUTO_FALLBACK_THIN_CONTEXT_THRESHOLD
 
 
 def get_subnets_needing_fallback(min_confidence=70, max_subnets=10):
@@ -53,7 +54,7 @@ def get_subnets_needing_fallback(min_confidence=70, max_subnets=10):
                 # Model-only with thin context
                 and_(
                     SubnetMeta.provenance == 'model-only',
-                    SubnetMeta.context_tokens < 100
+                    SubnetMeta.context_tokens < AUTO_FALLBACK_THIN_CONTEXT_THRESHOLD
                 ),
                 # Missing critical fields
                 or_(

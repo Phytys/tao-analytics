@@ -37,8 +37,11 @@ def create_dash(server):
                     dbc.NavItem(
                         dbc.NavLink("Subnet Explorer", href="/dash/explorer", className="text-white")
                     ),
+                    # System Info link - only show when authenticated
                     dbc.NavItem(
-                        dbc.NavLink("System Info", href="/dash/system-info", className="text-white")
+                        dbc.NavLink("System Info", href="/dash/system-info", className="text-white"),
+                        id="system-info-nav-item",
+                        style={"display": "none"}  # Hidden by default
                     ),
                 ], className="ms-auto"),
             ]),
@@ -61,21 +64,40 @@ def create_dash(server):
     register_explorer_callbacks(app)
     register_system_info_callbacks(app)
     
-    # URL routing callback
+    # URL routing callback with authentication check
     @app.callback(
         dash.Output("page-content", "children"),
         dash.Input("url", "pathname")
     )
     def display_page(pathname):
+        # Check authentication for system-info access
+        if pathname == "/dash/system-info":
+            if not session.get('admin_authenticated'):
+                return html.Div([
+                    html.H1("Access Denied", className="text-center mt-5 text-danger"),
+                    html.P("You must be logged in as admin to access this page.", className="text-center"),
+                    html.A("Go to Login", href="/admin/login", className="btn btn-primary d-block mx-auto mt-3")
+                ])
+            return system_info_layout
+        
         if pathname == "/dash/explorer" or pathname == "/dash/":
             return explorer_layout
-        elif pathname == "/dash/system-info":
-            return system_info_layout
         else:
             return html.Div([
                 html.H1("404 - Page Not Found", className="text-center mt-5"),
                 html.P("The page you're looking for doesn't exist.", className="text-center"),
                 html.A("Go to Explorer", href="/dash/explorer", className="btn btn-primary d-block mx-auto mt-3")
             ])
+    
+    # Callback to show/hide system-info link based on authentication
+    @app.callback(
+        dash.Output("system-info-nav-item", "style"),
+        dash.Input("url", "pathname")
+    )
+    def update_navbar_visibility(pathname):
+        if session.get('admin_authenticated'):
+            return {"display": "block"}
+        else:
+            return {"display": "none"}
     
     return app 

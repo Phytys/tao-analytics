@@ -1,57 +1,78 @@
 """
-Database utilities for TAO Analytics.
-Provides database-agnostic helpers for JSON field extraction.
+Database utility functions for TAO Analytics.
+
+This module provides database-agnostic utilities that work with both SQLite and Postgres.
 """
 
-from sqlalchemy import func
-from flask import current_app
-import os
+from sqlalchemy import func, text, Column
+from typing import Any
 
 
-def json_field(col, key):
+def json_field(column: Column, key: str) -> Any:
     """
-    Extract JSON field in a database-agnostic way.
+    Extract a value from a JSON column in a database-agnostic way.
     
     Args:
-        col: SQLAlchemy column containing JSON data
-        key: JSON key to extract
-        
+        column: The JSON column to extract from
+        key: The JSON key to extract (supports dot notation like 'user.name')
+    
     Returns:
-        SQLAlchemy expression for JSON extraction
+        SQLAlchemy expression that extracts the JSON value
         
-    Usage:
-        # Instead of: json_extract(raw_json, '$.market_cap_tao')
-        # Use: json_field(screener_raw.raw_json, 'market_cap_tao')
+    Examples:
+        # Extract simple key
+        json_field(SubnetMeta.raw_json, 'website_url')
+        
+        # Extract nested key
+        json_field(SubnetMeta.raw_json, 'user.profile.name')
     """
-    # Detect database dialect
-    dialect = get_db_dialect()
+    # Get database type from models engine
+    from models import engine
+    dialect = engine.dialect.name
     
     if dialect == 'sqlite':
-        # SQLite: json_extract(col, '$.key')
-        return func.json_extract(col, f'$.{key}')
-    else:
-        # PostgreSQL: col->>'key'
-        return col.op('->>')(key)
-
-
-def get_db_dialect():
-    """
-    Get the current database dialect.
-    
-    Returns:
-        str: 'sqlite' or 'postgresql'
-    """
-    # Try to get from Flask app context first
-    try:
-        database_url = current_app.config.get('DATABASE_URL', 'sqlite:///tao.sqlite')
-    except RuntimeError:
-        # Fall back to environment variable if not in app context
-        database_url = os.getenv('DATABASE_URL', 'sqlite:///tao.sqlite')
-    
-    if 'sqlite' in database_url.lower():
-        return 'sqlite'
-    elif 'postgres' in database_url.lower():
-        return 'postgresql'
+        return _sqlite_json_extract(column, key)
+    elif dialect == 'postgresql':
+        return _postgres_json_extract(column, key)
     else:
         # Default to SQLite for unknown databases
-        return 'sqlite' 
+        return _sqlite_json_extract(column, key)
+
+
+def _sqlite_json_extract(column: Column, key: str) -> Any:
+    """SQLite JSON extraction using json_extract function."""
+    return func.json_extract(column, f'$.{key}')
+
+
+def _postgres_json_extract(column: Column, key: str) -> Any:
+    """PostgreSQL JSON extraction using -> operator."""
+    # Handle nested keys by chaining -> operators
+    keys = key.split('.')
+    result = column
+    
+    for k in keys:
+        result = result.op('->')(k)
+    
+    # Use ->> for the final extraction to get text
+    return result.op('->>')(keys[-1])
+
+
+def get_database_type() -> str:
+    """
+    Get the current database type (sqlite or postgresql).
+    
+    Returns:
+        Database type as string
+    """
+    from models import engine
+    return engine.dialect.name
+
+
+def is_sqlite() -> bool:
+    """Check if current database is SQLite."""
+    return get_database_type() == 'sqlite'
+
+
+def is_postgresql() -> bool:
+    """Check if current database is PostgreSQL."""
+    return get_database_type() == 'postgresql' 

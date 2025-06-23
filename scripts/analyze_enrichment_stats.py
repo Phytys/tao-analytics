@@ -73,6 +73,14 @@ def analyze_primary_categories(df):
     unexpected_categories = set(category_counts.index) - set(PRIMARY_CATEGORIES)
     if unexpected_categories:
         print(f"\n⚠️  Unexpected categories found: {unexpected_categories}")
+    
+    # Special analysis for uncategorized subnets
+    uncategorized = df[df['primary_category'] == 'Uncategorized']
+    if len(uncategorized) > 0:
+        print(f"\n🔴 UNCategorized subnets: {len(uncategorized)} ({len(uncategorized)/total_subnets*100:.1f}%)")
+        print("These subnets failed category validation and need manual review:")
+        for _, row in uncategorized.iterrows():
+            print(f"  - Subnet {row['netuid']}: {row['subnet_name']} (confidence: {row['confidence']}%)")
 
 def analyze_secondary_tags(df):
     """Analyze secondary tags usage."""

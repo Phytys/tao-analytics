@@ -9,10 +9,11 @@ from typing import Dict, List, Any, Optional
 import pandas as pd
 import json
 
-from .db import get_db
+from .db import get_db, load_subnet_frame
 from .cache import cached, db_cache
 from .db_utils import json_field
 from models import ScreenerRaw, SubnetMeta
+from datetime import datetime, timedelta
 
 
 class MetricsService:
@@ -30,52 +31,32 @@ class MetricsService:
         Returns:
             Dictionary with KPI data
         """
-        db = get_db()
+        df = load_subnet_frame()
         
-        try:
-            # Total subnets
-            total_subnets = db.query(ScreenerRaw).count()
-            
-            # Enriched subnets
-            enriched_subnets = db.query(SubnetMeta).count()
-            
-            # Categories count
-            categories = db.query(
-                SubnetMeta.primary_category,
-                func.count(SubnetMeta.netuid).label('count')
-            ).group_by(SubnetMeta.primary_category).all()
-            
-            # Average confidence
-            avg_confidence = db.query(
-                func.avg(SubnetMeta.confidence)
-            ).scalar() or 0
-            
-            # High confidence subnets (>=90)
-            high_confidence = db.query(SubnetMeta).filter(
-                SubnetMeta.confidence >= 90
-            ).count()
-            
-            # Total market cap
-            total_market_cap = db.query(
-                func.sum(json_field(ScreenerRaw.raw_json, 'market_cap_tao'))
-            ).scalar() or 0
-            
-            # Convert to basic Python types
-            total_market_cap = float(total_market_cap) if total_market_cap is not None else 0.0
-            avg_confidence = float(avg_confidence) if avg_confidence is not None else 0.0
-            
-            return {
-                'total_subnets': int(total_subnets),
-                'enriched_subnets': int(enriched_subnets),
-                'enrichment_rate': round((enriched_subnets / total_subnets * 100), 1) if total_subnets > 0 else 0.0,
-                'categories': int(len(categories)),
-                'avg_confidence': round(avg_confidence, 1),
-                'high_confidence': int(high_confidence),
-                'high_confidence_rate': round((high_confidence / enriched_subnets * 100), 1) if enriched_subnets > 0 else 0.0,
-                'total_market_cap': round(total_market_cap, 2)
-            }
-        finally:
-            db.close()
+        # Basic metrics
+        total_subnets = len(df)
+        enriched_subnets = len(df[df['primary_category'].notna()])
+        enrichment_rate = (enriched_subnets / total_subnets * 100) if total_subnets > 0 else 0
+        
+        # Category distribution
+        category_counts = df['primary_category'].value_counts().to_dict() if 'primary_category' in df.columns else {}
+        
+        # Confidence metrics
+        avg_confidence = df['confidence'].mean() if 'confidence' in df.columns else 0
+        
+        # Privacy focus
+        privacy_focused = len(df[df['privacy_security_flag'] == True]) if 'privacy_security_flag' in df.columns else 0
+        privacy_rate = (privacy_focused / total_subnets * 100) if total_subnets > 0 else 0
+        
+        return {
+            'total_subnets': total_subnets,
+            'enriched_subnets': enriched_subnets,
+            'enrichment_rate': round(enrichment_rate, 1),
+            'avg_confidence': round(avg_confidence, 1),
+            'privacy_focused': privacy_focused,
+            'privacy_rate': round(privacy_rate, 1),
+            'category_distribution': category_counts
+        }
     
     @cached(db_cache)
     def get_category_stats(self) -> List[Dict[str, Any]]:
@@ -85,36 +66,26 @@ class MetricsService:
         Returns:
             List of category stats
         """
-        db = get_db()
+        df = load_subnet_frame()
         
-        try:
-            # Get category counts and averages
-            stats = db.query(
-                SubnetMeta.primary_category,
-                func.count(SubnetMeta.netuid).label('count'),
-                func.avg(SubnetMeta.confidence).label('avg_confidence'),
-                func.avg(json_field(ScreenerRaw.raw_json, 'market_cap_tao')).label('avg_market_cap'),
-                func.sum(json_field(ScreenerRaw.raw_json, 'market_cap_tao')).label('total_market_cap')
-            ).join(
-                ScreenerRaw, SubnetMeta.netuid == ScreenerRaw.netuid
-            ).group_by(
-                SubnetMeta.primary_category
-            ).order_by(
-                desc('count')
-            ).all()
-            
-            return [
-                {
-                    'category': str(stat.primary_category or ''),
-                    'count': int(stat.count),
-                    'avg_confidence': round(float(stat.avg_confidence or 0), 1),
-                    'avg_market_cap': round(float(stat.avg_market_cap or 0), 2),
-                    'total_market_cap': round(float(stat.total_market_cap or 0), 2)
-                }
-                for stat in stats
-            ]
-        finally:
-            db.close()
+        # Get category counts and averages
+        stats = df.groupby('primary_category').agg(
+            count=('netuid', 'count'),
+            avg_confidence=('confidence', 'mean'),
+            avg_market_cap=('market_cap_tao', 'mean'),
+            total_market_cap=('market_cap_tao', 'sum')
+        ).reset_index()
+        
+        return [
+            {
+                'category': str(category or ''),
+                'count': int(count),
+                'avg_confidence': round(float(avg_confidence or 0), 1),
+                'avg_market_cap': round(float(avg_market_cap or 0), 2),
+                'total_market_cap': round(float(total_market_cap or 0), 2)
+            }
+            for category, count, avg_confidence, avg_market_cap, total_market_cap in stats.values
+        ]
     
     @cached(db_cache)
     def get_confidence_distribution(self) -> List[Dict[str, Any]]:
@@ -124,36 +95,28 @@ class MetricsService:
         Returns:
             List of confidence buckets
         """
-        db = get_db()
+        df = load_subnet_frame()
         
-        try:
-            # Define confidence buckets
-            buckets = [
-                (0, 20, '0-20'),
-                (20, 40, '20-40'),
-                (40, 60, '40-60'),
-                (60, 80, '60-80'),
-                (80, 90, '80-90'),
-                (90, 100, '90-100')
-            ]
+        # Define confidence buckets
+        buckets = [
+            (0, 20, '0-20'),
+            (20, 40, '20-40'),
+            (40, 60, '40-60'),
+            (60, 80, '60-80'),
+            (80, 90, '80-90'),
+            (90, 100, '90-100')
+        ]
+        
+        distribution = []
+        for min_score, max_score, label in buckets:
+            count = len(df[(df['confidence'] >= min_score) & (df['confidence'] < max_score)])
             
-            distribution = []
-            for min_score, max_score, label in buckets:
-                count = db.query(SubnetMeta).filter(
-                    and_(
-                        SubnetMeta.confidence >= min_score,
-                        SubnetMeta.confidence < max_score
-                    )
-                ).count()
-                
-                distribution.append({
-                    'range': label,
-                    'count': count
-                })
-            
-            return distribution
-        finally:
-            db.close()
+            distribution.append({
+                'range': label,
+                'count': count
+            })
+        
+        return distribution
     
     @cached(db_cache)
     def get_provenance_stats(self) -> Dict[str, Any]:
@@ -163,35 +126,25 @@ class MetricsService:
         Returns:
             Dictionary with provenance stats
         """
-        db = get_db()
+        df = load_subnet_frame()
         
-        try:
-            # Count by provenance
-            provenance_counts = db.query(
-                SubnetMeta.provenance,
-                func.count(SubnetMeta.netuid).label('count')
-            ).group_by(SubnetMeta.provenance).all()
-            
-            # Context token distribution
-            context_stats = db.query(
-                func.avg(SubnetMeta.context_tokens).label('avg_tokens'),
-                func.min(SubnetMeta.context_tokens).label('min_tokens'),
-                func.max(SubnetMeta.context_tokens).label('max_tokens')
-            ).first()
-            
-            return {
-                'provenance_counts': [
-                    {'provenance': str(p.provenance or ''), 'count': int(p.count)}
-                    for p in provenance_counts
-                ],
-                'context_tokens': {
-                    'avg': round(float(context_stats.avg_tokens or 0), 1),
-                    'min': int(context_stats.min_tokens or 0),
-                    'max': int(context_stats.max_tokens or 0)
-                }
+        # Count by provenance
+        provenance_counts = df['provenance'].value_counts().to_dict()
+        
+        # Context token distribution
+        context_stats = df['context_tokens'].agg(['mean', 'min', 'max']).to_dict()
+        
+        return {
+            'provenance_counts': [
+                {'provenance': str(provenance or ''), 'count': int(count)}
+                for provenance, count in provenance_counts.items()
+            ],
+            'context_tokens': {
+                'avg': round(float(context_stats['mean'] or 0), 1),
+                'min': int(context_stats['min'] or 0),
+                'max': int(context_stats['max'] or 0)
             }
-        finally:
-            db.close()
+        }
     
     @cached(db_cache)
     def get_top_subnets(self, limit: int = 10, sort_by: str = 'market_cap') -> List[Dict[str, Any]]:
@@ -205,55 +158,31 @@ class MetricsService:
         Returns:
             List of top subnets
         """
-        db = get_db()
+        df = load_subnet_frame()
         
-        try:
-            query = db.query(
-                SubnetMeta,
-                ScreenerRaw
-            ).join(
-                ScreenerRaw, SubnetMeta.netuid == ScreenerRaw.netuid
-            )
-            
-            # Apply sorting
-            if sort_by == 'market_cap':
-                query = query.order_by(
-                    desc(json_field(ScreenerRaw.raw_json, 'market_cap_tao'))
-                )
-            elif sort_by == 'confidence':
-                query = query.order_by(desc(SubnetMeta.confidence))
-            elif sort_by == 'context_tokens':
-                query = query.order_by(desc(SubnetMeta.context_tokens))
-            
-            results = query.limit(limit).all()
-            
-            subnets = []
-            for result in results:
-                subnet_meta, screener_raw = result
-                
-                # Extract market cap safely
-                try:
-                    if isinstance(screener_raw.raw_json, dict):
-                        raw_data = screener_raw.raw_json
-                    else:
-                        raw_data = json.loads(screener_raw.raw_json) if screener_raw.raw_json else {}
-                    market_cap = raw_data.get('market_cap_tao', 0)
-                except (json.JSONDecodeError, AttributeError):
-                    market_cap = 0
-                
-                subnets.append({
-                    'netuid': int(subnet_meta.netuid),
-                    'name': str(subnet_meta.subnet_name or ''),
-                    'category': str(subnet_meta.primary_category or ''),
-                    'confidence_score': float(subnet_meta.confidence or 0),
-                    'market_cap': float(market_cap),
-                    'context_tokens': int(subnet_meta.context_tokens or 0),
-                    'provenance': str(subnet_meta.provenance or '')
-                })
-            
-            return subnets
-        finally:
-            db.close()
+        # Apply sorting
+        if sort_by == 'market_cap':
+            df = df.sort_values(by='market_cap_tao', ascending=False)
+        elif sort_by == 'confidence':
+            df = df.sort_values(by='confidence', ascending=False)
+        elif sort_by == 'context_tokens':
+            df = df.sort_values(by='context_tokens', ascending=False)
+        
+        results = df.head(limit).reset_index(drop=True)
+        
+        subnets = []
+        for _, row in results.iterrows():
+            subnets.append({
+                'netuid': int(row['netuid']),
+                'name': str(row['subnet_name'] or ''),
+                'category': str(row['primary_category'] or ''),
+                'confidence_score': float(row['confidence'] or 0),
+                'market_cap': float(row['market_cap_tao'] or 0),
+                'context_tokens': int(row['context_tokens'] or 0),
+                'provenance': str(row['provenance'] or '')
+            })
+        
+        return subnets
     
     def get_search_results(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
         """
@@ -266,51 +195,93 @@ class MetricsService:
         Returns:
             List of matching subnets
         """
-        db = get_db()
+        df = load_subnet_frame()
         
-        try:
-            # Search in name, category, and tags
-            search_query = f"%{query.lower()}%"
+        # Search in name, category, and tags
+        search_query = f"%{query.lower()}%"
+        
+        results = df[
+            (df['subnet_name'].str.lower().str.contains(search_query)) |
+            (df['primary_category'].str.lower().str.contains(search_query)) |
+            (df['secondary_tags'].str.lower().str.contains(search_query))
+        ].head(limit).reset_index(drop=True)
+        
+        search_results = []
+        for _, row in results.iterrows():
+            search_results.append({
+                'netuid': int(row['netuid']),
+                'name': str(row['subnet_name'] or ''),
+                'category': str(row['primary_category'] or ''),
+                'confidence_score': float(row['confidence'] or 0),
+                'market_cap': float(row['market_cap_tao'] or 0),
+                'tags': str(row['secondary_tags'] or '')
+            })
+        
+        return search_results
+
+    def category_evolution_metrics(self) -> Dict[str, Any]:
+        """Get metrics for category evolution and suggestions."""
+        df = load_subnet_frame()
+        
+        # Filter enriched subnets
+        enriched = df[df['primary_category'].notna()].copy()
+        
+        if len(enriched) == 0:
+            return {
+                'total_enriched': 0,
+                'category_suggestions': 0,
+                'suggestion_rate': 0,
+                'suggested_categories': [],
+                'category_coverage': {},
+                'optimization_insights': []
+            }
+        
+        # Category suggestions analysis
+        category_suggestions = enriched[enriched['category_suggestion'].notna() & (enriched['category_suggestion'] != '')]
+        suggestion_count = len(category_suggestions)
+        suggestion_rate = (suggestion_count / len(enriched) * 100) if len(enriched) > 0 else 0
+        
+        # Get suggested categories
+        suggested_categories = category_suggestions['category_suggestion'].value_counts().to_dict()
+        
+        # Category coverage analysis
+        category_coverage = enriched['primary_category'].value_counts().to_dict()
+        
+        # Optimization insights
+        insights = []
+        
+        # Check for categories with many suggestions
+        if suggestion_count > 0:
+            insights.append(f"{suggestion_count} subnets have suggested new categories")
             
-            results = db.query(
-                SubnetMeta,
-                ScreenerRaw
-            ).join(
-                ScreenerRaw, SubnetMeta.netuid == ScreenerRaw.netuid
-            ).filter(
-                or_(
-                    func.lower(SubnetMeta.subnet_name).like(search_query),
-                    func.lower(SubnetMeta.primary_category).like(search_query),
-                    func.lower(SubnetMeta.secondary_tags).like(search_query)
-                )
-            ).limit(limit).all()
+            # Find most suggested categories
+            if suggested_categories:
+                top_suggestion = max(suggested_categories.items(), key=lambda x: x[1])
+                insights.append(f"Most suggested category: '{top_suggestion[0]}' ({top_suggestion[1]} times)")
+        
+        # Check for category imbalance
+        if category_coverage:
+            max_category_count = max(category_coverage.values())
+            min_category_count = min(category_coverage.values())
             
-            search_results = []
-            for result in results:
-                subnet_meta, screener_raw = result
-                
-                # Extract market cap safely
-                try:
-                    if isinstance(screener_raw.raw_json, dict):
-                        raw_data = screener_raw.raw_json
-                    else:
-                        raw_data = json.loads(screener_raw.raw_json) if screener_raw.raw_json else {}
-                    market_cap = raw_data.get('market_cap_tao', 0)
-                except (json.JSONDecodeError, AttributeError):
-                    market_cap = 0
-                
-                search_results.append({
-                    'netuid': int(subnet_meta.netuid),
-                    'name': str(subnet_meta.subnet_name or ''),
-                    'category': str(subnet_meta.primary_category or ''),
-                    'confidence_score': float(subnet_meta.confidence or 0),
-                    'market_cap': float(market_cap),
-                    'tags': str(subnet_meta.secondary_tags or '')
-                })
-            
-            return search_results
-        finally:
-            db.close()
+            if max_category_count > min_category_count * 3:  # Significant imbalance
+                most_common = max(category_coverage.items(), key=lambda x: x[1])
+                least_common = min(category_coverage.items(), key=lambda x: x[1])
+                insights.append(f"Category imbalance: '{most_common[0]}' ({most_common[1]}) vs '{least_common[0]}' ({least_common[1]})")
+        
+        # Check for uncategorized subnets
+        uncategorized = len(df[df['primary_category'].isna()])
+        if uncategorized > 0:
+            insights.append(f"{uncategorized} subnets still need categorization")
+        
+        return {
+            'total_enriched': len(enriched),
+            'category_suggestions': suggestion_count,
+            'suggestion_rate': round(suggestion_rate, 1),
+            'suggested_categories': suggested_categories,
+            'category_coverage': category_coverage,
+            'optimization_insights': insights
+        }
 
 
 # Global instance

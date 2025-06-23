@@ -1,7 +1,8 @@
 import os, json, pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, select, func
 from sqlalchemy.orm import sessionmaker
-from .db_utils import json_field, get_db_dialect
+from .db_utils import json_field, get_database_type
+from models import SubnetMeta, ScreenerRaw
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///tao.sqlite")
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
@@ -17,47 +18,43 @@ def get_db():
         raise
 
 def get_base_query():
-    """Get base query with database-agnostic JSON extraction."""
-    dialect = get_db_dialect()
+    """Get base query with database-agnostic JSON extraction using SQLAlchemy ORM."""
+    # Use SQLAlchemy ORM with JSON helper
+    query = select(
+        SubnetMeta,
+        func.coalesce(json_field(ScreenerRaw.raw_json, 'market_cap_tao'), 0).label('mcap_tao'),
+        func.coalesce(json_field(ScreenerRaw.raw_json, 'net_volume_tao_24h'), 0).label('flow_24h'),
+        json_field(ScreenerRaw.raw_json, 'github_repo').label('github_url'),
+        json_field(ScreenerRaw.raw_json, 'subnet_url').label('website_url')
+    ).select_from(
+        SubnetMeta.__table__.outerjoin(ScreenerRaw.__table__, SubnetMeta.netuid == ScreenerRaw.netuid)
+    )
     
-    if dialect == 'sqlite':
-        return """
-        SELECT sm.*,
-               COALESCE(json_extract(sr.raw_json,'$.market_cap_tao'), 0)      AS mcap_tao,
-               COALESCE(json_extract(sr.raw_json,'$.net_volume_tao_24h'), 0) AS flow_24h,
-               json_extract(sr.raw_json,'$.github_repo')                    AS github_url,
-               json_extract(sr.raw_json,'$.subnet_url')                     AS website_url
-        FROM   subnet_meta sm
-        LEFT JOIN screener_raw sr USING(netuid)
-        """
-    else:
-        # PostgreSQL version
-        return """
-        SELECT sm.*,
-               COALESCE((sr.raw_json->>'market_cap_tao')::numeric, 0)      AS mcap_tao,
-               COALESCE((sr.raw_json->>'net_volume_tao_24h')::numeric, 0) AS flow_24h,
-               sr.raw_json->>'github_repo'                                AS github_url,
-               sr.raw_json->>'subnet_url'                                 AS website_url
-        FROM   subnet_meta sm
-        LEFT JOIN screener_raw sr USING(netuid)
-        """
+    return query
 
 def load_subnet_frame(category="All", search=""):
     """Return pandas DF filtered by category & search text."""
-    clause = []
-    params = {}
-    if category != "All":
-        clause.append("sm.primary_category = :cat"); params["cat"] = category
-    if search:
-        like = f"%{search.lower()}%"
-        clause.append("(lower(sm.subnet_name) LIKE :sea OR lower(sm.secondary_tags) LIKE :sea)")
-        params["sea"] = like
-    where = "WHERE " + " AND ".join(clause) if clause else ""
+    query = get_base_query()
     
-    query = get_base_query() + where
-    df = pd.read_sql(text(query), engine, params=params)
+    # Add filters
+    if category != "All":
+        query = query.where(SubnetMeta.primary_category == category)
+    
+    if search:
+        search_like = f"%{search.lower()}%"
+        query = query.where(
+            func.lower(SubnetMeta.subnet_name).like(search_like) |
+            func.lower(SubnetMeta.secondary_tags).like(search_like)
+        )
+    
+    # Execute query and convert to DataFrame
+    with engine.connect() as conn:
+        result = conn.execute(query)
+        rows = result.fetchall()
+        columns = list(result.keys())
+        df = pd.DataFrame(rows, columns=columns)
     
     # ensure numeric with proper defaults
-    df["mcap_tao"] = pd.to_numeric(df.mcap_tao, errors="coerce").fillna(0.0)
-    df["flow_24h"] = pd.to_numeric(df.flow_24h, errors="coerce").fillna(0.0)
+    df["mcap_tao"] = pd.to_numeric(df["mcap_tao"], errors="coerce").fillna(0.0)
+    df["flow_24h"] = pd.to_numeric(df["flow_24h"], errors="coerce").fillna(0.0)
     return df 

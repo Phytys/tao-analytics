@@ -302,7 +302,7 @@ PRIMARY_CATEGORIES = [
 
 # Enrichment policy
 ALLOW_MODEL_KNOWLEDGE = True      # Use model prior knowledge
-MIN_CONTEXT_TOKENS = 50           # Below this → model-only mode
+MIN_CONTEXT_TOKENS = 100          # Below this → model-only mode
 MODEL_ONLY_MAX_CONF = 50          # Max confidence for model-only
 ```
 

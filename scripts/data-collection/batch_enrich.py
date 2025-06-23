@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Batch enrichment script for multiple subnets.
-Processes subnets efficiently with cost control and progress tracking.
+Processes subnets efficiently with smart enrichment logic that automatically
+handles both context-rich and model-only modes based on context availability.
 
 USAGE EXAMPLES:
     # Process specific subnets
@@ -35,12 +36,13 @@ import signal
 from typing import List
 from enrich_with_openai import enrich_with_openai, save_enrichment
 from prepare_context import prepare_context_with_fallback, format_context, SubnetContext, get_all_netuids, compute_context_hash
-from models import SubnetMeta
+from models import SubnetMeta, ScreenerRaw
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from config import DB_URL
 from datetime import datetime
 import time
+from parameter_settings import DEFAULT_API_DELAY, PROGRESS_SAVE_FREQUENCY, MIN_CONTEXT_TOKENS
 
 # Global state for graceful shutdown
 processed_netuids = set()
@@ -71,19 +73,19 @@ def load_progress():
         return set()
 
 def process_subnet(netuid: int, force: bool = False) -> bool:
-    """Process a single subnet and return success status."""
+    """Process a single subnet with smart enrichment logic."""
     try:
         print(f"\n{'='*50}")
         print(f"Processing subnet {netuid}...")
         print(f"{'='*50}")
         
-        # Get context
+        # Get context (this handles fallback to model-only if no context available)
         context = prepare_context_with_fallback(netuid)
         if not context:
             print(f"Failed to prepare context for subnet {netuid}")
             return False
         
-        # Check if context has changed
+        # Check if context has changed (hash-based caching)
         engine = create_engine(DB_URL)
         with Session(engine) as session:
             meta = session.get(SubnetMeta, netuid)
@@ -98,8 +100,16 @@ def process_subnet(netuid: int, force: bool = False) -> bool:
             else:
                 print(f"No stored hash for subnet {netuid}, proceeding with enrichment")
         
-        # Enrich with OpenAI
-        enrichment = enrich_with_openai(context)
+        # Smart enrichment logic based on context availability
+        if context.token_count >= MIN_CONTEXT_TOKENS:
+            # Rich context available - use context + model knowledge
+            print(f"Rich context available ({context.token_count} tokens) - using context + model knowledge")
+            enrichment = enrich_with_openai(context, force_model_only=False)
+        else:
+            # No context or minimal context - use model-only mode
+            print(f"Minimal context ({context.token_count} tokens) - using model-only mode")
+            enrichment = enrich_with_openai(context, force_model_only=True)
+        
         if enrichment:
             print(f"\nEnrichment successful for subnet {netuid}")
             save_enrichment(netuid, enrichment, context)
@@ -113,14 +123,17 @@ def process_subnet(netuid: int, force: bool = False) -> bool:
         return False
 
 def main():
+    # Global state for graceful shutdown
+    global processed_netuids, interrupted
+    
     # Set up signal handler for graceful shutdown
     signal.signal(signal.SIGINT, signal_handler)
     
-    parser = argparse.ArgumentParser(description="Batch enrich multiple subnets")
+    parser = argparse.ArgumentParser(description="Batch enrich multiple subnets with smart enrichment logic")
     parser.add_argument("--netuids", nargs="+", type=int, help="List of NetUIDs to process")
     parser.add_argument("--range", nargs=2, type=int, help="Range of NetUIDs (start end)")
     parser.add_argument("--force", action="store_true", help="Force enrichment even if context hasn't changed")
-    parser.add_argument("--delay", type=float, default=1.0, help="Delay between API calls (seconds)")
+    parser.add_argument("--delay", type=float, default=DEFAULT_API_DELAY, help="Delay between API calls (seconds)")
     parser.add_argument("--max-subnets", type=int, help="Maximum number of subnets to process")
     parser.add_argument("--resume", action="store_true", help="Resume from previous run")
     
@@ -138,7 +151,6 @@ def main():
     
     # Load progress if resuming
     if args.resume:
-        global processed_netuids
         processed_netuids = load_progress()
         print(f"Resuming from previous run. Already processed: {len(processed_netuids)} subnets")
         # Skip already processed subnets
@@ -151,6 +163,7 @@ def main():
     print(f"Processing {len(netuids)} subnets: {netuids}")
     print(f"Delay between calls: {args.delay}s")
     print(f"Force mode: {args.force}")
+    print("Smart enrichment: Will use context when available, model-only when not")
     
     # Process subnets
     successful = 0
@@ -171,8 +184,8 @@ def main():
         else:
             failed += 1
         
-        # Save progress every 10 subnets
-        if i % 10 == 0:
+        # Save progress every PROGRESS_SAVE_FREQUENCY subnets
+        if i % PROGRESS_SAVE_FREQUENCY == 0:
             save_progress()
         
         # Add delay between calls to avoid rate limiting

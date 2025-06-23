@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
 Prepare context for subnet analysis.
 
@@ -32,32 +32,20 @@ from datetime import datetime
 from fake_useragent import UserAgent
 import hashlib
 from collections import Counter
-import nltk
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-
-# Download required NLTK data
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
-try:
-    nltk.data.find('corpora/stopwords')
-except LookupError:
-    nltk.download('stopwords')
 
 # Add project root to Python path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from models import ScreenerRaw
-from config import DB_URL, MIN_CONTEXT_TOKENS
+from config import DB_URL
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-
-# Constants for content limits
-MAX_WEBSITE_CHARS = 1000  # Maximum characters to fetch from website
-MAX_README_CHARS = 2000   # Maximum characters to fetch from README
+from parameter_settings import (
+    MAX_WEBSITE_CHARS, MAX_README_CHARS, MAX_SCRAPING_RETRIES, 
+    WEBSITE_TIMEOUT, GITHUB_TIMEOUT, WAYBACK_TIMEOUT, MAX_GITHUB_ISSUES,
+    TOKEN_ESTIMATION_RATIO, MIN_FALLBACK_CONTENT_LENGTH, MIN_CONTEXT_TOKENS
+)
 
 @dataclass
 class SubnetContext:
@@ -72,7 +60,7 @@ class SubnetContext:
         readme_content: Content from the GitHub README
         token_count: Estimated token count for the content
         prepared_at: Timestamp when the context was prepared
-        relevant_ngrams: Top TF-IDF keywords from content
+        relevant_ngrams: Top keywords from content (simplified)
     """
     netuid: int
     subnet_name: str
@@ -84,23 +72,24 @@ class SubnetContext:
     prepared_at: str
     relevant_ngrams: List[str]
 
-def extract_relevant_ngrams(text: str, max_ngrams: int = 5) -> List[str]:
-    """Extract top TF-IDF n-grams from text content."""
+def extract_simple_keywords(text: str, max_keywords: int = 5) -> List[str]:
+    """Extract simple keywords from text content without NLTK."""
     if not text:
         return []
     
-    # Tokenize and clean
-    tokens = word_tokenize(text.lower())
+    # Simple word frequency analysis
+    words = re.findall(r'\b[a-zA-Z]{3,}\b', text.lower())
     
-    # Remove stopwords and non-alphabetic tokens
-    stop_words = set(stopwords.words('english'))
-    tokens = [token for token in tokens if token.isalpha() and token not in stop_words and len(token) > 2]
+    # Remove common words
+    common_words = {'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'man', 'new', 'now', 'old', 'see', 'two', 'way', 'who', 'boy', 'did', 'its', 'let', 'put', 'say', 'she', 'too', 'use', 'with', 'this', 'that', 'have', 'will', 'your', 'from', 'they', 'know', 'want', 'been', 'good', 'much', 'some', 'time', 'very', 'when', 'come', 'here', 'just', 'like', 'long', 'make', 'many', 'over', 'such', 'take', 'than', 'them', 'well', 'were', 'what', 'work', 'year', 'back', 'call', 'come', 'down', 'even', 'find', 'give', 'here', 'last', 'left', 'life', 'make', 'most', 'much', 'name', 'next', 'part', 'same', 'seem', 'take', 'tell', 'than', 'that', 'them', 'they', 'this', 'time', 'very', 'well', 'what', 'when', 'work', 'year'}
+    
+    words = [word for word in words if word not in common_words]
     
     # Count frequencies
-    word_freq = Counter(tokens)
+    word_freq = Counter(words)
     
-    # Get top words (simple approach - in production you'd use proper TF-IDF)
-    top_words = [word for word, freq in word_freq.most_common(max_ngrams)]
+    # Get top words
+    top_words = [word for word, freq in word_freq.most_common(max_keywords)]
     
     return top_words
 
@@ -123,7 +112,7 @@ def get_headers() -> Dict[str, str]:
         'Cache-Control': 'max-age=0',
     }
 
-def fetch_website_content(url: str, max_retries: int = 3) -> Optional[str]:
+def fetch_website_content(url: str, max_retries: int = MAX_SCRAPING_RETRIES) -> Optional[str]:
     """Fetch and clean content from a website using httpx with proper headers and exponential backoff."""
     headers = get_headers()
     
@@ -132,7 +121,7 @@ def fetch_website_content(url: str, max_retries: int = 3) -> Optional[str]:
             print(f"Attempt {attempt + 1}/{max_retries} to fetch {url}")
             
             # Use httpx for better async support and modern HTTP features
-            with httpx.Client(timeout=30.0, follow_redirects=True) as client:
+            with httpx.Client(timeout=WEBSITE_TIMEOUT, follow_redirects=True) as client:
                 response = client.get(url, headers=headers)
                 
                 # Handle successful responses
@@ -143,8 +132,8 @@ def fetch_website_content(url: str, max_retries: int = 3) -> Optional[str]:
                     for element in soup(['script', 'style', 'nav', 'header', 'footer', 'iframe', 'noscript']):
                         element.decompose()
                     
-                    # Get text and clean it
-                    text = soup.get_text(separator=' ', strip=True)
+                    # Enhanced content extraction with priority for headers and important sections
+                    text = extract_prioritized_content(soup)
                     text = clean_text(text)
                     
                     if text:
@@ -186,6 +175,60 @@ def fetch_website_content(url: str, max_retries: int = 3) -> Optional[str]:
     
     return None
 
+def extract_prioritized_content(soup: BeautifulSoup) -> str:
+    """
+    Extract content with priority for headers and important sections.
+    
+    Priority order:
+    1. H1 and H2 headers
+    2. Main content sections
+    3. Remaining content
+    """
+    content_parts = []
+    
+    # 1. Extract H1 and H2 headers first
+    headers = soup.find_all(['h1', 'h2'])
+    for header in headers:
+        header_text = header.get_text(strip=True)
+        if header_text:
+            content_parts.append(f"HEADER: {header_text}")
+            # Also include the next paragraph or section after each header
+            next_sibling = header.find_next_sibling(['p', 'div', 'section'])
+            if next_sibling:
+                sibling_text = next_sibling.get_text(strip=True)
+                if sibling_text and len(sibling_text) > 20:  # Only include substantial content
+                    content_parts.append(sibling_text)
+    
+    # 2. Look for main content sections (main, article, section with specific classes)
+    main_selectors = [
+        'main',
+        'article', 
+        '[class*="content"]',
+        '[class*="main"]',
+        '[id*="content"]',
+        '[id*="main"]'
+    ]
+    
+    for selector in main_selectors:
+        elements = soup.select(selector)
+        for element in elements:
+            text = element.get_text(strip=True)
+            if text and len(text) > 50:  # Only include substantial sections
+                content_parts.append(text)
+    
+    # 3. If we don't have enough content, add remaining text
+    if len(' '.join(content_parts)) < MAX_WEBSITE_CHARS // 2:
+        remaining_text = soup.get_text(separator=' ', strip=True)
+        content_parts.append(remaining_text)
+    
+    # Combine all parts
+    combined_text = ' '.join(content_parts)
+    
+    # Clean up excessive whitespace
+    combined_text = re.sub(r'\s+', ' ', combined_text).strip()
+    
+    return combined_text
+
 def fetch_github_readme(repo_url: str) -> Optional[str]:
     """Fetch and clean README content from GitHub."""
     try:
@@ -199,7 +242,7 @@ def fetch_github_readme(repo_url: str) -> Optional[str]:
                 branches = ['main', 'master']
                 for branch in branches:
                     raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/README.md"
-                    response = requests.get(raw_url, timeout=10)
+                    response = requests.get(raw_url, timeout=GITHUB_TIMEOUT)
                     if response.status_code == 200:
                         content = response.text
                         print(f"Successfully fetched README from {branch} branch")
@@ -215,7 +258,7 @@ def fetch_github_readme(repo_url: str) -> Optional[str]:
 def count_tokens(text: str) -> int:
     """Simple token count estimation (rough approximation)."""
     # Rough estimate: 1 token ≈ 4 characters
-    return len(text) // 4
+    return len(text) // TOKEN_ESTIMATION_RATIO
 
 def get_all_netuids() -> List[int]:
     """Get list of all netuids from the database."""
@@ -223,12 +266,12 @@ def get_all_netuids() -> List[int]:
     with Session(engine) as session:
         return [row.netuid for row in session.query(ScreenerRaw).all()]
 
-def fetch_github_issues(owner: str, repo: str, max_issues: int = 5) -> Optional[str]:
+def fetch_github_issues(owner: str, repo: str, max_issues: int = MAX_GITHUB_ISSUES) -> Optional[str]:
     """Fetch recent GitHub issues as fallback context."""
     try:
         # Use GitHub API to get recent issues
         api_url = f"https://api.github.com/repos/{owner}/{repo}/issues?state=open&per_page={max_issues}"
-        response = requests.get(api_url, timeout=10)
+        response = requests.get(api_url, timeout=GITHUB_TIMEOUT)
         
         if response.status_code == 200:
             issues = response.json()
@@ -253,7 +296,7 @@ def fetch_wayback_snapshot(url: str) -> Optional[str]:
     try:
         # Try to get the latest snapshot from Wayback Machine
         wayback_url = f"https://web.archive.org/web/{url}"
-        response = requests.get(wayback_url, timeout=15, headers=get_headers())
+        response = requests.get(wayback_url, timeout=WAYBACK_TIMEOUT, headers=get_headers())
         
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
@@ -265,7 +308,7 @@ def fetch_wayback_snapshot(url: str) -> Optional[str]:
             text = soup.get_text(separator=' ', strip=True)
             text = clean_text(text)
             
-            if text and len(text) > 100:  # Only return if we got meaningful content
+            if text and len(text) > MIN_FALLBACK_CONTENT_LENGTH:  # Only return if we got meaningful content
                 return text[:MAX_WEBSITE_CHARS]
     except Exception as e:
         print(f"Error fetching Wayback snapshot: {e}")
@@ -345,7 +388,7 @@ def prepare_context(netuid: int) -> Optional[SubnetContext]:
         
         # Extract relevant n-grams
         if readme_content:
-            context.relevant_ngrams = extract_relevant_ngrams(readme_content)
+            context.relevant_ngrams = extract_simple_keywords(readme_content)
         
         return context
 
@@ -435,7 +478,7 @@ def prepare_context_with_fallback(netuid: int) -> Optional[SubnetContext]:
                     print(f"✅ Found {len(issues_content)} characters from GitHub issues")
                     context.readme_content = issues_content
                     context.token_count = count_tokens(issues_content)
-                    context.relevant_ngrams = extract_relevant_ngrams(issues_content)
+                    context.relevant_ngrams = extract_simple_keywords(issues_content)
                     return context
         
         # Try Wayback Machine if we have a website
@@ -445,7 +488,7 @@ def prepare_context_with_fallback(netuid: int) -> Optional[SubnetContext]:
                 print(f"✅ Found {len(wayback_content)} characters from Wayback Machine")
                 context.website_content = wayback_content
                 context.token_count = count_tokens(wayback_content)
-                context.relevant_ngrams = extract_relevant_ngrams(wayback_content)
+                context.relevant_ngrams = extract_simple_keywords(wayback_content)
                 return context
     
     # If all fallbacks failed, return None (will be skipped)

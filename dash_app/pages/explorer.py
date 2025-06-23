@@ -367,6 +367,24 @@ def render_cards(json_df):
                 html.Div(links, className="mt-2") if links else html.Div()
             ], className="mb-2"),
             
+            # New expandable section for use case and technical features
+            html.Details([
+                html.Summary("Use Case & Technical Features", className="text-primary fw-bold mb-2"),
+                html.Div([
+                    # Primary use case
+                    html.Div([
+                        html.Strong("Primary Use Case: ", className="text-info"),
+                        html.Span(row.primary_use_case or "Not specified", className="small")
+                    ], className="mb-2") if pd.notna(row.primary_use_case) else html.Div(),
+                    
+                    # Key technical features
+                    html.Div([
+                        html.Strong("Key Technical Features: ", className="text-info"),
+                        html.Span(row.key_technical_features or "Not specified", className="small")
+                    ], className="mb-2") if pd.notna(row.key_technical_features) else html.Div(),
+                ])
+            ], className="mb-2") if (pd.notna(row.primary_use_case) or pd.notna(row.key_technical_features)) else html.Div(),
+            
             # Provenance info
             html.Small(
                 format_provenance(row.provenance) if pd.notna(row.provenance) else "",

@@ -25,7 +25,10 @@ class SubnetMeta(Base):
     # — fields to be filled by the LLM —
     tagline = Column(String)
     what_it_does = Column(Text)
+    primary_use_case = Column(Text)  # What is the subnet's primary use case?
+    key_technical_features = Column(Text)  # What are the key technical features?
     primary_category = Column(String(32))  # New granular category
+    category_suggestion = Column(Text)  # LLM suggestion for new category if needed
     secondary_tags = Column(Text)  # CSV string of normalized tags
     confidence = Column(Float)
     context_hash = Column(String)  # MD5 hash of the context JSON

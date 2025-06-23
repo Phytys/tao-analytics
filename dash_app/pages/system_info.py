@@ -78,6 +78,12 @@ layout = dbc.Container([
         ], md=6),
     ], className="mb-4"),
     
+    # Category Evolution Section
+    html.Div([
+        html.H3("Category Evolution & Optimization", className="mb-3"),
+        html.Div(id="category-evolution", className="mb-4"),
+    ], className="mb-4"),
+    
     # Top Subnets Table
     html.Div(id="top-subnets", className="mb-4"),
     
@@ -105,6 +111,7 @@ def load_system_data(n_intervals):
         provenance_stats = metrics_service.get_provenance_stats()
         top_subnets = metrics_service.get_top_subnets(limit=10, sort_by='market_cap')
         cache_info = cache_stats()
+        category_evolution = metrics_service.category_evolution_metrics()
         
         return {
             'landing_kpis': landing_kpis,
@@ -113,6 +120,7 @@ def load_system_data(n_intervals):
             'provenance_stats': provenance_stats,
             'top_subnets': top_subnets,
             'cache_info': cache_info,
+            'category_evolution': category_evolution,
             'timestamp': datetime.now().isoformat()
         }
     except Exception as e:
@@ -182,6 +190,10 @@ def render_category_chart(data):
     
     df = pd.DataFrame(data['category_stats'])
     
+    # Check if dataframe is empty
+    if df.empty:
+        return html.Div("No category data available")
+    
     fig = px.bar(
         df,
         x='category',
@@ -210,6 +222,10 @@ def render_confidence_chart(data):
         return html.Div("No data available")
     
     df = pd.DataFrame(data['confidence_dist'])
+    
+    # Check if dataframe is empty
+    if df.empty:
+        return html.Div("No confidence data available")
     
     fig = px.bar(
         df,
@@ -240,6 +256,10 @@ def render_provenance_chart(data):
     
     provenance_data = data['provenance_stats']['provenance_counts']
     df = pd.DataFrame(provenance_data)
+    
+    # Check if dataframe is empty
+    if df.empty:
+        return html.Div("No provenance data available")
     
     fig = px.pie(
         df,
@@ -306,6 +326,10 @@ def render_top_subnets(data):
     
     subnets = data['top_subnets']
     
+    # Check if subnets list is empty
+    if not subnets:
+        return html.Div("No subnet data available")
+    
     table_header = [
         html.Thead(html.Tr([
             html.Th("NetUID"),
@@ -369,6 +393,80 @@ def render_performance_metrics(data):
     return html.Div([
         html.H3("Performance Metrics", className="mb-3"),
         dbc.Row([dbc.Col(card, md=3) for card in metric_cards], className="g-3")
+    ])
+
+@callback(
+    Output("category-evolution", "children"),
+    Input("system-data", "data")
+)
+def render_category_evolution(data):
+    """Render category evolution metrics and insights."""
+    if not data or 'category_evolution' not in data:
+        return html.Div("No category evolution data available")
+    
+    evolution = data['category_evolution']
+    
+    # Create cards for key metrics
+    metric_cards = [
+        dbc.Card([
+            dbc.CardBody([
+                html.H4(f"{evolution['total_enriched']}", className="card-title text-primary"),
+                html.P("Enriched Subnets", className="card-text")
+            ])
+        ], className="text-center"),
+        dbc.Card([
+            dbc.CardBody([
+                html.H4(f"{evolution['category_suggestions']}", className="card-title text-warning"),
+                html.P("Category Suggestions", className="card-text")
+            ])
+        ], className="text-center"),
+        dbc.Card([
+            dbc.CardBody([
+                html.H4(f"{evolution['suggestion_rate']}%", className="card-title text-info"),
+                html.P("Suggestion Rate", className="card-text")
+            ])
+        ], className="text-center"),
+    ]
+    
+    # Create insights list
+    insights_list = []
+    for insight in evolution['optimization_insights']:
+        insights_list.append(html.Li(insight, className="mb-1"))
+    
+    # Create suggested categories table
+    suggested_categories_table = []
+    if evolution['suggested_categories']:
+        for category, count in evolution['suggested_categories'].items():
+            suggested_categories_table.append(
+                html.Tr([
+                    html.Td(category),
+                    html.Td(count, className="text-center")
+                ])
+            )
+    
+    return html.Div([
+        # Metric cards
+        dbc.Row([dbc.Col(card, md=4) for card in metric_cards], className="mb-4"),
+        
+        # Insights and suggestions
+        dbc.Row([
+            dbc.Col([
+                html.H5("Optimization Insights", className="mb-3"),
+                html.Ul(insights_list) if insights_list else html.P("No optimization insights available.", className="text-muted")
+            ], md=6),
+            dbc.Col([
+                html.H5("Suggested Categories", className="mb-3"),
+                dbc.Table([
+                    html.Thead([
+                        html.Tr([
+                            html.Th("Category Name"),
+                            html.Th("Count", className="text-center")
+                        ])
+                    ]),
+                    html.Tbody(suggested_categories_table)
+                ], striped=True, bordered=True, hover=True) if suggested_categories_table else html.P("No category suggestions yet.", className="text-muted")
+            ], md=6)
+        ])
     ])
 
 def register_callbacks(dash_app):

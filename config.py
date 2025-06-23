@@ -21,6 +21,8 @@ PRIMARY_CATEGORIES = [
     "LLM-Training / Fine-tune", 
     "Data-Feeds & Oracles",
     "Serverless-Compute",  # deploy & run models, GPU grids
+    "AI-Verification & Trust",  # zero-knowledge proofs, model authenticity
+    "Confidential-Compute",  # secure, private AI execution
     "Hashrate-Mining (BTC / PoW)",
     "Finance-Trading & Forecasting",
     "Security & Auditing",
@@ -54,5 +56,4 @@ CATEGORY_CHOICES = PRIMARY_CATEGORIES
 
 # Enrichment policy
 ALLOW_MODEL_KNOWLEDGE = True  # Whether to let model use prior knowledge
-MIN_CONTEXT_TOKENS = 50       # Below this → model-only mode
 MODEL_ONLY_MAX_CONF = 50      # Max confidence when using model knowledge only

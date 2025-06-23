@@ -49,8 +49,15 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from models import ScreenerRaw, SubnetMeta
-from config import DB_URL, OPENAI_KEY, OPENAI_MODEL, CATEGORY_CHOICES, ALLOW_MODEL_KNOWLEDGE, MIN_CONTEXT_TOKENS, MODEL_ONLY_MAX_CONF, PRIMARY_CATEGORIES, normalize_tags
+from config import DB_URL, OPENAI_KEY, OPENAI_MODEL, CATEGORY_CHOICES, ALLOW_MODEL_KNOWLEDGE, MODEL_ONLY_MAX_CONF, PRIMARY_CATEGORIES, normalize_tags
 from prepare_context import prepare_context_with_fallback, format_context, SubnetContext, get_all_netuids, compute_context_hash
+from parameter_settings import (
+    TAGLINE_MAX_WORDS, WHAT_IT_DOES_MAX_WORDS, PRIMARY_USE_CASE_MAX_WORDS, KEY_TECHNICAL_FEATURES_MAX_WORDS,
+    MAX_SECONDARY_TAGS, OPENAI_MAX_TOKENS, OPENAI_TIMEOUT, OPENAI_TEMPERATURE,
+    PROVENANCE_PENALTY, THIN_CONTEXT_PENALTY, THIN_CONTEXT_THRESHOLD, LOW_CONFIDENCE_THRESHOLD,
+    FALLBACK_TAGS, DEFAULT_CATEGORY, ENABLE_CATEGORY_REASK, CATEGORY_REASK_MAX_TOKENS,
+    MIN_CONTEXT_TOKENS
+)
 
 # Initialize OpenAI client
 client = OpenAI(api_key=OPENAI_KEY)
@@ -89,23 +96,35 @@ Prioritize a category that reflects *what utility end-users buy*
 
 Schema (all strings unless noted):
 {{
-  \"tagline\":                  \"... ≤12 words ...\",
-  \"what_it_does\":             \"... ≤40 words ...\",
-  \"primary_category\":         \"<exact name from list above>\",
-  \"secondary_tags\":           [\"max 6 kebab-case tags\"],
-  \"confidence\":               0-100,
-  \"privacy_security_flag\":    true|false,   // true if focus is privacy, security, or auditing
-  \"provenance\":               {{          // track where each field came from
-       \"tagline\": \"context|model|both|unknown\",
-       \"what_it_does\": \"...\",
-       \"primary_category\": \"...\",
-       \"secondary_tags\": \"...\",
-       \"privacy_security_flag\": \"...\"
+  "tagline":                  "... ≤{TAGLINE_MAX_WORDS} words ...",
+  "what_it_does":             "... ≤{WHAT_IT_DOES_MAX_WORDS} words ...",
+  "primary_use_case":         "... ≤{PRIMARY_USE_CASE_MAX_WORDS} words ...",
+  "key_technical_features":   "... ≤{KEY_TECHNICAL_FEATURES_MAX_WORDS} words ...",
+  "primary_category":         "<exact name from list above>",
+  "category_suggestion":      "<suggest new category name if existing ones don't fit well, otherwise leave empty>",
+  "secondary_tags":           ["max {MAX_SECONDARY_TAGS} kebab-case tags"],
+  "confidence":               0-100,
+  "privacy_security_flag":    true|false,   // true if focus is privacy, security, or auditing
+  "provenance":               {{          // track where each field came from
+       "tagline": "context|model|both|unknown",
+       "what_it_does": "...",
+       "primary_use_case": "...",
+       "key_technical_features": "...",
+       "primary_category": "...",
+       "category_suggestion": "...",
+       "secondary_tags": "...",
+       "privacy_security_flag": "..."
   }}
 }}
 
-Generate secondary_tags beginning with the most unique features 
-(e.g. serverless-ai, zk-proof, deepfake-detection, solidity-audit).
+Field Guidelines:
+- tagline: Concise, memorable description (e.g., "Decentralized AI inference network")
+- what_it_does: Comprehensive, investor-friendly explanation in simple terms. Explain what the subnet does, why it matters, how it works, and what value it provides to users. Use clear language that non-technical people can understand. Include business context and real-world applications.
+- primary_use_case: Specific use case or application (e.g., "AI model deployment and inference")
+- key_technical_features: Technical capabilities and innovations (e.g., "Distributed training, ZK proofs, consensus mechanisms")
+- primary_category: Choose the best match from the list above. If none fit well, suggest a new category name in category_suggestion.
+- category_suggestion: If the existing categories don't capture this subnet's focus well, suggest a new category name (e.g., "AI-Governance", "Cross-Chain-Bridges"). Leave empty if existing categories work.
+- secondary_tags: Start with most unique features (e.g., serverless-ai, zk-proof, deepfake-detection)
 
 {mode_instruction}
 """
@@ -146,7 +165,7 @@ CONTEXT:
                 {"role": "user", "content": category_prompt}
             ],
             temperature=0.1,
-            max_tokens=50
+            max_tokens=CATEGORY_REASK_MAX_TOKENS
         )
         
         content = response.choices[0].message.content.strip()
@@ -164,18 +183,18 @@ CONTEXT:
         print(f"Category re-ask error: {e}")
         return initial_category
 
-def enrich_with_openai(context: SubnetContext) -> Optional[Dict[str, Any]]:
+def enrich_with_openai(context: SubnetContext, force_model_only: bool = False) -> Optional[Dict[str, Any]]:
     """Call OpenAI API to analyze the subnet."""
     
-    # Pre-flight guard: skip if context is too thin
-    if context.token_count < MIN_CONTEXT_TOKENS:
+    # Pre-flight guard: skip if context is too thin, unless forced
+    if not force_model_only and context.token_count < MIN_CONTEXT_TOKENS:
         print(f"⚠️  WARNING: Subnet {context.netuid} has insufficient context ({context.token_count} tokens < {MIN_CONTEXT_TOKENS})")
         print("Skipping LLM call to avoid wasting money on poor results")
         return None
     
     try:
-        # Determine mode based on context availability
-        mode = "model-only" if context.token_count < MIN_CONTEXT_TOKENS else "mixed"
+        # Determine mode based on context availability or forced model-only
+        mode = "model-only" if force_model_only or context.token_count < MIN_CONTEXT_TOKENS else "mixed"
         print(f"Enrichment mode: {mode} (context tokens: {context.token_count})")
         
         # Build prompt based on mode
@@ -192,122 +211,37 @@ def enrich_with_openai(context: SubnetContext) -> Optional[Dict[str, Any]]:
                 {"role": "system", "content": "You are a helpful assistant that analyzes Bittensor subnet projects."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.1,  # Low temperature for more consistent results
-            max_tokens=1000,
-            timeout=90  # Add timeout to prevent hanging
+            temperature=OPENAI_TEMPERATURE,
+            max_tokens=OPENAI_MAX_TOKENS,
+            timeout=OPENAI_TIMEOUT
         )
         
-        # Get the content and clean it
-        content = response.choices[0].message.content
-        print("\n--- RAW LLM RESPONSE ---")
-        print(content)
-        print("--- END RAW LLM RESPONSE ---\n")
+        content = response.choices[0].message.content.strip()
         
-        # Try to extract JSON block if present
-        json_str = content
-        # Remove code block markers if present
-        if '```' in json_str:
-            json_str = re.sub(r'```[a-zA-Z]*', '', json_str)
-            json_str = json_str.replace('```', '')
-        json_str = json_str.strip()
-        # Try to find the first { ... } block
-        match = re.search(r'\{[\s\S]*\}', json_str)
-        if match:
-            json_str = match.group(0)
-        
-        # Parse response
+        # Parse JSON response
         try:
-            result = json.loads(json_str)
+            # Try to extract JSON block if present
+            json_str = content
+            # Remove code block markers if present
+            if '```' in json_str:
+                json_str = re.sub(r'```[a-zA-Z]*', '', json_str)
+                json_str = json_str.replace('```', '')
+            json_str = json_str.strip()
+            # Try to find the first { ... } block
+            match = re.search(r'\{[\s\S]*\}', json_str)
+            if match:
+                json_str = match.group(0)
+            
+            enrichment = json.loads(json_str)
         except Exception as e:
-            print("[ERROR] Failed to parse LLM response as JSON!")
-            print(f"Raw content was:\n{content}")
-            print(f"Extracted JSON string was:\n{json_str}")
-            print(f"Exception: {e}")
+            print(f"Error parsing LLM response as JSON: {e}")
+            print(f"Raw response: {content}")
             return None
         
-        # Validate and normalize primary category
-        raw_category = result.get("primary_category", "").strip()
-        # Case-insensitive match to our canonical list
-        canonical_category = next(
-            (c for c in PRIMARY_CATEGORIES if c.lower() == raw_category.lower()), 
-            "Dev-Tooling"  # Default fallback
-        )
-        result["primary_category"] = canonical_category
-        print(f"Primary category normalized: '{raw_category}' -> '{canonical_category}'")
+        return enrichment
         
-        # Category re-ask fallback if model chose category despite good context
-        provenance = result.get("provenance", {})
-        if (provenance.get("primary_category") == "model" and 
-            context.token_count >= MIN_CONTEXT_TOKENS and
-            canonical_category == "Dev-Tooling"):  # Common fallback
-            
-            print("⚠️  WARNING: Category from model despite good context (tokens: {context.token_count})")
-            print("Re-asking for category due to model choice with good context...")
-            better_category = re_ask_category(context, canonical_category)
-            if better_category != canonical_category:
-                result["primary_category"] = better_category
-                provenance["primary_category"] = "context"
-                result["provenance"] = provenance
-        
-        # Normalize secondary tags
-        raw_tags = result.get("secondary_tags", [])
-        normalized_tags = normalize_tags(raw_tags)
-        
-        # Pad tags to ensure exactly 6 tags
-        while len(normalized_tags) < 6:
-            # Add auto-generated tags from context n-grams
-            if context.relevant_ngrams and len(context.relevant_ngrams) > 0:
-                for ngram in context.relevant_ngrams:
-                    if ngram not in normalized_tags and len(normalized_tags) < 6:
-                        normalized_tags.append(ngram)
-                        break
-            else:
-                # Fallback generic tags
-                fallback_tags = ["bittensor", "decentralized", "ai", "blockchain", "subnet"]
-                for tag in fallback_tags:
-                    if tag not in normalized_tags and len(normalized_tags) < 6:
-                        normalized_tags.append(tag)
-                        break
-        
-        result["secondary_tags"] = normalized_tags
-        print(f"Secondary tags normalized: {raw_tags} -> {normalized_tags}")
-        
-        # Process privacy/security flag
-        result["privacy_security_flag"] = bool(result.get("privacy_security_flag", False))
-        print(f"Privacy/security flag: {result['privacy_security_flag']}")
-        
-        # Apply confidence penalties for model-only mode
-        if mode == "model-only":
-            result["confidence"] = min(result.get("confidence", 0), MODEL_ONLY_MAX_CONF)
-            print(f"Model-only mode: confidence clamped to {result['confidence']}")
-        
-        # Apply provenance penalty for model-derived categories
-        if provenance.get("primary_category") == "model" and context.token_count >= MIN_CONTEXT_TOKENS:
-            current_confidence = result.get("confidence", 0)
-            result["confidence"] = max(current_confidence - 5, 0)
-            print(f"⚠️  Provenance penalty: confidence reduced by 5 (model-derived category)")
-        
-        # Apply thin-context penalty for low context with model provenance
-        if context.token_count < 100 and provenance.get("primary_category") == "model":
-            current_confidence = result.get("confidence", 0)
-            result["confidence"] = max(current_confidence - 15, 0)  # Additional penalty for thin context
-            print(f"⚠️  Thin-context penalty: confidence reduced by 15 (low context + model provenance)")
-        
-        # Flag for manual review if confidence is low after penalties
-        if result.get("confidence", 0) <= 70:
-            print(f"🔴 FLAG: Low confidence ({result.get('confidence', 0)}) - consider manual review")
-        
-        # Add context token count
-        result["context_tokens"] = context.token_count
-        
-        return result
     except Exception as e:
-        print(f"\nError calling OpenAI API:")
-        print(f"Error type: {type(e).__name__}")
-        print(f"Error message: {str(e)}")
-        if hasattr(e, 'response'):
-            print(f"Response status: {e.response.status_code if hasattr(e.response, 'status_code') else 'N/A'}")
-            print(f"Response body: {e.response.text if hasattr(e.response, 'text') else 'N/A'}")
+        print(f"OpenAI API error: {e}")
         return None
 
 def save_enrichment(netuid: int, enrichment: Dict[str, Any], context: SubnetContext) -> None:
@@ -323,7 +257,10 @@ def save_enrichment(netuid: int, enrichment: Dict[str, Any], context: SubnetCont
         # Update fields
         enriched.tagline = enrichment.get('tagline')
         enriched.what_it_does = enrichment.get('what_it_does')
+        enriched.primary_use_case = enrichment.get('primary_use_case')
+        enriched.key_technical_features = enrichment.get('key_technical_features')
         enriched.primary_category = enrichment.get('primary_category')
+        enriched.category_suggestion = enrichment.get('category_suggestion')
         enriched.secondary_tags = ','.join(enrichment.get('secondary_tags', []))
         enriched.confidence = enrichment.get('confidence')
         enriched.privacy_security_flag = enrichment.get('privacy_security_flag')
