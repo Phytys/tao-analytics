@@ -277,6 +277,26 @@ def render_cards(json_df):
         # Subnet name with number
         subnet_display_name = f"{row.netuid} {row.subnet_name}" if pd.notna(row.subnet_name) else f"Subnet {row.netuid}"
         
+        # Get favicon for website
+        favicon_element = html.Div()
+        try:
+            if pd.notna(row.favicon_url) and row.favicon_url:
+                # Use cached favicon from database
+                favicon_element = html.Img(
+                    src=row.favicon_url,
+                    alt="Favicon",
+                    style={
+                        'width': '20px',
+                        'height': '20px',
+                        'margin-right': '8px',
+                        'border-radius': '2px'
+                    }
+                )
+        except Exception as e:
+            # If favicon logic fails, just continue without favicon
+            print(f"Favicon error for subnet {row.netuid}: {e}")
+            favicon_element = html.Div()
+        
         # Category badge
         category_badge = (
             dbc.Badge(row.primary_category, color="info", className="mb-2")
@@ -348,7 +368,10 @@ def render_cards(json_df):
             ], className="text-end mb-2"),
             
             # Title with subnet number
-            html.H5(subnet_display_name, className="card-title mb-2"),
+            html.H5([
+                favicon_element,
+                subnet_display_name
+            ], className="card-title mb-2"),
             
             # Category
             category_badge,

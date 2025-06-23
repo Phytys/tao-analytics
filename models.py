@@ -35,6 +35,7 @@ class SubnetMeta(Base):
     context_tokens = Column(Integer, default=0)  # How much context was available
     provenance = Column(Text)  # JSON string tracking where each field came from
     privacy_security_flag = Column(Boolean, default=False)  # Privacy/security focus flag
+    favicon_url = Column(String)  # Cached favicon URL for the subnet
 
     # — timestamps —
     last_enriched_at = Column(DateTime)  # When LLM fields were last updated
