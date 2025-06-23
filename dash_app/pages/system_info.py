@@ -151,7 +151,57 @@ def render_kpi_cards(data):
         ], className="text-center"),
     ]
     
-    return dbc.Row([dbc.Col(card, md=4, lg=2) for card in cards], className="g-3")
+    # Add enrichment stats cards
+    enrichment_cards = [
+        dbc.Card([
+            dbc.CardBody([
+                html.H4(f"{kpis.get('avg_context_tokens', 0)}", className="card-title text-info"),
+                html.P("Avg Context Tokens", className="card-text")
+            ])
+        ], className="text-center"),
+        dbc.Card([
+            dbc.CardBody([
+                html.H4(f"{kpis.get('rich_context_rate', 0)}%", className="card-title text-success"),
+                html.P("Rich Context (>1K tokens)", className="card-text")
+            ])
+        ], className="text-center"),
+        dbc.Card([
+            dbc.CardBody([
+                html.H4(f"{kpis.get('category_suggestions', 0)}", className="card-title text-warning"),
+                html.P("Category Suggestions", className="card-text")
+            ])
+        ], className="text-center"),
+    ]
+    
+    # Provenance breakdown card
+    provenance_stats = kpis.get('provenance_stats', {})
+    total_provenance = sum(provenance_stats.values())
+    if total_provenance > 0:
+        context_pct = round((provenance_stats.get('context', 0) / total_provenance) * 100, 1)
+        model_pct = round((provenance_stats.get('model', 0) / total_provenance) * 100, 1)
+        both_pct = round((provenance_stats.get('both', 0) / total_provenance) * 100, 1)
+        
+        provenance_card = dbc.Card([
+            dbc.CardBody([
+                html.H4(f"{context_pct}%", className="card-title text-success"),
+                html.P("Context-Based", className="card-text"),
+                html.Small(f"Model: {model_pct}% | Mixed: {both_pct}%", className="text-muted")
+            ])
+        ], className="text-center")
+    else:
+        provenance_card = dbc.Card([
+            dbc.CardBody([
+                html.H4("N/A", className="card-title text-muted"),
+                html.P("Provenance", className="card-text")
+            ])
+        ], className="text-center")
+    
+    enrichment_cards.append(provenance_card)
+    
+    return [
+        dbc.Row([dbc.Col(card, md=4, lg=2) for card in cards], className="g-3 mb-4"),
+        dbc.Row([dbc.Col(card, md=3) for card in enrichment_cards], className="g-3")
+    ]
 
 @callback(
     Output("enrichment-progress", "children"),
@@ -182,6 +232,31 @@ def render_enrichment_progress(data):
             html.Strong(f"{remaining}"), " subnets remaining"
         ], className="text-muted")
     ]
+    
+    # Add context quality info
+    if kpis.get('avg_context_tokens', 0) > 0:
+        stats.append(
+            html.Div([
+                html.Br(),
+                html.Strong(f"{kpis['avg_context_tokens']}"), " avg context tokens",
+                html.Br(),
+                html.Strong(f"{kpis.get('rich_context_rate', 0)}%"), " have rich context (>1K tokens)"
+            ], className="text-info")
+        )
+    
+    # Add last enrichment timestamp
+    if kpis.get('last_enriched_at'):
+        from datetime import datetime
+        try:
+            last_enriched = datetime.fromisoformat(kpis['last_enriched_at'].replace('Z', '+00:00'))
+            stats.append(
+                html.Div([
+                    html.Br(),
+                    html.Small(f"Last enriched: {last_enriched.strftime('%Y-%m-%d %H:%M:%S')}", className="text-muted")
+                ])
+            )
+        except:
+            pass
     
     if remaining > 0:
         stats.append(

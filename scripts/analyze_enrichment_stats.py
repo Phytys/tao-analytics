@@ -29,13 +29,16 @@ def get_enrichment_stats():
             subnet_name,
             tagline,
             what_it_does,
+            primary_use_case,
+            key_technical_features,
             primary_category,
             secondary_tags,
             confidence,
             context_tokens,
             privacy_security_flag,
             provenance,
-            last_enriched_at
+            last_enriched_at,
+            category_suggestion
         FROM subnet_meta 
         WHERE primary_category IS NOT NULL
         ORDER BY netuid
@@ -47,8 +50,10 @@ def get_enrichment_stats():
     
     return pd.DataFrame(rows, columns=[
         'netuid', 'subnet_name', 'tagline', 'what_it_does', 
+        'primary_use_case', 'key_technical_features',
         'primary_category', 'secondary_tags', 'confidence', 
-        'context_tokens', 'privacy_security_flag', 'provenance', 'last_enriched_at'
+        'context_tokens', 'privacy_security_flag', 'provenance', 'last_enriched_at',
+        'category_suggestion'
     ])
 
 def analyze_primary_categories(df):
@@ -203,6 +208,166 @@ def analyze_provenance(df):
             percentage = (count / total_fields) * 100
             print(f"  {source.capitalize()}: {count} ({percentage:.1f}%)")
 
+def analyze_context_quality(df):
+    """Analyze context quality and distribution."""
+    print("\n" + "="*60)
+    print("📚 CONTEXT QUALITY ANALYSIS")
+    print("="*60)
+    
+    total_subnets = len(df)
+    
+    # Context token distribution
+    no_context = len(df[df['context_tokens'] == 0])
+    low_context = len(df[df['context_tokens'].between(1, 500)])
+    medium_context = len(df[df['context_tokens'].between(501, 1000)])
+    high_context = len(df[df['context_tokens'] > 1000])
+    
+    print(f"Context token distribution:")
+    print(f"  No context (0 tokens):     {no_context:>3} ({no_context/total_subnets*100:>5.1f}%)")
+    print(f"  Low context (1-500):       {low_context:>3} ({low_context/total_subnets*100:>5.1f}%)")
+    print(f"  Medium context (501-1000): {medium_context:>3} ({medium_context/total_subnets*100:>5.1f}%)")
+    print(f"  High context (>1000):      {high_context:>3} ({high_context/total_subnets*100:>5.1f}%)")
+    
+    # Context quality by category
+    print(f"\nContext quality by category (avg tokens):")
+    context_by_category = df.groupby('primary_category')['context_tokens'].agg(['mean', 'count']).round(0)
+    context_by_category = context_by_category.sort_values('mean', ascending=False)
+    
+    for category, row in context_by_category.iterrows():
+        print(f"  {category:<30} {row['mean']:>6.0f} tokens ({row['count']:>2} subnets)")
+    
+    # Top 10 subnets by context tokens
+    print(f"\nTop 10 subnets by context tokens:")
+    top_context = df.nlargest(10, 'context_tokens')[['netuid', 'subnet_name', 'context_tokens', 'primary_category']]
+    for _, row in top_context.iterrows():
+        print(f"  Subnet {row['netuid']:>3}: {row['subnet_name']:<20} {row['context_tokens']:>4} tokens ({row['primary_category']})")
+
+def analyze_category_suggestions(df):
+    """Analyze category suggestions from LLM."""
+    print("\n" + "="*60)
+    print("💡 CATEGORY SUGGESTIONS ANALYSIS")
+    print("="*60)
+    
+    # Get subnets with category suggestions
+    suggestions = df[df['category_suggestion'].notna() & (df['category_suggestion'] != '')]
+    
+    if len(suggestions) == 0:
+        print("No category suggestions found.")
+        return
+    
+    print(f"Subnets with category suggestions: {len(suggestions)} ({len(suggestions)/len(df)*100:.1f}%)")
+    
+    print(f"\nCategory suggestions:")
+    for _, row in suggestions.iterrows():
+        print(f"  Subnet {row['netuid']:>3}: {row['subnet_name']:<20} → {row['category_suggestion']}")
+    
+    # Analyze suggestion patterns
+    suggestion_counts = suggestions['category_suggestion'].value_counts()
+    print(f"\nMost common suggestions:")
+    for suggestion, count in suggestion_counts.head(5).items():
+        print(f"  {suggestion}: {count} subnets")
+
+def analyze_enrichment_success_metrics(df):
+    """Analyze overall enrichment success metrics."""
+    print("\n" + "="*60)
+    print("🎯 ENRICHMENT SUCCESS METRICS")
+    print("="*60)
+    
+    total_subnets = len(df)
+    
+    # Completeness metrics
+    complete_profiles = df[
+        df['tagline'].notna() & 
+        df['what_it_does'].notna() & 
+        df['primary_use_case'].notna() & 
+        df['key_technical_features'].notna() & 
+        df['primary_category'].notna()
+    ]
+    
+    print(f"Profile completeness:")
+    print(f"  Complete profiles: {len(complete_profiles)} ({len(complete_profiles)/total_subnets*100:.1f}%)")
+    print(f"  Partial profiles:  {total_subnets - len(complete_profiles)} ({(total_subnets - len(complete_profiles))/total_subnets*100:.1f}%)")
+    
+    # Field completion rates
+    fields = ['tagline', 'what_it_does', 'primary_use_case', 'key_technical_features', 'primary_category', 'secondary_tags']
+    print(f"\nField completion rates:")
+    for field in fields:
+        completion_rate = (df[field].notna().sum() / total_subnets) * 100
+        print(f"  {field:<20}: {completion_rate:>5.1f}%")
+    
+    # Quality metrics
+    high_confidence = len(df[df['confidence'] >= 90])
+    context_based = len(df[df['context_tokens'] > 100])
+    
+    print(f"\nQuality metrics:")
+    print(f"  High confidence (≥90): {high_confidence} ({high_confidence/total_subnets*100:.1f}%)")
+    print(f"  Context-based:         {context_based} ({context_based/total_subnets*100:.1f}%)")
+    print(f"  Average confidence:    {df['confidence'].mean():.1f}%")
+    print(f"  Average context tokens: {df['context_tokens'].mean():.0f}")
+
+def analyze_word_count_distribution(df):
+    """Analyze word count distribution for text fields."""
+    print("\n" + "="*60)
+    print("📝 WORD COUNT ANALYSIS")
+    print("="*60)
+    
+    def count_words(text):
+        if pd.isna(text):
+            return 0
+        return len(str(text).split())
+    
+    # Analyze word counts for key text fields
+    fields = ['tagline', 'what_it_does', 'primary_use_case', 'key_technical_features']
+    
+    for field in fields:
+        word_counts = df[field].apply(count_words)
+        print(f"\n{field.replace('_', ' ').title()}:")
+        print(f"  Mean: {word_counts.mean():.1f} words")
+        print(f"  Median: {word_counts.median():.1f} words")
+        print(f"  Min: {word_counts.min()} words")
+        print(f"  Max: {word_counts.max()} words")
+        
+        # Show examples of longest descriptions
+        longest_idx = word_counts.idxmax()
+        if not pd.isna(longest_idx):
+            longest_text = df.loc[longest_idx, field]
+            print(f"  Longest (Subnet {df.loc[longest_idx, 'netuid']}): {longest_text[:100]}...")
+
+def analyze_enrichment_timeline(df):
+    """Analyze enrichment timeline and patterns."""
+    print("\n" + "="*60)
+    print("⏰ ENRICHMENT TIMELINE ANALYSIS")
+    print("="*60)
+    
+    if 'last_enriched_at' not in df.columns or df['last_enriched_at'].isna().all():
+        print("No enrichment timestamps available.")
+        return
+    
+    # Convert to datetime
+    df['enrichment_date'] = pd.to_datetime(df['last_enriched_at'])
+    
+    # Timeline analysis
+    earliest = df['enrichment_date'].min()
+    latest = df['enrichment_date'].max()
+    duration = latest - earliest
+    
+    print(f"Enrichment timeline:")
+    print(f"  Earliest: {earliest}")
+    print(f"  Latest:   {latest}")
+    print(f"  Duration: {duration}")
+    
+    # Enrichments per day
+    daily_counts = df.groupby(df['enrichment_date'].dt.date).size()
+    print(f"\nEnrichments per day:")
+    print(f"  Average: {daily_counts.mean():.1f} per day")
+    print(f"  Max:     {daily_counts.max()} per day")
+    print(f"  Min:     {daily_counts.min()} per day")
+    
+    # Show daily breakdown
+    print(f"\nDaily breakdown:")
+    for date, count in daily_counts.items():
+        print(f"  {date}: {count} enrichments")
+
 def main():
     print("🔍 Loading enrichment data...")
     df = get_enrichment_stats()
@@ -220,6 +385,11 @@ def main():
     analyze_confidence_by_category(df)
     analyze_context_correlation(df)
     analyze_provenance(df)
+    analyze_context_quality(df)
+    analyze_category_suggestions(df)
+    analyze_enrichment_success_metrics(df)
+    analyze_word_count_distribution(df)
+    analyze_enrichment_timeline(df)
     
     print("\n" + "="*60)
     print("🎉 ANALYSIS COMPLETE")

@@ -52,6 +52,32 @@ class MetricsService:
         total_market_cap = df['mcap_tao'].sum() if 'mcap_tao' in df.columns else 0
         high_confidence = len(df[df['confidence'] >= 90]) if 'confidence' in df.columns else 0
         
+        # Enrichment stats
+        avg_context_tokens = int(df['context_tokens'].mean()) if 'context_tokens' in df.columns else 0
+        rich_context_count = len(df[df['context_tokens'] > 1000]) if 'context_tokens' in df.columns else 0
+        rich_context_rate = (rich_context_count / total_subnets * 100) if total_subnets > 0 else 0
+        last_enriched_at = None
+        if 'last_enriched_at' in df.columns and df['last_enriched_at'].notna().any():
+            last_enriched_at = str(df['last_enriched_at'].max())
+        
+        # Provenance breakdown
+        provenance_stats = {'context': 0, 'model': 0, 'both': 0, 'unknown': 0}
+        if 'provenance' in df.columns:
+            for provenance_str in df['provenance'].dropna():
+                try:
+                    import json
+                    provenance = json.loads(provenance_str)
+                    for field, source in provenance.items():
+                        if source in provenance_stats:
+                            provenance_stats[source] += 1
+                except:
+                    provenance_stats['unknown'] += 1
+        
+        # Category suggestions monitoring
+        category_suggestions = 0
+        if 'category_suggestion' in df.columns:
+            category_suggestions = len(df[df['category_suggestion'].notna() & (df['category_suggestion'] != '')])
+        
         return {
             'total_subnets': total_subnets,
             'enriched_subnets': enriched_subnets,
@@ -61,7 +87,13 @@ class MetricsService:
             'privacy_rate': round(privacy_rate, 1),
             'total_market_cap': round(total_market_cap / 1000000, 1),  # Convert to millions
             'high_confidence': high_confidence,
-            'category_distribution': category_counts
+            'category_distribution': category_counts,
+            'avg_context_tokens': avg_context_tokens,
+            'rich_context_count': rich_context_count,
+            'rich_context_rate': round(rich_context_rate, 1),
+            'last_enriched_at': last_enriched_at,
+            'provenance_stats': provenance_stats,
+            'category_suggestions': category_suggestions
         }
     
     @cached(db_cache)
