@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from dash_app import create_dash
-from services.metrics import metrics_service
+from services.tao_metrics import tao_metrics_service
 from services.auth import require_admin, verify_admin_credentials, login_admin, logout_admin
 import os
 
@@ -13,19 +13,24 @@ def create_app():
     @server.route("/")
     def index():
         """Landing page."""
-        # Get cached KPIs for landing page
+        # Get network overview for landing page
         try:
-            kpis = metrics_service.get_landing_kpis()
+            network_data = tao_metrics_service.get_network_overview()
         except Exception as e:
-            print(f"Error loading KPIs: {e}")
-            kpis = {
-                'total_subnets': 124,
-                'enriched_subnets': 94,
-                'enrichment_rate': 75.8,
-                'categories': 12,
-                'avg_confidence': 85.2
+            print(f"Error loading network data: {e}")
+            network_data = {
+                'total_subnets': 125,
+                'active_subnets': 125,
+                'total_market_cap': 1.8,
+                'avg_market_cap': 14.7,
+                'total_flow_24h': -6.9,
+                'positive_flow_subnets': 30,
+                'top_subnet_name': 'Chutes',
+                'top_subnet_mcap': 284.6,
+                'recent_subnets': 30,
+                'network_growth_rate': 24.0
             }
-        return render_template("index.html", kpis=kpis)
+        return render_template("index.html", network_data=network_data)
 
     @server.route('/admin/login', methods=['GET', 'POST'])
     def admin_login():

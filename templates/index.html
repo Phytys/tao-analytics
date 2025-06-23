@@ -37,20 +37,20 @@
             </p>
             <div class="hero-stats">
                 <div class="stat-item">
-                    <span class="stat-number">{{ kpis.total_subnets }}</span>
+                    <span class="stat-number">{{ network_data.total_subnets }}</span>
                     <span class="stat-label">Subnets</span>
                 </div>
                 <div class="stat-item">
-                    <span class="stat-number">{{ kpis.categories }}</span>
-                    <span class="stat-label">Categories</span>
+                    <span class="stat-number">{{ "%.1f"|format(network_data.total_market_cap) }}M</span>
+                    <span class="stat-label">Market Cap</span>
                 </div>
                 <div class="stat-item">
-                    <span class="stat-number">{{ kpis.enriched_subnets }}</span>
-                    <span class="stat-label">Enriched</span>
+                    <span class="stat-number">{{ network_data.positive_flow_subnets }}</span>
+                    <span class="stat-label">Growing</span>
                 </div>
                 <div class="stat-item">
-                    <span class="stat-number">{{ "%.1f"|format(kpis.avg_confidence) }}%</span>
-                    <span class="stat-label">Avg Confidence</span>
+                    <span class="stat-number">{{ "%.1f"|format(network_data.network_growth_rate) }}%</span>
+                    <span class="stat-label">Growth Rate</span>
                 </div>
             </div>
             <a href="/dash/explorer" class="cta-button">
@@ -59,6 +59,24 @@
                     <path d="M5 12h14M12 5l7 7-7 7"/>
                 </svg>
             </a>
+            
+            <!-- Network Highlights -->
+            <div class="network-highlights">
+                <div class="highlight-card">
+                    <div class="highlight-icon">🏆</div>
+                    <div class="highlight-content">
+                        <h3>Top Subnet: {{ network_data.top_subnet_name }}</h3>
+                        <p>{{ "%.1f"|format(network_data.top_subnet_mcap) }}K TAO Market Cap</p>
+                    </div>
+                </div>
+                <div class="highlight-card">
+                    <div class="highlight-icon">📈</div>
+                    <div class="highlight-content">
+                        <h3>Network Activity</h3>
+                        <p>{{ network_data.recent_subnets }} subnets with positive 24h flow</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 

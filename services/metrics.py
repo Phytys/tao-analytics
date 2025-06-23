@@ -48,6 +48,10 @@ class MetricsService:
         privacy_focused = len(df[df['privacy_security_flag'] == True]) if 'privacy_security_flag' in df.columns else 0
         privacy_rate = (privacy_focused / total_subnets * 100) if total_subnets > 0 else 0
         
+        # Market cap metrics
+        total_market_cap = df['mcap_tao'].sum() if 'mcap_tao' in df.columns else 0
+        high_confidence = len(df[df['confidence'] >= 90]) if 'confidence' in df.columns else 0
+        
         return {
             'total_subnets': total_subnets,
             'enriched_subnets': enriched_subnets,
@@ -55,6 +59,8 @@ class MetricsService:
             'avg_confidence': round(avg_confidence, 1),
             'privacy_focused': privacy_focused,
             'privacy_rate': round(privacy_rate, 1),
+            'total_market_cap': round(total_market_cap / 1000000, 1),  # Convert to millions
+            'high_confidence': high_confidence,
             'category_distribution': category_counts
         }
     
@@ -72,8 +78,8 @@ class MetricsService:
         stats = df.groupby('primary_category').agg(
             count=('netuid', 'count'),
             avg_confidence=('confidence', 'mean'),
-            avg_market_cap=('market_cap_tao', 'mean'),
-            total_market_cap=('market_cap_tao', 'sum')
+            avg_market_cap=('mcap_tao', 'mean'),
+            total_market_cap=('mcap_tao', 'sum')
         ).reset_index()
         
         return [
@@ -162,7 +168,7 @@ class MetricsService:
         
         # Apply sorting
         if sort_by == 'market_cap':
-            df = df.sort_values(by='market_cap_tao', ascending=False)
+            df = df.sort_values(by='mcap_tao', ascending=False)
         elif sort_by == 'confidence':
             df = df.sort_values(by='confidence', ascending=False)
         elif sort_by == 'context_tokens':
@@ -177,7 +183,7 @@ class MetricsService:
                 'name': str(row['subnet_name'] or ''),
                 'category': str(row['primary_category'] or ''),
                 'confidence_score': float(row['confidence'] or 0),
-                'market_cap': float(row['market_cap_tao'] or 0),
+                'market_cap': float(row['mcap_tao'] or 0),
                 'context_tokens': int(row['context_tokens'] or 0),
                 'provenance': str(row['provenance'] or '')
             })
@@ -213,7 +219,7 @@ class MetricsService:
                 'name': str(row['subnet_name'] or ''),
                 'category': str(row['primary_category'] or ''),
                 'confidence_score': float(row['confidence'] or 0),
-                'market_cap': float(row['market_cap_tao'] or 0),
+                'market_cap': float(row['mcap_tao'] or 0),
                 'tags': str(row['secondary_tags'] or '')
             })
         

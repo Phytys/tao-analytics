@@ -12,7 +12,8 @@ A comprehensive data collection, enrichment, and analytics platform for Bittenso
 - **Standardized categories**: Predefined taxonomy for consistent classification
 - **Modern Dashboard**: Web interface with filtering, charts, and expandable cards
 - **Admin System**: Protected system information dashboard for administrators
-- **Real-time data**: Live market cap and performance metrics from TAO.app API
+- **Network Intelligence**: Real-time market cap, flow, and performance metrics
+- **Separated Architecture**: User-facing network metrics vs system metrics
 
 ---
 
@@ -26,20 +27,20 @@ tao-analytics/
 ├── models.py                 # Database schema definitions
 ├── requirements.txt          # Python dependencies
 ├── Procfile                  # Heroku deployment configuration
-├── tao.sqlite               # SQLite database (308KB, 124 subnets)
+├── tao.sqlite               # SQLite database (260KB, 125 subnets)
 ├── .gitignore               # Git ignore rules
 ├── README.md                # This file
-├── PLAN.md                  # Project roadmap and development plan
+├── PLAN.md                  # Project roadmap and development plan (v0.4)
 ├── admin_config.md          # Admin authentication configuration
 ├── processed_netuids.json   # Cache of processed subnet IDs
 │
 ├── static/                   # Static assets for landing page
 │   ├── css/
-│   │   └── main.css         # Landing page styles
+│   │   └── main.css         # Landing page styles with network highlights
 │   └── favicons/            # Favicon assets
 │
 ├── templates/                # Flask templates
-│   ├── index.html           # Tesla-inspired landing page
+│   ├── index.html           # Tesla-inspired landing page with network metrics
 │   └── admin_login.html     # Admin authentication page
 │
 ├── dash_app/                 # Dash dashboard application
@@ -57,7 +58,8 @@ tao-analytics/
 │   ├── db.py                # Database service with query helpers
 │   ├── db_utils.py          # Database utility functions
 │   ├── favicons.py          # Favicon download service
-│   └── metrics.py           # Metrics and analytics service
+│   ├── metrics.py           # System metrics service (admin dashboard)
+│   └── tao_metrics.py       # Network metrics service (user-facing)
 │
 ├── scripts/                  # Data processing scripts
 │   ├── __init__.py
@@ -67,6 +69,7 @@ tao-analytics/
 │   │   ├── prepare_context.py       # Scrape websites and GitHub READMEs
 │   │   ├── enrich_with_openai.py    # LLM enrichment with provenance tracking
 │   │   ├── batch_enrich.py          # Batch processing with cost control
+│   │   ├── parameter_settings.py    # Centralized parameter configuration
 │   │   └── contexts/                # Cached context JSON files
 │   │       ├── 1.json
 │   │       ├── 19.json
@@ -100,7 +103,7 @@ tao-analytics/
 ### **Dashboard Files**
 - **`dash_app/__init__.py`**: Dash app initialization, routing, and navigation setup
 - **`dash_app/pages/explorer.py`**: Public subnet explorer with filtering, search, and interactive charts
-- **`dash_app/pages/system_info.py`**: Admin-only system information dashboard with performance metrics
+- **`dash_app/pages/system_info.py`**: Admin-only system information dashboard with enrichment progress tracking
 
 ### **Service Layer**
 - **`services/auth.py`**: Admin authentication with session management and decorators
@@ -108,13 +111,15 @@ tao-analytics/
 - **`services/db.py`**: Database service with query helpers and connection management
 - **`services/db_utils.py`**: Database utility functions for common operations
 - **`services/favicons.py`**: Favicon download and management service
-- **`services/metrics.py`**: Metrics service for dashboard KPIs and analytics
+- **`services/metrics.py`**: System metrics service for admin dashboard KPIs and analytics
+- **`services/tao_metrics.py`**: Network metrics service for user-facing data (market cap, flow, performance)
 
 ### **Data Collection Scripts**
 - **`scripts/data-collection/fetch_screener.py`**: Downloads subnet data from TAO API
 - **`scripts/data-collection/prepare_context.py`**: Scrapes websites and GitHub READMEs for context
 - **`scripts/data-collection/enrich_with_openai.py`**: LLM enrichment with provenance tracking
 - **`scripts/data-collection/batch_enrich.py`**: Batch processing with cost control and progress tracking
+- **`scripts/data-collection/parameter_settings.py`**: Centralized parameter configuration
 - **`scripts/analyze_enrichment_stats.py`**: Analyzes enrichment quality and generates statistics
 - **`scripts/auto_fallback_enrich.py`**: Automatic retry and fallback enrichment for failed subnets
 
@@ -125,9 +130,9 @@ tao-analytics/
 - **`scripts/reset_db.py`**: Reset database schema and tables
 
 ### **Templates and Static Files**
-- **`templates/index.html`**: Tesla-inspired landing page with navigation
+- **`templates/index.html`**: Tesla-inspired landing page with network metrics and highlights
 - **`templates/admin_login.html`**: Admin authentication page
-- **`static/css/main.css`**: Landing page styling
+- **`static/css/main.css`**: Landing page styling with network highlights
 - **`dash_app/assets/custom.css`**: Dashboard styling and custom components
 
 ---
@@ -162,18 +167,25 @@ SECRET_KEY=your-secret-key-for-sessions
 ### 3. **Launch the Application**
 
 ```bash
-python app.py          # → http://127.0.0.1:5000/
+python app.py          # → http://127.0.0.1:5001/
 ```
 
 **Available Pages:**
-- **Homepage**: `http://127.0.0.1:5000/` - Landing page with navigation
-- **Subnet Explorer**: `http://127.0.0.1:5000/dash/explorer` - Public subnet dashboard
-- **Admin Login**: `http://127.0.0.1:5000/admin/login` - Admin authentication
-- **System Info**: `http://127.0.0.1:5000/dash/system-info` - Admin-only system dashboard
+- **Homepage**: `http://127.0.0.1:5001/` - Landing page with network metrics
+- **Subnet Explorer**: `http://127.0.0.1:5001/dash/explorer` - Public subnet dashboard
+- **Admin Login**: `http://127.0.0.1:5001/admin/login` - Admin authentication
+- **System Info**: `http://127.0.0.1:5001/dash/system-info` - Admin-only system dashboard
 
 ---
 
 ## Dashboard Features
+
+### **Landing Page (Network Intelligence)**
+- **Network overview**: Total subnets, market cap, growth metrics
+- **Top performing subnet**: Highlighted with market cap and activity
+- **Network activity**: Subnets with positive 24h flow
+- **Growth indicators**: Network growth rate and activity metrics
+- **Tesla-inspired design**: Modern, responsive layout
 
 ### **Public Subnet Explorer**
 - **Modern design** with responsive layout
@@ -187,8 +199,9 @@ python app.py          # → http://127.0.0.1:5000/
 
 ### **Admin System Information Dashboard**
 - **Protected access** requiring admin authentication
+- **Enrichment progress tracking** with visual progress bar
 - **System performance metrics** and cache statistics
-- **Enrichment quality analytics** with confidence distributions
+- **Category evolution analytics** with optimization insights
 - **Database statistics** and table information
 - **Cache management** with clear and cleanup functions
 - **Top subnets** by market cap and performance
@@ -217,7 +230,8 @@ python scripts/data-collection/fetch_screener.py
 python scripts/data-collection/prepare_context.py
 ```
 - Scrapes website content and GitHub READMEs
-- Cleans and truncates content
+- Cleans and truncates content (3000 chars max)
+- Prioritizes headers and README sections
 - Estimates token count and saves as JSON
 - **Smart features**: Retry logic, content truncation, token estimation
 
@@ -228,15 +242,17 @@ python scripts/data-collection/enrich_with_openai.py --netuid 1
 - **Provenance tracking**: Distinguishes between context, model, both, or unknown sources
 - **Smart caching**: MD5 hash-based change detection
 - **Quality control**: Confidence scoring and context token tracking
-- **Category standardization**: Uses predefined taxonomy
+- **Category standardization**: Uses predefined taxonomy with dynamic suggestions
+- **Enhanced fields**: primary_use_case, key_technical_features, category_suggestion
 
 ### 4. **Batch Processing**
 ```bash
-python scripts/data-collection/batch_enrich.py --range 1 124 --delay 2
+python scripts/data-collection/batch_enrich.py --range 1 125 --delay 2
 ```
 - **Cost control**: Configurable delays between API calls
 - **Progress tracking**: Real-time status updates
 - **Flexible input**: Process specific subnets, ranges, or all subnets
+- **Fallback mode**: `--fallback` flag for model-only enrichment
 
 ### 5. **Analyze and Export**
 ```bash
@@ -262,8 +278,11 @@ Enriched subnet information:
 | `netuid` | Integer | Primary key, subnet number |
 | `subnet_name` | String | Subnet name from screener |
 | `tagline` | String | LLM-generated concise description |
-| `what_it_does` | Text | LLM-generated detailed purpose |
+| `what_it_does` | Text | LLM-generated detailed purpose (100 words max) |
+| `primary_use_case` | Text | LLM-generated primary use case description |
+| `key_technical_features` | Text | LLM-generated technical features list |
 | `primary_category` | String | Standardized category |
+| `category_suggestion` | String | LLM-suggested new category (for admin review) |
 | `secondary_tags` | Text | Comma-separated relevant tags |
 | `confidence` | Float | LLM confidence score (0-100) |
 | `context_hash` | String | MD5 hash for change detection |
@@ -272,6 +291,10 @@ Enriched subnet information:
 | `privacy_security_flag` | Boolean | Privacy/security focus flag |
 | `last_enriched_at` | DateTime | When LLM fields were last updated |
 | `updated_at` | DateTime | Last database update |
+| `mcap_tao` | Float | Market cap in TAO |
+| `flow_24h` | Float | 24-hour flow in TAO |
+| `github_url` | String | GitHub repository URL |
+| `website_url` | String | Website URL |
 
 ---
 
@@ -284,7 +307,7 @@ Enriched subnet information:
 TAO_APP_API_KEY = "your-tao-api-key"
 OPENAI_API_KEY = "your-openai-api-key"
 
-# Granular primary categories
+# Enhanced primary categories
 PRIMARY_CATEGORIES = [
     "LLM-Inference",
     "LLM-Training / Fine-tune", 
@@ -297,39 +320,61 @@ PRIMARY_CATEGORIES = [
     "Media-Vision / 3-D",
     "Science-Research (Non-financial)",
     "Consumer-AI & Games",
-    "Dev-Tooling"
+    "Dev-Tooling",
+    "AI-Verification & Trust",
+    "Confidential-Compute"
 ]
 
 # Enrichment policy
 ALLOW_MODEL_KNOWLEDGE = True      # Use model prior knowledge
 MIN_CONTEXT_TOKENS = 100          # Below this → model-only mode
 MODEL_ONLY_MAX_CONF = 50          # Max confidence for model-only
+WHAT_IT_DOES_MAX_WORDS = 100      # Maximum words for what_it_does field
 ```
 
 ---
 
 ## Current Status
 
-- **Total subnets**: 124
-- **Enriched subnets**: 94 (75.8%)
+- **Total subnets**: 125
+- **Enriched subnets**: 7 (5.6%) - *Target: 80%+*
 - **Success rate**: 100% for processed subnets
-- **Database size**: 308KB
-- **Categories**: 12 granular categories with good distribution
-- **Quality**: Mix of high-confidence (context-rich) and lower-confidence (model-only) enrichments
+- **Database size**: 260KB
+- **Categories**: 5 active categories with 2 new additions
+- **Quality**: High confidence (95.0%) for enriched subnets
+- **Total Market Cap**: 1.8M TAO
+- **Network Growth**: 24% of subnets showing positive flow
 
 ### **Category Distribution**
-- Science-Research (Non-financial): 17 subnets
-- Finance-Trading & Forecasting: 16 subnets
-- Serverless-Compute: 11 subnets
-- Security & Auditing: 9 subnets
-- LLM-Training / Fine-tune: 9 subnets
-- Media-Vision / 3-D: 8 subnets
-- LLM-Inference: 7 subnets
-- Data-Feeds & Oracles: 6 subnets
-- Consumer-AI & Games: 5 subnets
-- Dev-Tooling: 3 subnets
-- Hashrate-Mining (BTC / PoW): 2 subnets
-- Privacy / Anonymity: 1 subnet
+- LLM-Training / Fine-tune: 3 subnets
+- LLM-Inference: 1 subnet
+- AI-Verification & Trust: 1 subnet
+- Confidential-Compute: 1 subnet
+- Finance-Trading & Forecasting: 1 subnet
+
+### **Network Activity**
+- **Growing subnets**: 30 (24% of total)
+- **Top subnet**: Chutes (284.6K TAO market cap)
+- **Network flow**: -6.9K TAO (24h net change)
+- **Active categories**: 5 with good distribution
+
+---
+
+## Architecture Overview
+
+### **Separated Metrics Architecture**
+- **`services/tao_metrics.py`**: User-facing network metrics (market cap, flow, performance)
+- **`services/metrics.py`**: System metrics (enrichment progress, cache stats, admin KPIs)
+
+### **Landing Page Transformation**
+- **Before**: System metrics (enrichment rate, confidence scores)
+- **After**: Network intelligence (market cap, growth, top performers)
+
+### **Enhanced Data Quality**
+- **Improved prompts**: Added primary_use_case and key_technical_features
+- **Better context**: Increased truncation to 3000 chars, prioritized headers
+- **Dynamic categories**: LLM can suggest new categories for admin review
+- **Parameter centralization**: All settings in parameter_settings.py
 
 ---
 
@@ -347,7 +392,10 @@ The enrichment system tracks the source of each field:
 {
   "tagline": "context",
   "what_it_does": "context", 
+  "primary_use_case": "context",
+  "key_technical_features": "context",
   "primary_category": "model",
+  "category_suggestion": "context",
   "secondary_tags": "both"
 }
 ```
@@ -365,8 +413,8 @@ The enrichment system tracks the source of each field:
 ### **Context Token Tracking**
 - **750+ tokens**: Rich context (website + README)
 - **250-749 tokens**: Moderate context (partial data)
-- **50-249 tokens**: Minimal context
-- **0-49 tokens**: No context (model-only mode)
+- **100-249 tokens**: Minimal context
+- **0-99 tokens**: No context (model-only mode)
 
 ---
 
@@ -417,6 +465,18 @@ This project uses data and services from:
 
 ---
 
+## Development Roadmap
+
+See [PLAN.md](PLAN.md) for detailed development roadmap and priorities.
+
+**Current Focus (v0.4):**
+- Mass enrichment campaign (target 80%+ coverage)
+- Subnet analytics page development
+- Category optimization and review
+- Performance improvements and caching
+
+---
+
 ## Notes
 
 - The pipeline is designed to be Heroku-friendly (no browser scraping, lightweight dependencies)
@@ -427,6 +487,7 @@ This project uses data and services from:
 - URL formatting ensures proper links (adds https:// to domains without protocols)
 - Modern design provides professional user experience
 - Admin system provides secure access to system information and management functions
+- Separated metrics architecture provides better user experience and system management
 
 ---
 

@@ -25,16 +25,9 @@ CATEGORY_COLORS = {
     "Media-Vision / 3-D": "#bcbd22",
     "Science-Research (Non-financial)": "#17becf",
     "Consumer-AI & Games": "#ff9896",
-    "Dev-Tooling": "#98df8a"
-}
-
-CONFIDENCE_COLORS = {
-    '0-20': '#dc3545',
-    '20-40': '#fd7e14', 
-    '40-60': '#ffc107',
-    '60-80': '#20c997',
-    '80-90': '#17a2b8',
-    '90-100': '#28a745'
+    "Dev-Tooling": "#98df8a",
+    "AI-Verification & Trust": "#ff6b6b",
+    "Confidential-Compute": "#4ecdc4"
 }
 
 layout = dbc.Container([
@@ -58,37 +51,24 @@ layout = dbc.Container([
     # KPI Cards
     html.Div(id="kpi-cards", className="mb-4"),
     
-    # Charts Row 1
+    # Enrichment Progress Section
+    html.Div([
+        html.H3("Enrichment Progress", className="mb-3"),
+        html.Div(id="enrichment-progress", className="mb-4"),
+    ], className="mb-4"),
+    
+    # Charts Row - Only show useful charts
     dbc.Row([
         dbc.Col([
             html.Div(id="category-chart", className="chart-container")
-        ], md=6),
-        dbc.Col([
-            html.Div(id="confidence-chart", className="chart-container")
-        ], md=6),
-    ], className="mb-4"),
-    
-    # Charts Row 2
-    dbc.Row([
-        dbc.Col([
-            html.Div(id="provenance-chart", className="chart-container")
         ], md=6),
         dbc.Col([
             html.Div(id="cache-stats", className="chart-container")
         ], md=6),
     ], className="mb-4"),
     
-    # Category Evolution Section
-    html.Div([
-        html.H3("Category Evolution & Optimization", className="mb-3"),
-        html.Div(id="category-evolution", className="mb-4"),
-    ], className="mb-4"),
-    
     # Top Subnets Table
     html.Div(id="top-subnets", className="mb-4"),
-    
-    # Performance Metrics
-    html.Div(id="performance-metrics", className="mb-4"),
     
     # Store for data
     dcc.Store(id="system-data"),
@@ -104,23 +84,17 @@ def load_system_data(n_intervals):
     """Load all system data."""
     print(f"[DEBUG] Loading system data, interval: {n_intervals}")
     try:
-        # Get all metrics
+        # Get essential metrics only
         landing_kpis = metrics_service.get_landing_kpis()
         category_stats = metrics_service.get_category_stats()
-        confidence_dist = metrics_service.get_confidence_distribution()
-        provenance_stats = metrics_service.get_provenance_stats()
         top_subnets = metrics_service.get_top_subnets(limit=10, sort_by='market_cap')
         cache_info = cache_stats()
-        category_evolution = metrics_service.category_evolution_metrics()
         
         return {
             'landing_kpis': landing_kpis,
             'category_stats': category_stats,
-            'confidence_dist': confidence_dist,
-            'provenance_stats': provenance_stats,
             'top_subnets': top_subnets,
             'cache_info': cache_info,
-            'category_evolution': category_evolution,
             'timestamp': datetime.now().isoformat()
         }
     except Exception as e:
@@ -159,8 +133,8 @@ def render_kpi_cards(data):
         ], className="text-center"),
         dbc.Card([
             dbc.CardBody([
-                html.H4(f"{kpis['avg_confidence']}%", className="card-title text-warning"),
-                html.P("Avg Confidence", className="card-text")
+                html.H4(f"{kpis['total_market_cap']}M", className="card-title text-warning"),
+                html.P("Total Market Cap (TAO)", className="card-text")
             ])
         ], className="text-center"),
         dbc.Card([
@@ -171,13 +145,53 @@ def render_kpi_cards(data):
         ], className="text-center"),
         dbc.Card([
             dbc.CardBody([
-                html.H4(f"{kpis['total_market_cap']:.1f}M", className="card-title text-primary"),
-                html.P("Total Market Cap (TAO)", className="card-text")
+                html.H4(f"{len(kpis['category_distribution'])}", className="card-title text-primary"),
+                html.P("Active Categories", className="card-text")
             ])
         ], className="text-center"),
     ]
     
     return dbc.Row([dbc.Col(card, md=4, lg=2) for card in cards], className="g-3")
+
+@callback(
+    Output("enrichment-progress", "children"),
+    Input("system-data", "data")
+)
+def render_enrichment_progress(data):
+    """Render enrichment progress section."""
+    if not data:
+        return html.Div("No data available")
+    
+    kpis = data['landing_kpis']
+    total = kpis['total_subnets']
+    enriched = kpis['enriched_subnets']
+    remaining = total - enriched
+    
+    progress_bar = dbc.Progress(
+        value=enriched,
+        max=total,
+        label=f"{enriched}/{total} ({kpis['enrichment_rate']}%)",
+        color="success",
+        className="mb-3"
+    )
+    
+    stats = [
+        html.Div([
+            html.Strong(f"{enriched}"), " subnets enriched",
+            html.Br(),
+            html.Strong(f"{remaining}"), " subnets remaining"
+        ], className="text-muted")
+    ]
+    
+    if remaining > 0:
+        stats.append(
+            html.Div([
+                html.Br(),
+                html.Small("💡 Run enrichment script to improve coverage", className="text-info")
+            ])
+        )
+    
+    return html.Div([progress_bar] + stats)
 
 @callback(
     Output("category-chart", "children"),
@@ -198,81 +212,19 @@ def render_category_chart(data):
         df,
         x='category',
         y='count',
+        title="Subnets per Category",
         color='category',
-        title="Subnets by Category",
-        color_discrete_map=CATEGORY_COLORS
+        color_discrete_map=CATEGORY_COLORS,
+        text='count'
     )
     
     fig.update_layout(
-        height=400,
+        margin=dict(l=20, r=20, t=50, b=20),
         showlegend=False,
-        margin=dict(l=20, r=20, t=50, b=20),
-        font=dict(family="Inter, sans-serif")
+        xaxis_tickangle=-45
     )
     
-    return dcc.Graph(figure=fig, config={'displayModeBar': False})
-
-@callback(
-    Output("confidence-chart", "children"),
-    Input("system-data", "data")
-)
-def render_confidence_chart(data):
-    """Render confidence distribution chart."""
-    if not data or 'confidence_dist' not in data:
-        return html.Div("No data available")
-    
-    df = pd.DataFrame(data['confidence_dist'])
-    
-    # Check if dataframe is empty
-    if df.empty:
-        return html.Div("No confidence data available")
-    
-    fig = px.bar(
-        df,
-        x='range',
-        y='count',
-        color='range',
-        title="Confidence Score Distribution",
-        color_discrete_map=CONFIDENCE_COLORS
-    )
-    
-    fig.update_layout(
-        height=400,
-        showlegend=False,
-        margin=dict(l=20, r=20, t=50, b=20),
-        font=dict(family="Inter, sans-serif")
-    )
-    
-    return dcc.Graph(figure=fig, config={'displayModeBar': False})
-
-@callback(
-    Output("provenance-chart", "children"),
-    Input("system-data", "data")
-)
-def render_provenance_chart(data):
-    """Render provenance distribution chart."""
-    if not data or 'provenance_stats' not in data:
-        return html.Div("No data available")
-    
-    provenance_data = data['provenance_stats']['provenance_counts']
-    df = pd.DataFrame(provenance_data)
-    
-    # Check if dataframe is empty
-    if df.empty:
-        return html.Div("No provenance data available")
-    
-    fig = px.pie(
-        df,
-        names='provenance',
-        values='count',
-        title="Data Provenance Distribution"
-    )
-    
-    fig.update_layout(
-        height=400,
-        margin=dict(l=20, r=20, t=50, b=20),
-        font=dict(family="Inter, sans-serif")
-    )
+    fig.update_traces(textposition='outside')
     
     return dcc.Graph(figure=fig, config={'displayModeBar': False})
 
@@ -283,37 +235,42 @@ def render_provenance_chart(data):
 def render_cache_stats(data):
     """Render cache statistics."""
     if not data or 'cache_info' not in data:
-        return html.Div("No data available")
+        return html.Div("No cache data available")
     
     cache_info = data['cache_info']
     
     # Create cache usage chart
-    api_cache_usage = (cache_info['api_cache']['size'] / cache_info['api_cache']['max_size']) * 100
-    db_cache_usage = (cache_info['db_cache']['size'] / cache_info['db_cache']['max_size']) * 100
+    cache_sizes = {
+        'API Cache': cache_info['api_cache']['size'],
+        'DB Cache': cache_info['db_cache']['size']
+    }
     
-    fig = go.Figure()
-    
-    fig.add_trace(go.Indicator(
-        mode="gauge+number",
-        value=api_cache_usage,
-        title={'text': "API Cache Usage"},
-        gauge={'axis': {'range': [None, 100]},
-               'bar': {'color': "darkblue"},
-               'steps': [
-                   {'range': [0, 50], 'color': "lightgray"},
-                   {'range': [50, 80], 'color': "yellow"},
-                   {'range': [80, 100], 'color': "red"}
-               ],
-               'threshold': {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': 90}}
-    ))
-    
-    fig.update_layout(
-        height=400,
-        margin=dict(l=20, r=20, t=50, b=20),
-        font=dict(family="Inter, sans-serif")
+    fig = px.pie(
+        values=list(cache_sizes.values()),
+        names=list(cache_sizes.keys()),
+        title="Cache Usage",
+        color=list(cache_sizes.keys()),
+        color_discrete_map={'API Cache': '#1f77b4', 'DB Cache': '#ff7f0e'}
     )
     
-    return dcc.Graph(figure=fig, config={'displayModeBar': False})
+    fig.update_layout(
+        margin=dict(l=20, r=20, t=50, b=20),
+        showlegend=True
+    )
+    
+    # Add cache details
+    details = html.Div([
+        html.Small([
+            html.Strong("API Cache: "), f"{cache_info['api_cache']['size']}/{cache_info['api_cache']['max_size']}",
+            html.Br(),
+            html.Strong("DB Cache: "), f"{cache_info['db_cache']['size']}/{cache_info['db_cache']['max_size']}",
+        ], className="text-muted mt-2")
+    ])
+    
+    return html.Div([
+        dcc.Graph(figure=fig, config={'displayModeBar': False}),
+        details
+    ])
 
 @callback(
     Output("top-subnets", "children"),
@@ -322,23 +279,22 @@ def render_cache_stats(data):
 def render_top_subnets(data):
     """Render top subnets table."""
     if not data or 'top_subnets' not in data:
-        return html.Div("No data available")
+        return html.Div("No subnet data available")
     
     subnets = data['top_subnets']
     
-    # Check if subnets list is empty
     if not subnets:
-        return html.Div("No subnet data available")
+        return html.Div("No enriched subnets available")
     
+    # Create table
     table_header = [
         html.Thead(html.Tr([
             html.Th("NetUID"),
             html.Th("Name"),
             html.Th("Category"),
-            html.Th("Market Cap (TAO)"),
             html.Th("Confidence"),
-            html.Th("Context Tokens"),
-            html.Th("Provenance")
+            html.Th("Market Cap (TAO)"),
+            html.Th("Context Tokens")
         ]))
     ]
     
@@ -347,128 +303,17 @@ def render_top_subnets(data):
             html.Td(subnet['netuid']),
             html.Td(subnet['name']),
             html.Td(subnet['category']),
-            html.Td(f"{subnet['market_cap']:.2f}"),
-            html.Td(f"{subnet['confidence_score']:.0f}%"),
-            html.Td(subnet['context_tokens']),
-            html.Td(subnet['provenance'])
+            html.Td(f"{subnet['confidence_score']}%"),
+            html.Td(f"{subnet['market_cap']:,.0f}"),
+            html.Td(subnet['context_tokens'])
         ]) for subnet in subnets
     ])]
     
     return html.Div([
         html.H3("Top Subnets by Market Cap", className="mb-3"),
-        dbc.Table(table_header + table_body, bordered=True, hover=True)
-    ])
-
-@callback(
-    Output("performance-metrics", "children"),
-    Input("system-data", "data")
-)
-def render_performance_metrics(data):
-    """Render performance metrics."""
-    if not data:
-        return html.Div("No data available")
-    
-    cache_info = data.get('cache_info', {})
-    provenance_stats = data.get('provenance_stats', {})
-    
-    metrics = [
-        ("API Cache Size", f"{cache_info.get('api_cache', {}).get('size', 0)}/{cache_info.get('api_cache', {}).get('max_size', 0)}"),
-        ("DB Cache Size", f"{cache_info.get('db_cache', {}).get('size', 0)}/{cache_info.get('db_cache', {}).get('max_size', 0)}"),
-        ("API Cache TTL", f"{cache_info.get('api_cache', {}).get('ttl', 0)}s"),
-        ("DB Cache TTL", f"{cache_info.get('db_cache', {}).get('ttl', 0)}s"),
-        ("Avg Context Tokens", f"{provenance_stats.get('context_tokens', {}).get('avg', 0):.1f}"),
-        ("Max Context Tokens", f"{provenance_stats.get('context_tokens', {}).get('max', 0)}"),
-        ("Last Updated", data.get('timestamp', 'Unknown'))
-    ]
-    
-    metric_cards = [
-        dbc.Card([
-            dbc.CardBody([
-                html.H6(label, className="card-title"),
-                html.P(value, className="card-text")
-            ])
-        ], className="text-center") for label, value in metrics
-    ]
-    
-    return html.Div([
-        html.H3("Performance Metrics", className="mb-3"),
-        dbc.Row([dbc.Col(card, md=3) for card in metric_cards], className="g-3")
-    ])
-
-@callback(
-    Output("category-evolution", "children"),
-    Input("system-data", "data")
-)
-def render_category_evolution(data):
-    """Render category evolution metrics and insights."""
-    if not data or 'category_evolution' not in data:
-        return html.Div("No category evolution data available")
-    
-    evolution = data['category_evolution']
-    
-    # Create cards for key metrics
-    metric_cards = [
-        dbc.Card([
-            dbc.CardBody([
-                html.H4(f"{evolution['total_enriched']}", className="card-title text-primary"),
-                html.P("Enriched Subnets", className="card-text")
-            ])
-        ], className="text-center"),
-        dbc.Card([
-            dbc.CardBody([
-                html.H4(f"{evolution['category_suggestions']}", className="card-title text-warning"),
-                html.P("Category Suggestions", className="card-text")
-            ])
-        ], className="text-center"),
-        dbc.Card([
-            dbc.CardBody([
-                html.H4(f"{evolution['suggestion_rate']}%", className="card-title text-info"),
-                html.P("Suggestion Rate", className="card-text")
-            ])
-        ], className="text-center"),
-    ]
-    
-    # Create insights list
-    insights_list = []
-    for insight in evolution['optimization_insights']:
-        insights_list.append(html.Li(insight, className="mb-1"))
-    
-    # Create suggested categories table
-    suggested_categories_table = []
-    if evolution['suggested_categories']:
-        for category, count in evolution['suggested_categories'].items():
-            suggested_categories_table.append(
-                html.Tr([
-                    html.Td(category),
-                    html.Td(count, className="text-center")
-                ])
-            )
-    
-    return html.Div([
-        # Metric cards
-        dbc.Row([dbc.Col(card, md=4) for card in metric_cards], className="mb-4"),
-        
-        # Insights and suggestions
-        dbc.Row([
-            dbc.Col([
-                html.H5("Optimization Insights", className="mb-3"),
-                html.Ul(insights_list) if insights_list else html.P("No optimization insights available.", className="text-muted")
-            ], md=6),
-            dbc.Col([
-                html.H5("Suggested Categories", className="mb-3"),
-                dbc.Table([
-                    html.Thead([
-                        html.Tr([
-                            html.Th("Category Name"),
-                            html.Th("Count", className="text-center")
-                        ])
-                    ]),
-                    html.Tbody(suggested_categories_table)
-                ], striped=True, bordered=True, hover=True) if suggested_categories_table else html.P("No category suggestions yet.", className="text-muted")
-            ], md=6)
-        ])
+        dbc.Table(table_header + table_body, striped=True, bordered=True, hover=True)
     ])
 
 def register_callbacks(dash_app):
-    """Register all callbacks with the dash app."""
-    pass  # Callbacks are already registered via decorators 
+    """Register all callbacks for the system info page."""
+    pass 

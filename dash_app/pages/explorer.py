@@ -3,7 +3,6 @@ from dash import html, dcc, Input, Output, State, callback, callback_context
 import plotly.express as px
 import plotly.graph_objects as go
 from services.db import load_subnet_frame
-from services.metrics import metrics_service
 from services.favicons import favicon_service
 from services.cache import cache_stats
 import pandas as pd, datetime as dt, json, os
