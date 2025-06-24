@@ -21,6 +21,7 @@
 - [Deployment](#deployment)
 - [Development Notes](#development-notes)
 - [License](#license)
+- [Development > SDK setup (macOS M-series)](#development--sdk-setup-macos-m-series)
 
 ---
 
@@ -252,6 +253,40 @@ tao-analytics/
 ## License
 
 This project is licensed under the MIT License. See `LICENSE` for details.
+
+---
+
+## Development > SDK setup (macOS M-series)
+
+To reliably install the Bittensor SDK on Apple Silicon (macOS 14/15):
+
+```
+xcode-select --install               # ensure Command Line Tools
+brew install openssl pkg-config      # headers for any native wheels
+python3.10 -m venv bt_venv           # use 3.10 for maximum wheel coverage *
+source bt_venv/bin/activate
+python -m pip install -U pip wheel setuptools
+pip install "grpcio>=1.73.0" "grpcio-tools>=1.73.0"
+pip install "bittensor>=9.7.0"
+```
+
+* Python 3.10 still has the widest wheel support across the py-crypto stack. Python 3.11+ should also work today (grpc 1.73 ships wheels for 3.11 arm64), but 3.10 is a guaranteed "happy path".
+
+To run the SDK smoke-test:
+
+```
+python scripts/data_sources/sdk_smoketest.py
+```
+
+Expected output:
+```
+{
+  'network': 'finney',
+  'chain_endpoint': 'wss://entrypoint-finney.opentensor.ai:443',
+  'current_block': 1623456,
+  'finalized_block': 1623452
+}
+```
 
 ---
 
