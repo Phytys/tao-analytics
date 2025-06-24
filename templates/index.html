@@ -54,16 +54,25 @@
                     <span class="stat-label">Subnets</span>
                 </div>
                 <div class="stat-item">
-                    <span class="stat-number">{{ "%.1f"|format(network_data.total_market_cap) }}M</span>
-                    <span class="stat-label">Market Cap</span>
+                    <span class="stat-number">${{ "%.1f"|format(network_data.total_market_cap * network_data.tao_price_usd) }}M</span>
+                    <span class="stat-label">All Subnets Market Cap (USD)</span>
+                    <span class="stat-usd">{{ "%.1f"|format(network_data.total_market_cap) }}M TAO</span>
                 </div>
                 <div class="stat-item">
-                    <span class="stat-number">{{ network_data.positive_flow_subnets }}</span>
-                    <span class="stat-label">Growing</span>
+                    <span class="stat-number">${{ "%.1f"|format(network_data.tao_market_cap_usd) }}M</span>
+                    <span class="stat-label">Bittensor Market Cap (USD)</span>
                 </div>
                 <div class="stat-item">
-                    <span class="stat-number">{{ "%.1f"|format(network_data.network_growth_rate) }}%</span>
-                    <span class="stat-label">Growth Rate</span>
+                    <span class="stat-number">${{ "%.2f"|format(network_data.tao_price_usd) }}</span>
+                    <span class="stat-label">TAO Price (USD)</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">{{ network_data.positive_flow_count }}</span>
+                    <span class="stat-label">Positive Flow</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">{{ "%.1f"|format(network_data.positive_flow_percentage) }}%</span>
+                    <span class="stat-label">Positive Flow %</span>
                 </div>
             </div>
             <a href="/dash/explorer" class="cta-button">
@@ -123,7 +132,7 @@
 
     <footer class="footer">
         <div class="container">
-            <p>&copy; 2024 TAO Analytics. Built with precision for the decentralized future.</p>
+            <p>&copy; 2025 TAO Analytics. Built with love for the decentralized future.</p>
             <p class="footer-credits">
                 Data powered by <a href="https://tao.app" target="_blank" class="footer-link">TAO.app API</a> • 
                 Intelligence enhanced by <a href="https://openai.com" target="_blank" class="footer-link">OpenAI GPT-4</a>

@@ -1,5 +1,5 @@
 import os, json, pandas as pd
-from sqlalchemy import create_engine, text, select, func
+from sqlalchemy import create_engine, text, select, func, String
 from sqlalchemy.orm import sessionmaker
 from .db_utils import json_field, get_database_type
 from models import SubnetMeta, ScreenerRaw
@@ -42,9 +42,16 @@ def load_subnet_frame(category="All", search=""):
     
     if search:
         search_like = f"%{search.lower()}%"
+        # Expanded search: match against all relevant fields
         query = query.where(
+            func.lower(func.cast(SubnetMeta.netuid, String)).like(search_like) |
             func.lower(SubnetMeta.subnet_name).like(search_like) |
-            func.lower(SubnetMeta.secondary_tags).like(search_like)
+            func.lower(SubnetMeta.primary_category).like(search_like) |
+            func.lower(SubnetMeta.secondary_tags).like(search_like) |
+            func.lower(SubnetMeta.tagline).like(search_like) |
+            func.lower(SubnetMeta.what_it_does).like(search_like) |
+            func.lower(SubnetMeta.primary_use_case).like(search_like) |
+            func.lower(SubnetMeta.key_technical_features).like(search_like)
         )
     
     # Execute query and convert to DataFrame

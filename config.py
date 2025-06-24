@@ -8,6 +8,7 @@ load_dotenv(BASE_DIR / ".env")
 
 TAO_KEY = os.getenv("TAO_APP_API_KEY")
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
+COINGECKO_API_KEY = os.getenv('COINGECKO_API_KEY')
 
 TAO_ENDPOINT = "https://api.tao.app/api/beta/subnet_screener"
 

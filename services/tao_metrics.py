@@ -12,7 +12,7 @@ import json
 from .db import get_db, load_subnet_frame
 from .cache import cached, db_cache
 from .db_utils import json_field
-from models import ScreenerRaw, SubnetMeta
+from models import ScreenerRaw, SubnetMeta, CoinGeckoPrice
 from datetime import datetime, timedelta
 
 
@@ -43,15 +43,27 @@ class TaoMetricsService:
         
         # Flow metrics (24h)
         total_flow_24h = df['flow_24h'].sum()
-        positive_flow_subnets = len(df[df['flow_24h'] > 0])
+        positive_flow_subnets = len(df[df['flow_24h'] > 0])  # Subnets with positive net volume
         
         # Top subnet
         top_subnet = df.loc[df['mcap_tao'].idxmax()] if not df.empty else None
         top_subnet_name = top_subnet['subnet_name'] if top_subnet is not None else 'N/A'
         top_subnet_mcap = top_subnet['mcap_tao'] if top_subnet is not None else 0
         
-        # Network growth (subnets with recent activity)
-        recent_subnets = len(df[df['flow_24h'] > 0])  # Subnets with positive flow
+        # Network activity (subnets with positive flow)
+        recent_subnets = len(df[df['flow_24h'] > 0])  # Subnets with positive net volume
+        
+        # Get current TAO price and market cap
+        tao_price_usd = 354.5  # Default fallback
+        tao_market_cap_usd = 0  # Default fallback
+        try:
+            with get_db() as session:
+                latest_price = session.query(CoinGeckoPrice).order_by(CoinGeckoPrice.fetched_at.desc()).first()
+                if latest_price:
+                    tao_price_usd = float(latest_price.price_usd)
+                    tao_market_cap_usd = float(latest_price.market_cap_usd or 0)
+        except Exception as e:
+            print(f"Error fetching TAO data: {e}")
         
         return {
             'total_subnets': total_subnets,
@@ -59,11 +71,13 @@ class TaoMetricsService:
             'total_market_cap': round(float(total_market_cap) / 1000000, 1),  # Convert to millions
             'avg_market_cap': round(float(avg_market_cap) / 1000, 1),  # Convert to thousands
             'total_flow_24h': round(float(total_flow_24h) / 1000, 1),  # Convert to thousands
-            'positive_flow_subnets': positive_flow_subnets,
+            'positive_flow_count': positive_flow_subnets,
             'top_subnet_name': top_subnet_name,
             'top_subnet_mcap': round(float(top_subnet_mcap) / 1000, 1),  # Convert to thousands
             'recent_subnets': recent_subnets,
-            'network_growth_rate': round((recent_subnets / total_subnets * 100), 1) if total_subnets > 0 else 0
+            'positive_flow_percentage': round((recent_subnets / total_subnets * 100), 1) if total_subnets > 0 else 0,
+            'tao_price_usd': tao_price_usd,
+            'tao_market_cap_usd': round(tao_market_cap_usd / 1000000, 1)  # Convert to millions
         }
     
     @cached(db_cache)

@@ -3,6 +3,7 @@ from sqlalchemy import (
     JSON, Text, DateTime, func, Boolean
 )
 from sqlalchemy.orm import declarative_base, sessionmaker
+from datetime import datetime
 
 from config import DB_URL
 
@@ -40,5 +41,12 @@ class SubnetMeta(Base):
     # — timestamps —
     last_enriched_at = Column(DateTime)  # When LLM fields were last updated
     updated_at = Column(DateTime, onupdate=func.now())
+
+class CoinGeckoPrice(Base):
+    __tablename__ = 'coingecko'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    price_usd = Column(Float, nullable=False)
+    market_cap_usd = Column(Float, nullable=True)  # Bittensor's total market cap
+    fetched_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 Base.metadata.create_all(engine) 

@@ -13,3 +13,4 @@ dash==2.16.1
 dash-bootstrap-components
 gunicorn
 psycopg2-binary>=2.9 
+coingecko

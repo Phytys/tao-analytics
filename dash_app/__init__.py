@@ -36,6 +36,8 @@ def create_dash(server):
                     html.Span(className="hamburger-line")
                 ], className="mobile-menu-btn", id="mobile-menu-btn", n_clicks=0),
                 html.Div([
+                    # Close button for mobile menu
+                    html.Button("×", id="mobile-menu-close", className="mobile-menu-close-btn", n_clicks=0),
                     html.A("Subnet Explorer", href="/dash/explorer", className="nav-link"),
                     html.A("System Info", href="/dash/system-info", className="nav-link", id="system-info-nav-link"),
                     html.A("Back to Home", href="/", className="nav-link")
@@ -66,17 +68,20 @@ def create_dash(server):
         dash.Output("mobile-menu-btn", "className"),
         dash.Output("menu-state", "data"),
         dash.Input("mobile-menu-btn", "n_clicks"),
+        dash.Input("mobile-menu-close", "n_clicks"),
         dash.State("menu-state", "data"),
         prevent_initial_call=True
     )
-    def toggle_mobile_menu(n_clicks, menu_state):
-        if n_clicks is None:
+    def toggle_mobile_menu(n_hamburger, n_close, menu_state):
+        ctx = dash.callback_context
+        if not ctx.triggered:
             return "nav-links", "mobile-menu-btn", menu_state
-        
+        btn_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        if btn_id == "mobile-menu-close":
+            return "nav-links", "mobile-menu-btn", {"open": False}
+        # Hamburger button toggles open/close
         is_open = menu_state.get("open", False)
-        new_state = not is_open
-        
-        if new_state:
+        if not is_open:
             return "nav-links nav-open", "mobile-menu-btn active", {"open": True}
         else:
             return "nav-links", "mobile-menu-btn", {"open": False}
