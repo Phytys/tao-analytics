@@ -9,6 +9,7 @@ from datetime import datetime
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from config import TAO_ENDPOINT, TAO_KEY
 from models import Session, ScreenerRaw, SubnetMeta
+from services.cache import clear_all_caches
 
 def main():
     print("Fetching screener …")
@@ -53,6 +54,10 @@ def main():
     sess.commit()
     print(f"Saved {len(screener)} rows.")
     sess.close()
+    
+    # Clear cache to ensure new data is immediately visible
+    clear_all_caches()
+    print("✅ Cache cleared - new data is now visible in the app!")
 
 if __name__ == "__main__":
     try:

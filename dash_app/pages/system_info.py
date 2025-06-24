@@ -389,6 +389,92 @@ def render_top_subnets(data):
         dbc.Table(table_header + table_body, striped=True, bordered=True, hover=True)
     ])
 
+@callback(
+    Output("system-data", "data", allow_duplicate=True),
+    Input("refresh-btn", "n_clicks"),
+    prevent_initial_call=True
+)
+def refresh_data(n_clicks):
+    """Refresh system data."""
+    print(f"[DEBUG] Refresh button clicked: {n_clicks}")
+    try:
+        # Get essential metrics only
+        landing_kpis = metrics_service.get_landing_kpis()
+        category_stats = metrics_service.get_category_stats()
+        top_subnets = metrics_service.get_top_subnets(limit=10, sort_by='market_cap')
+        cache_info = cache_stats()
+        
+        return {
+            'landing_kpis': landing_kpis,
+            'category_stats': category_stats,
+            'top_subnets': top_subnets,
+            'cache_info': cache_info,
+            'timestamp': datetime.now().isoformat()
+        }
+    except Exception as e:
+        print(f"Error refreshing data: {e}")
+        return {}
+
+@callback(
+    Output("system-data", "data", allow_duplicate=True),
+    Input("clear-cache-btn", "n_clicks"),
+    prevent_initial_call=True
+)
+def clear_cache(n_clicks):
+    """Clear all caches."""
+    print(f"[DEBUG] Clear cache button clicked: {n_clicks}")
+    try:
+        from services.cache import clear_all_caches
+        clear_all_caches()
+        print("All caches cleared successfully")
+        
+        # Reload data after clearing cache
+        landing_kpis = metrics_service.get_landing_kpis()
+        category_stats = metrics_service.get_category_stats()
+        top_subnets = metrics_service.get_top_subnets(limit=10, sort_by='market_cap')
+        cache_info = cache_stats()
+        
+        return {
+            'landing_kpis': landing_kpis,
+            'category_stats': category_stats,
+            'top_subnets': top_subnets,
+            'cache_info': cache_info,
+            'timestamp': datetime.now().isoformat()
+        }
+    except Exception as e:
+        print(f"Error clearing cache: {e}")
+        return {}
+
+@callback(
+    Output("system-data", "data", allow_duplicate=True),
+    Input("cleanup-cache-btn", "n_clicks"),
+    prevent_initial_call=True
+)
+def cleanup_cache(n_clicks):
+    """Cleanup expired cache entries."""
+    print(f"[DEBUG] Cleanup cache button clicked: {n_clicks}")
+    try:
+        from services.cache import cleanup_all_caches
+        cleanup_all_caches()
+        print("Cache cleanup completed")
+        
+        # Reload data after cleanup
+        landing_kpis = metrics_service.get_landing_kpis()
+        category_stats = metrics_service.get_category_stats()
+        top_subnets = metrics_service.get_top_subnets(limit=10, sort_by='market_cap')
+        cache_info = cache_stats()
+        
+        return {
+            'landing_kpis': landing_kpis,
+            'category_stats': category_stats,
+            'top_subnets': top_subnets,
+            'cache_info': cache_info,
+            'timestamp': datetime.now().isoformat()
+        }
+    except Exception as e:
+        print(f"Error cleaning up cache: {e}")
+        return {}
+
 def register_callbacks(dash_app):
     """Register all callbacks for the system info page."""
     pass 

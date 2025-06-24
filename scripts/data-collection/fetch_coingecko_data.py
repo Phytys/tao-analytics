@@ -7,6 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from models import CoinGeckoPrice
 from config import DB_URL, COINGECKO_API_KEY
+from services.cache import clear_all_caches
 import coingecko
 
 COIN_ID = 'bittensor'
@@ -55,6 +56,10 @@ def save_data_to_db(price_usd, market_cap_usd):
 def main():
     price_usd, market_cap_usd = fetch_tao_data()
     save_data_to_db(price_usd, market_cap_usd)
+    
+    # Clear cache to ensure new data is immediately visible
+    clear_all_caches()
+    print("✅ Cache cleared - new TAO price/market cap is now visible in the app!")
 
 if __name__ == "__main__":
     main() 
