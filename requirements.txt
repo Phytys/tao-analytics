@@ -1,3 +1,10 @@
+# --- core ---
+grpcio>=1.73.0            # force modern wheel first
+grpcio-tools>=1.73.0      # needed by bittensor CLI
+bittensor==9.7.*          # pin working version
+rich                       # pretty CLI output
+
+# --- existing dependencies ---
 requests==2.31.0
 beautifulsoup4==4.12.2
 sqlalchemy>=2.0.28
