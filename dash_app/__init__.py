@@ -24,37 +24,33 @@ def create_dash(server):
         suppress_callback_exceptions=True
     )
     
-    # App layout with navigation
+    # App layout with custom navigation
     app.layout = html.Div([
-        # Navigation bar
-        dbc.Navbar(
-            dbc.Container([
-                dbc.NavbarBrand(
-                    html.A("TAO Analytics", href="/", className="text-decoration-none text-white"),
-                    className="fw-bold"
-                ),
-                dbc.Nav([
-                    dbc.NavItem(
-                        dbc.NavLink("Subnet Explorer", href="/dash/explorer", className="text-white")
-                    ),
-                    # System Info link - only show when authenticated
-                    dbc.NavItem(
-                        dbc.NavLink("System Info", href="/dash/system-info", className="text-white"),
-                        id="system-info-nav-item",
-                        style={"display": "none"}  # Hidden by default
-                    ),
-                ], className="ms-auto"),
-            ]),
-            color="primary",
-            dark=True,
-            className="mb-4"
-        ),
+        # Custom Navigation bar
+        html.Nav([
+            html.Div([
+                html.A("TAO Analytics", href="/", className="nav-brand"),
+                html.Button([
+                    html.Span(className="hamburger-line"),
+                    html.Span(className="hamburger-line"),
+                    html.Span(className="hamburger-line")
+                ], className="mobile-menu-btn", id="mobile-menu-btn", n_clicks=0),
+                html.Div([
+                    html.A("Subnet Explorer", href="/dash/explorer", className="nav-link"),
+                    html.A("System Info", href="/dash/system-info", className="nav-link", id="system-info-nav-link"),
+                    html.A("Back to Home", href="/", className="nav-link")
+                ], className="nav-links", id="nav-links")
+            ], className="nav-container")
+        ], className="navbar"),
         
         # Page content
         html.Div(id="page-content"),
         
         # URL routing
         dcc.Location(id="url", refresh=False),
+        
+        # Store for menu state
+        dcc.Store(id="menu-state", data={"open": False})
     ])
     
     # Import and register callbacks
@@ -63,6 +59,27 @@ def create_dash(server):
     
     register_explorer_callbacks(app)
     register_system_info_callbacks(app)
+    
+    # Mobile menu toggle callback
+    @app.callback(
+        dash.Output("nav-links", "className"),
+        dash.Output("mobile-menu-btn", "className"),
+        dash.Output("menu-state", "data"),
+        dash.Input("mobile-menu-btn", "n_clicks"),
+        dash.State("menu-state", "data"),
+        prevent_initial_call=True
+    )
+    def toggle_mobile_menu(n_clicks, menu_state):
+        if n_clicks is None:
+            return "nav-links", "mobile-menu-btn", menu_state
+        
+        is_open = menu_state.get("open", False)
+        new_state = not is_open
+        
+        if new_state:
+            return "nav-links nav-open", "mobile-menu-btn active", {"open": True}
+        else:
+            return "nav-links", "mobile-menu-btn", {"open": False}
     
     # URL routing callback with authentication check
     @app.callback(
@@ -91,7 +108,7 @@ def create_dash(server):
     
     # Callback to show/hide system-info link based on authentication
     @app.callback(
-        dash.Output("system-info-nav-item", "style"),
+        dash.Output("system-info-nav-link", "style"),
         dash.Input("url", "pathname")
     )
     def update_navbar_visibility(pathname):

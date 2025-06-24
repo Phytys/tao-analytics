@@ -1,5 +1,5 @@
 import dash_bootstrap_components as dbc
-from dash import html, dcc, Input, Output, State, callback, callback_context
+from dash import html, dcc, Input, Output, State, callback, callback_context, clientside_callback
 import plotly.express as px
 import plotly.graph_objects as go
 from services.db import load_subnet_frame
@@ -49,60 +49,75 @@ layout = dbc.Container(
         # --- Tesla-inspired header ---
         html.Div([
             html.H1("Bittensor Subnet Explorer", className="dashboard-title"),
-            html.P("Comprehensive analytics and insights for the decentralized AI network", className="dashboard-subtitle"),
         ], className="dashboard-header"),
         
         # --- filter controls ---
         html.Div([
             dbc.Row([
                 dbc.Col([
-                    html.Label("Category Filter", className="form-label"),
                     dcc.Dropdown(
                         id="cat-drop",
-                        options=[{"label": c, "value": c} for c in CATS],
+                        options=[{"label": "All categories", "value": "All"}] + [{"label": c, "value": c} for c in CATS if c != "All"],
                         value="All",
                         clearable=False,
-                        className="form-select"
+                        style={"width": "100%"}
                     ),
-                ], md=4),
+                ], xs=12, md=6, className="filter-col"),
                 dbc.Col([
-                    html.Label("Search Subnets", className="form-label"),
                     dcc.Input(
                         id="search-box",
                         type="text",
-                        placeholder="Search by name or tags...",
+                        placeholder="Search subnets (name, tag, etc)",
                         debounce=True,
                         className="form-control"
                     ),
-                ], md=4),
-                dbc.Col([
-                    html.Label("Last Updated", className="form-label"),
-                    html.Div(id="refresh-stamp", className="text-muted"),
-                ], md=4),
-            ]),
-        ], className="filter-controls"),
+                    html.Div(id="refresh-stamp", className="text-muted minimal-last-updated"),
+                ], xs=12, md=6, className="filter-col"),
+            ], className="g-1 g-md-2"),
+        ], className="filter-controls compact-filter-controls"),
         
         # --- KPI strip ---
-        html.Div(id="kpi-strip", className="mb-4"),
+        html.Div(id="kpi-strip", className="mb-4 compact-kpi-strip"),
         
-        # --- charts ---
+        # --- minimalist chart toggle and chart ---
         html.Div([
-            dcc.Tabs(
-                id="charts-tab",
-                value="count",
-                children=[
-                    dcc.Tab(label="Subnets per Category", value="count"),
-                    dcc.Tab(label="Market-cap by Category", value="mcap"),
-                    dcc.Tab(label="Confidence Distribution", value="confidence"),
-                ],
-                className="nav-tabs"
+            html.Div(
+                dbc.ButtonGroup([
+                    dbc.Button(
+                        [
+                            html.I(className="bi bi-pie-chart-fill me-1"),
+                            "Subnets"
+                        ],
+                        id="btn-chart-count",
+                        color="primary",
+                        outline=False,  # Will be set dynamically
+                        active=True,
+                        n_clicks=0,
+                        className="chart-toggle-btn"
+                    ),
+                    dbc.Button(
+                        [
+                            html.I(className="bi bi-bar-chart-fill me-1"),
+                            "Market Cap"
+                        ],
+                        id="btn-chart-mcap",
+                        color="primary",
+                        outline=True,  # Will be set dynamically
+                        active=False,
+                        n_clicks=0,
+                        className="chart-toggle-btn"
+                    ),
+                ], size="sm", className="chart-toggle-group justify-content-center mb-2", id="chart-toggle-group"),
+                className="d-flex justify-content-center"
             ),
             html.Div(id="chart-fig", className="chart-container"),
-        ]),
+        ], id="chart-section"),
         
         # --- card grid ---
         html.Div(id="card-grid", className="row g-4"),
         dcc.Store(id="cache-df"),
+        dcc.Store(id="chart-mode-store", data="mcap"),
+        dcc.Store(id="screen-size-store", data="large"),
     ],
     fluid=True,
     className="px-4"
@@ -130,79 +145,154 @@ def render_kpis(json_df):
     df = pd.read_json(StringIO(json_df), orient="split")
     total = len(df)
     cats = df["primary_category"].nunique()
-    privacy = (df["privacy_security_flag"] == True).mean() * 100
-    avg_confidence = df["confidence"].mean()
     
-    # Get cache stats
-    cache_info = cache_stats()
-    
+    # Only show essential badges that respond to filters/search
     badges = [
-        html.Span(f"{total} Subnets", className="kpi-badge"),
-        html.Span(f"{cats} Categories", className="kpi-badge"),
-        html.Span(f"{privacy:.0f}% Privacy-Focused", className="kpi-badge"),
-        html.Span(f"{avg_confidence:.0f}% Avg Confidence", className="kpi-badge"),
-        html.Span(f"Cache: {cache_info['api_cache']['size']}/{cache_info['api_cache']['max_size']}", className="kpi-badge"),
+        html.Span(f"📊 {total} Subnets", className="kpi-badge"),
+        html.Span(f"🏷️ {cats} Categories", className="kpi-badge"),
     ]
+    
+    # Add a helpful message if filters are applied
+    if total < 125:  # Assuming 125 is the total number of subnets
+        badges.append(
+            html.Span(f"🔍 Filtered results", className="kpi-badge kpi-filtered")
+        )
+    
     return html.Div(badges)
+
+@callback(
+    Output("chart-mode-store", "data"),
+    Output("btn-chart-count", "active"),
+    Output("btn-chart-mcap", "active"),
+    Output("btn-chart-count", "outline"),
+    Output("btn-chart-mcap", "outline"),
+    Input("btn-chart-count", "n_clicks"),
+    Input("btn-chart-mcap", "n_clicks"),
+)
+def toggle_chart_mode(n_count, n_mcap):
+    ctx = callback_context
+    if not ctx.triggered:
+        # Default: Market Cap is active
+        return "mcap", False, True, True, False
+    btn_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    if btn_id == "btn-chart-mcap":
+        return "mcap", False, True, True, False
+    return "count", True, False, False, True
 
 @callback(
     Output("chart-fig", "children"),
     Input("cache-df", "data"),
-    Input("charts-tab", "value"),
+    Input("chart-mode-store", "data"),
+    Input("screen-size-store", "data"),
 )
-def render_chart(json_df, mode):
+def render_chart(json_df, mode, screen_size):
     if not json_df:
-        return html.Div("No data available")
+        print("DEBUG: No JSON data available for charts")
+        return html.Div("No data available", style={"textAlign": "center", "padding": "2rem"})
     
-    df = pd.read_json(StringIO(json_df), orient="split")
-    
-    if mode == "count":
-        fig = px.pie(
-            df.groupby("primary_category").size().reset_index(name="count"),
-            names="primary_category",
-            values="count",
-            title="Subnets per Category",
-            color_discrete_map=CATEGORY_COLORS
-        )
-    elif mode == "mcap":
-        fig = px.bar(
-            df.groupby("primary_category")["mcap_tao"].sum().reset_index(),
-            x="primary_category",
-            y="mcap_tao",
-            title="Total Market-cap (TAO) by Category",
-            color="primary_category",
-            color_discrete_map=CATEGORY_COLORS
-        )
-    else:  # confidence
-        # Create confidence distribution
-        confidence_bins = [0, 20, 40, 60, 80, 90, 100]
-        confidence_labels = ['0-20', '20-40', '40-60', '60-80', '80-90', '90-100']
-        df['confidence_bin'] = pd.cut(df['confidence'], bins=confidence_bins, labels=confidence_labels, include_lowest=True)
+    try:
+        df = pd.read_json(StringIO(json_df), orient="split")
+        print(f"DEBUG: Loaded {len(df)} rows for chart, mode: {mode}, screen: {screen_size}")
+        showlegend = screen_size == "large"
         
-        fig = px.bar(
-            df.groupby('confidence_bin').size().reset_index(name='count'),
-            x='confidence_bin',
-            y='count',
-            title="AI Model Confidence in Subnet Classification",
-            color='confidence_bin',
-            color_discrete_map={
-                '0-20': '#dc3545',
-                '20-40': '#fd7e14',
-                '40-60': '#ffc107',
-                '60-80': '#20c997',
-                '80-90': '#17a2b8',
-                '90-100': '#28a745'
+        if mode == "count":
+            count_data = df.groupby("primary_category").size().reset_index()
+            count_data.columns = ["primary_category", "count"]
+            print(f"DEBUG: Pie chart data - {len(count_data)} categories")
+            fig = px.pie(
+                count_data,
+                names="primary_category",
+                values="count",
+                title="Subnets per Category",
+                color_discrete_map=CATEGORY_COLORS
+            )
+            fig.update_layout(
+                margin=dict(l=10, r=10, t=50, b=20),
+                height=350,
+                showlegend=showlegend,
+                autosize=True,
+                font=dict(size=12),
+                hoverlabel=dict(
+                    bgcolor="white",
+                    font_size=12,
+                    font_family="Inter"
+                ),
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)'
+            )
+            fig.update_traces(
+                hovertemplate="<b>%{label}</b><br>Subnets: %{value}<br>Percentage: %{percent}<extra></extra>"
+            )
+            
+        elif mode == "mcap":
+            mcap_data = df.groupby("primary_category")["mcap_tao"].sum().reset_index()
+            print(f"DEBUG: Bar chart data - {len(mcap_data)} categories")
+            fig = px.bar(
+                mcap_data,
+                x="primary_category",
+                y="mcap_tao",
+                title="Total Market-cap (TAO) by Category",
+                color="primary_category",
+                color_discrete_map=CATEGORY_COLORS
+            )
+            fig.update_layout(
+                margin=dict(l=20, r=20, t=50, b=20),
+                height=350,
+                showlegend=False,
+                autosize=True,
+                font=dict(size=12),
+                hoverlabel=dict(
+                    bgcolor="white",
+                    font_size=12,
+                    font_family="Inter"
+                )
+            )
+            fig.update_traces(
+                hovertemplate="<b>%{x}</b><br>Market Cap: %{y:,.0f} TAO<extra></extra>"
+            )
+            
+        else:
+            # Fallback to pie chart
+            count_data = df.groupby("primary_category").size().reset_index()
+            count_data.columns = ["primary_category", "count"]
+            fig = px.pie(
+                count_data,
+                names="primary_category",
+                values="count",
+                title="Subnets per Category",
+                color_discrete_map=CATEGORY_COLORS
+            )
+            fig.update_layout(
+                margin=dict(l=10, r=10, t=50, b=20),
+                height=350,
+                showlegend=showlegend,
+                autosize=True,
+                font=dict(size=12),
+                hoverlabel=dict(
+                    bgcolor="white",
+                    font_size=12,
+                    font_family="Inter"
+                ),
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)'
+            )
+            fig.update_traces(
+                hovertemplate="<b>%{label}</b><br>Subnets: %{value}<br>Percentage: %{percent}<extra></extra>"
+            )
+        
+        print("DEBUG: Chart created successfully")
+        return dcc.Graph(
+            figure=fig, 
+            config={
+                'displayModeBar': False,
+                'responsive': True,
+                'displaylogo': False
             }
         )
-    
-    fig.update_layout(
-        margin=dict(l=20, r=20, t=50, b=20),
-        height=400,
-        showlegend=True,
-        font=dict(family="Inter, sans-serif")
-    )
-    
-    return dcc.Graph(figure=fig, config={'displayModeBar': False})
+        
+    except Exception as e:
+        print(f"DEBUG: Error creating chart: {e}")
+        return html.Div(f"Error loading chart: {str(e)}", style={"textAlign": "center", "padding": "2rem", "color": "red"})
 
 @callback(
     Output("card-grid", "children"),
@@ -466,6 +556,36 @@ def toggle_card_expansion(n_clicks, btn_ids):
             btn_classes.append("expand-btn")
     
     return card_classes, btn_classes
+
+@callback(
+    Output("chart-section", "style"),
+    Input("cat-drop", "value"),
+)
+def toggle_chart_section(selected_category):
+    """Show/hide entire chart section based on category selection."""
+    if selected_category == "All":
+        return {"display": "block"}  # Show section
+    else:
+        return {"display": "none"}   # Hide section completely
+
+# Clientside callback to update screen size only on resize
+clientside_callback(
+    """
+    function(_, prev) {
+        function getSize() { return window.innerWidth < 768 ? 'small' : 'large'; }
+        if (!window._dash_screen_size_listener) {
+            window.addEventListener('resize', function() {
+                window.dash_clientside.callback_context.triggered[0].value = getSize();
+                window.dash_clientside.no_update = false;
+            });
+            window._dash_screen_size_listener = true;
+        }
+        return getSize();
+    }
+    """,
+    Output("screen-size-store", "data"),
+    Input("screen-size-store", "data")
+)
 
 def register_callbacks(dash_app):
     """Register all callbacks with the dash app."""
