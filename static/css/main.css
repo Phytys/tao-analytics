@@ -70,6 +70,17 @@ body {
     align-items: flex-start;
 }
 
+.nav-brand {
+    font-family: 'Orbitron', 'Inter', Arial, sans-serif;
+    font-size: 1.7rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    text-decoration: none;
+    margin-right: 2rem;
+    flex-shrink: 0;
+    letter-spacing: 0.04em;
+}
+
 .logo-text {
     font-family: 'Orbitron', 'Inter', Arial, sans-serif;
     font-size: 1.75rem;

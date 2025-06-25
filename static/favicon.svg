@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Background circle -->
+  <circle cx="16" cy="16" r="15" fill="#ffffff" stroke="#3e6ae1" stroke-width="1"/>
+  
+  <!-- TAO text using system font -->
+  <text x="16" y="18" font-family="Arial, sans-serif" font-size="12" font-weight="bold" text-anchor="middle" fill="#171a20">TAO</text>
+  
+  <!-- Small accent dot -->
+  <circle cx="16" cy="26" r="1.5" fill="#3e6ae1"/>
+</svg> 

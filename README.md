@@ -134,19 +134,19 @@ tao-analytics/
 ## Setup & Installation
 
 1. **Clone the repository:**
-   ```bash
+```bash
    git clone <repo-url>
    cd tao-analytics
-   ```
+```
 
 2. **Create and activate a virtual environment:**
-   ```bash
+```bash
    python3.11 -m venv venv311
    source venv311/bin/activate
    ```
 
 3. **Install dependencies:**
-   ```bash
+```bash
    pip install -r requirements.txt
    ```
 

@@ -19,10 +19,92 @@ def create_dash(server):
         url_base_pathname='/dash/',
         external_stylesheets=[
             dbc.themes.BOOTSTRAP,
-            "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+            "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap",
+            "https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap"
         ],
-        suppress_callback_exceptions=True
+        suppress_callback_exceptions=True,
+        title="Bittensor Subnet Explorer - TAO Analytics",
+        assets_folder='assets'
     )
+    
+    # Custom index template with favicon
+    app.index_string = '''
+    <!DOCTYPE html>
+    <html lang="en">
+        <head>
+            {%metas%}
+            <title>Bittensor Subnet Explorer - TAO Analytics</title>
+            
+            <!-- SEO Meta Tags -->
+            <meta name="description" content="Explore Bittensor subnets with AI-powered insights and real-time analytics. Comprehensive subnet data, bittensor on-chain data analysis, and intelligent filtering powered by GPT-4.">
+            <meta name="keywords" content="Bittensor, subnet explorer, TAO, AI analytics, decentralized AI, subnet data, bittensor on-chain data">
+            <meta name="author" content="TAO Analytics">
+            <meta name="robots" content="index, follow">
+            
+            <!-- Open Graph / Facebook -->
+            <meta property="og:type" content="website">
+            <meta property="og:url" content="{{ request.url }}">
+            <meta property="og:title" content="Bittensor Subnet Explorer - TAO Analytics">
+            <meta property="og:description" content="Explore Bittensor subnets with AI-powered insights and real-time analytics.">
+            <meta property="og:image" content="/static/favicon.png">
+            
+            <!-- Twitter -->
+            <meta property="twitter:card" content="summary_large_image">
+            <meta property="twitter:url" content="{{ request.url }}">
+            <meta property="twitter:title" content="Bittensor Subnet Explorer - TAO Analytics">
+            <meta property="twitter:description" content="Explore Bittensor subnets with AI-powered insights and real-time analytics.">
+            <meta property="twitter:image" content="/static/favicon.png">
+            
+            <!-- Canonical URL -->
+            <link rel="canonical" href="{{ request.url }}">
+            
+            {%favicon%}
+            {%css%}
+        </head>
+        <body>
+            {%app_entry%}
+            <footer>
+                {%config%}
+                {%scripts%}
+                {%renderer%}
+            </footer>
+            
+            <script>
+                // Update page title based on current URL
+                function updatePageTitle() {
+                    const pathname = window.location.pathname;
+                    if (pathname === '/dash/system-info') {
+                        document.title = 'System Information - TAO Analytics';
+                    } else if (pathname === '/dash/explorer' || pathname === '/dash/') {
+                        document.title = 'Bittensor Subnet Explorer - TAO Analytics';
+                    } else {
+                        document.title = 'TAO Analytics Dashboard';
+                    }
+                }
+                
+                // Update title on page load
+                updatePageTitle();
+                
+                // Update title when URL changes (for SPA navigation)
+                window.addEventListener('popstate', updatePageTitle);
+                
+                // Monitor for URL changes in Dash
+                const observer = new MutationObserver(function(mutations) {
+                    mutations.forEach(function(mutation) {
+                        if (mutation.type === 'childList') {
+                            updatePageTitle();
+                        }
+                    });
+                });
+                
+                // Start observing when DOM is ready
+                document.addEventListener('DOMContentLoaded', function() {
+                    observer.observe(document.body, { childList: true, subtree: true });
+                });
+            </script>
+        </body>
+    </html>
+    '''
     
     # App layout with custom navigation
     app.layout = html.Div([
