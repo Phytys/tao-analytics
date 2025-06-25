@@ -7,10 +7,29 @@ from services.favicons import favicon_service
 from services.cache import cache_stats
 import pandas as pd, datetime as dt, json, os
 from io import StringIO
+from models import CoinGeckoPrice
 
 CATS = ["All"] + sorted(
     load_subnet_frame()["primary_category"].dropna().unique().tolist()
 )
+
+# Category descriptions for tooltips
+CATEGORY_DESCRIPTIONS = {
+    "LLM-Inference": "AI text generation and language model services",
+    "LLM-Training / Fine-tune": "Training and fine-tuning large language models",
+    "Data-Feeds & Oracles": "Real-time data feeds and blockchain oracles",
+    "Serverless-Compute": "GPU computing power and model deployment",
+    "AI-Verification & Trust": "AI verification, zero-knowledge proofs, and trust systems",
+    "Confidential-Compute": "Secure and private AI execution",
+    "Hashrate-Mining (BTC / PoW)": "Bitcoin mining and proof-of-work services",
+    "Finance-Trading & Forecasting": "Financial trading and prediction services",
+    "Security & Auditing": "Security analysis and auditing services",
+    "Privacy / Anonymity": "Privacy-focused AI and anonymity services",
+    "Media-Vision / 3-D": "Computer vision, 3D modeling, and media AI",
+    "Science-Research (Non-financial)": "Scientific research and non-financial AI",
+    "Consumer-AI & Games": "Consumer AI applications and gaming",
+    "Dev-Tooling": "Developer tools, SDKs, and validator utilities"
+}
 
 # Category color mapping for consistent colors
 CATEGORY_COLORS = {
@@ -35,6 +54,15 @@ CONFIDENCE_COLORS = {
     'low': '#dc3545'        # Red for 0-69
 }
 
+# Get latest TAO price in USD (cached at module load)
+try:
+    from models import Session
+    _session = Session()
+    _tao_price_row = _session.query(CoinGeckoPrice).order_by(CoinGeckoPrice.fetched_at.desc()).first()
+    TAO_PRICE_USD = _tao_price_row.price_usd if _tao_price_row else 0
+except Exception:
+    TAO_PRICE_USD = 0
+
 def get_confidence_color(score):
     """Get confidence ribbon color based on score."""
     if score >= 90:
@@ -51,13 +79,122 @@ layout = dbc.Container(
             html.H1("Bittensor Subnet Explorer", className="dashboard-title"),
         ], className="dashboard-header"),
         
+        # --- Quick Start section (collapsible) ---
+        html.Div([
+            dbc.Button(
+                [
+                    html.I(className="bi bi-question-circle me-2"),
+                    "Quick Start Guide",
+                    html.I(className="bi bi-chevron-down ms-2", id="quick-start-icon")
+                ],
+                id="quick-start-toggle",
+                color="outline-primary",
+                className="mb-3",
+                n_clicks=0
+            ),
+            dbc.Collapse(
+                dbc.Card(
+                    dbc.CardBody([
+                        html.H5("🎯 How to Use This Explorer", className="mb-3"),
+                        html.Div([
+                            html.Div([
+                                html.H6("📊 Browse by Category", className="text-primary"),
+                                html.P("Click categories to see similar AI services. Each category represents a different type of AI task or service.")
+                            ], className="mb-3"),
+                            html.Div([
+                                html.H6("💰 Understanding Market Cap", className="text-primary"),
+                                html.P("Market Capitalisation (MC) = token price × circulating supply. Shows what the network is worth right now, based on the number of tokens actually tradeable today. MC grows as new tokens are emitted, even if price is flat.")
+                            ], className="mb-3"),
+                            html.Div([
+                                html.H6("🎯 Confidence Score (AI classification and description)", className="text-primary"),
+                                html.P("Green = reliable data from website/GitHub, Yellow = mixed sources, Red = limited information available.")
+                            ], className="mb-3"),
+                            html.Div([
+                                html.H6("🔍 Search & Filter", className="text-primary"),
+                                html.P("Use the search box to find specific subnets by name, tags, or features. Filter by category to focus on specific AI services.")
+                            ], className="mb-3"),
+                            html.Hr(),
+                            html.Div([
+                                html.H6("🏷️ Category Guide", className="text-primary mb-2"),
+                                html.Div([
+                                    html.Span("• ", className="fw-bold"),
+                                    html.Span("LLM-Inference: ", className="fw-bold text-info"),
+                                    html.Span("Text/chat model serving (e.g. Apex, Targon, Nineteen.ai)"),
+                                    html.Br(),
+                                    html.Span("• ", className="fw-bold"),
+                                    html.Span("LLM-Training / Fine-tune: ", className="fw-bold text-info"),
+                                    html.Span("Collaborative training or fine-tuning of models (e.g. Templar, OpenKaito, Gradients)"),
+                                    html.Br(),
+                                    html.Span("• ", className="fw-bold"),
+                                    html.Span("Data-Feeds & Oracles: ", className="fw-bold text-info"),
+                                    html.Span("Real-time data acquisition or indexing (e.g. Data Universe, Desearch)"),
+                                    html.Br(),
+                                    html.Span("• ", className="fw-bold"),
+                                    html.Span("Serverless-Compute: ", className="fw-bold text-info"),
+                                    html.Span("Raw GPU compute you can rent (e.g. SubVortex, Compute Horde, Storb)"),
+                                    html.Br(),
+                                    html.Span("• ", className="fw-bold"),
+                                    html.Span("AI-Verification & Trust: ", className="fw-bold text-info"),
+                                    html.Span("Model authenticity, ZK proofs, trust (e.g. Omron, ItsAI, FakeNews)"),
+                                    html.Br(),
+                                    html.Span("• ", className="fw-bold"),
+                                    html.Span("Confidential-Compute: ", className="fw-bold text-info"),
+                                    html.Span("Secure/private AI execution (no current subnets listed)"),
+                                    html.Br(),
+                                    html.Span("• ", className="fw-bold"),
+                                    html.Span("Hashrate-Mining (BTC / PoW): ", className="fw-bold text-info"),
+                                    html.Span("Pools redirecting external PoW hashrate (e.g. TAOHash, HashTensor)"),
+                                    html.Br(),
+                                    html.Span("• ", className="fw-bold"),
+                                    html.Span("Finance-Trading & Forecasting: ", className="fw-bold text-info"),
+                                    html.Span("Quant, trading bots, on-chain signal (e.g. Infinite Games, Sturdy, CANDLES)"),
+                                    html.Br(),
+                                    html.Span("• ", className="fw-bold"),
+                                    html.Span("Security & Auditing: ", className="fw-bold text-info"),
+                                    html.Span("Fake-news detection, code audit, threat intel (e.g. Yanez MIID, Bitsec.ai)"),
+                                    html.Br(),
+                                    html.Span("• ", className="fw-bold"),
+                                    html.Span("Privacy / Anonymity: ", className="fw-bold text-info"),
+                                    html.Span("Privacy-focused AI, anonymity (e.g. TAO Private Network, taonado)"),
+                                    html.Br(),
+                                    html.Span("• ", className="fw-bold"),
+                                    html.Span("Media-Vision / 3-D: ", className="fw-bold text-info"),
+                                    html.Span("Image, video, or 3-D generation/analysis (e.g. 404GEN, Nuance, Score)"),
+                                    html.Br(),
+                                    html.Span("• ", className="fw-bold"),
+                                    html.Span("Science-Research (Non-financial): ", className="fw-bold text-info"),
+                                    html.Span("Protein folding, climate models, open science (e.g. Zeus, Mainframe, Gaia)"),
+                                    html.Br(),
+                                    html.Span("• ", className="fw-bold"),
+                                    html.Span("Consumer-AI & Games: ", className="fw-bold text-info"),
+                                    html.Span("End-user apps, chat-RP, gaming, companions (e.g. Dippy, OMEGA Labs)"),
+                                    html.Br(),
+                                    html.Span("• ", className="fw-bold"),
+                                    html.Span("Dev-Tooling: ", className="fw-bold text-info"),
+                                    html.Span("SDKs, dashboards, validator tools (e.g. SWE - Rizzo, Ridges AI)")
+                                ], className="small")
+                            ])
+                        ])
+                    ]),
+                    className="border-primary"
+                ),
+                id="quick-start-collapse",
+                is_open=False
+            )
+        ], className="mb-4"),
+        
         # --- filter controls ---
         html.Div([
             dbc.Row([
                 dbc.Col([
                     dcc.Dropdown(
                         id="cat-drop",
-                        options=[{"label": "All categories", "value": "All"}] + [{"label": c, "value": c} for c in CATS if c != "All"],
+                        options=[{"label": "All categories", "value": "All"}] + [
+                            {
+                                "label": c, 
+                                "value": c
+                            } for c in CATS if c != "All"
+                        ],
                         value="All",
                         clearable=False,
                         style={"width": "100%"}
@@ -133,6 +270,21 @@ def refresh_df(cat, search):
     df = load_subnet_frame(cat, search or "")
     stamp = f"Last updated: {dt.datetime.utcnow().strftime('%H:%M:%S')} UTC"
     return df.to_json(date_unit="s", orient="split"), stamp
+
+@callback(
+    Output("quick-start-collapse", "is_open"),
+    Output("quick-start-icon", "className"),
+    Input("quick-start-toggle", "n_clicks"),
+    State("quick-start-collapse", "is_open"),
+    prevent_initial_call=True
+)
+def toggle_quick_start(n_clicks, is_open):
+    if n_clicks:
+        if is_open:
+            return False, "bi bi-chevron-down ms-2"
+        else:
+            return True, "bi bi-chevron-up ms-2"
+    return is_open, "bi bi-chevron-down ms-2"
 
 @callback(
     Output("kpi-strip", "children"),
@@ -387,96 +539,105 @@ def render_cards(json_df):
             print(f"Favicon error for subnet {row.netuid}: {e}")
             favicon_element = html.Div()
         
-        # Category badge
-        category_badge = (
-            dbc.Badge(row.primary_category, color="info", className="mb-2")
-            if pd.notna(row.primary_category)
-            else dbc.Badge("Uncategorized", color="secondary", className="mb-2")
-        )
-        
-        chips = [
-            dbc.Badge(tag, color="primary", className="me-1 mb-1")
-            for tag in tags[:6]  # Limit to 6 tags
-        ]
-        
-        privacy_badge = (
-            dbc.Badge("Privacy", color="danger", className="ms-1")
-            if row.privacy_security_flag
-            else ""
-        )
-        
-        # Detailed description
-        description = row.what_it_does if pd.notna(row.what_it_does) else "No detailed description available."
-        
-        # Links section with proper URL formatting
-        links = []
-        website_url = format_url(row.website_url)
-        github_url = format_url(row.github_url)
-        
-        if website_url:
-            links.append(
-                html.A(
-                    "🌐 Website", 
-                    href=website_url, 
-                    target="_blank", 
-                    className="btn btn-sm btn-outline-primary me-2"
-                )
-            )
-        if github_url:
-            links.append(
-                html.A(
-                    "📁 GitHub", 
-                    href=github_url, 
-                    target="_blank", 
-                    className="btn btn-sm btn-outline-secondary"
-                )
-            )
-        
-        # Confidence ribbon
+        # Confidence badge (simple, inline)
         confidence_score = row.confidence if pd.notna(row.confidence) else 0
-        confidence_color = get_confidence_color(confidence_score)
-        confidence_ribbon = html.Div(
-            f"{confidence_score:.0f}%",
-            style={
-                'position': 'absolute',
-                'top': '0',
-                'right': '0',
-                'background': confidence_color,
-                'color': 'white',
-                'padding': '2px 8px',
-                'font-size': '12px',
-                'font-weight': 'bold',
-                'border-radius': '0 4px 0 4px'
-            }
+        confidence_color = (
+            "success" if confidence_score >= 90 else
+            "warning" if confidence_score >= 70 else
+            "danger"
+        )
+        confidence_badge = dbc.Badge(
+            f"{confidence_score:.0f}% AI confidence",
+            color=confidence_color,
+            className="ms-2 small fw-normal opacity-75",
+            style={"font-size": "0.85em", "font-weight": 400},
+            id=f"confidence-badge-{row.netuid}"
+        )
+        confidence_tooltip = dbc.Tooltip(
+            "Data confidence: Green = reliable data from website/GitHub, Yellow = mixed sources, Red = limited information.",
+            target=f"confidence-badge-{row.netuid}",
+            placement="top"
         )
         
-        # Card structure with expandable description and confidence ribbon
+        # Market cap with badge and tooltip (show USD)
+        mcap_id = f"market-cap-{row.netuid}"
+        mcap_tao = row.mcap_tao if isinstance(row.mcap_tao, (float, int)) else 0.0  # type: ignore
+        mcap_usd = mcap_tao * float(TAO_PRICE_USD) if float(TAO_PRICE_USD) > 0 else 0
+        if mcap_usd >= 1_000_000:
+            mcap_usd_str = f"${mcap_usd/1_000_000:.1f}M"
+        elif mcap_usd >= 1_000:
+            mcap_usd_str = f"${mcap_usd/1_000:.1f}K"
+        else:
+            mcap_usd_str = f"${mcap_usd:,.0f}"
+        mcap_badge = dbc.Badge(
+            f"{mcap_str} ({mcap_usd_str})",
+            color="light",
+            className="text-primary mb-0 px-2 py-1 fw-semibold",
+            style={"font-size": "1em"},
+            id=mcap_id
+        )
+        mcap_tooltip = dbc.Tooltip(
+            "Market Capitalisation (MC) = token price × circulating supply. Shows what the network is worth right now, based on the number of tokens actually tradeable today. MC grows as new tokens are emitted, even if price is flat.",
+            target=mcap_id,
+            placement="auto"
+        )
+        # Category badge with tooltip directly on the badge
+        cat_id = f"category-badge-{row.netuid}"
+        category_badge = (
+            dbc.Badge(row.primary_category, color="info", className="mb-2", id=cat_id)
+            if pd.notna(row.primary_category)
+            else dbc.Badge("Uncategorized", color="secondary", className="mb-2", id=cat_id)
+        )
+        cat_tooltip = dbc.Tooltip(
+            f"Category: {row.primary_category}. Click category filter to see similar AI services.",
+            target=cat_id,
+            placement="top"
+        )
+        # Card structure with tooltips directly on text
         card_body = [
             # Header with market cap
             html.Div([
-                html.H6(mcap_str, className="text-primary mb-0"),
+                mcap_badge,
+                mcap_tooltip
             ], className="text-end mb-2"),
-            
-            # Title with subnet number
+            # Title with subnet number and confidence badge
             html.H5([
                 favicon_element,
-                subnet_display_name
-            ], className="card-title mb-2"),
-            
-            # Category
+                subnet_display_name,
+                confidence_badge,
+                confidence_tooltip
+            ], className="card-title mb-2 d-flex align-items-center"),
+            # Category badge with tooltip
             category_badge,
+            cat_tooltip,
             
             # Tagline
             html.P(row.tagline or "No description available", className="card-text mb-2"),
             
             # Tags
-            html.Div(chips + [privacy_badge], className="mb-3"),
+            html.Div([
+                dbc.Badge(tag, color="primary", className="me-1 mb-1")
+                for tag in tags[:6]  # Limit to 6 tags
+            ], className="mb-3"),
             
             # Expandable description with links
             html.Details([
                 html.Summary("What it does", className="text-primary fw-bold mb-2"),
-                html.P(description, className="card-text small mb-2"),
-                html.Div(links, className="mt-2") if links else html.Div()
+                html.P(row.what_it_does if pd.notna(row.what_it_does) else "No detailed description available.", className="card-text small mb-2"),
+                html.Div([
+                    html.A(
+                        "🌐 Website", 
+                        href=format_url(row.website_url), 
+                        target="_blank", 
+                        className="btn btn-sm btn-outline-primary me-2"
+                    ),
+                    html.A(
+                        "📁 GitHub", 
+                        href=format_url(row.github_url), 
+                        target="_blank", 
+                        className="btn btn-sm btn-outline-secondary"
+                    )
+                ], className="mt-2") if (pd.notna(row.website_url) or pd.notna(row.github_url)) else html.Div()
             ], className="mb-2"),
             
             # New expandable section for use case and technical features
@@ -506,13 +667,21 @@ def render_cards(json_df):
         
         return dbc.Col(
             html.Div([
-                confidence_ribbon,
                 dbc.Card(
                     dbc.CardBody(card_body),
                     className=f"h-100 {category_class}",
-                    style={"border-left": "4px solid #3e6ae1"}
+                    style={
+                        "border-left": "4px solid #3e6ae1",
+                        "position": "relative",
+                        "padding-top": "32px",  # More space for ribbon
+                        "background": "#f8f9fa",  # Debug background
+                    }
                 )
-            ], style={'position': 'relative'}),
+            ], style={
+                'position': 'relative',
+                'min-height': '240px',
+                'overflow': 'visible'
+            }),
             lg=4, md=6, className="mb-4"
         )
     
@@ -569,23 +738,8 @@ def toggle_chart_section(selected_category):
         return {"display": "none"}   # Hide section completely
 
 # Clientside callback to update screen size only on resize
-clientside_callback(
-    """
-    function(_, prev) {
-        function getSize() { return window.innerWidth < 768 ? 'small' : 'large'; }
-        if (!window._dash_screen_size_listener) {
-            window.addEventListener('resize', function() {
-                window.dash_clientside.callback_context.triggered[0].value = getSize();
-                window.dash_clientside.no_update = false;
-            });
-            window._dash_screen_size_listener = true;
-        }
-        return getSize();
-    }
-    """,
-    Output("screen-size-store", "data"),
-    Input("screen-size-store", "data")
-)
+# TODO: Re-implement screen size detection in a compatible way if mobile-specific tweaks are needed.
+# (Old code removed here)
 
 def register_callbacks(dash_app):
     """Register all callbacks with the dash app."""

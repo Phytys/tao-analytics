@@ -32,6 +32,11 @@ def create_app():
             }
         return render_template("index.html", network_data=network_data)
 
+    @server.route("/about")
+    def about():
+        """About page - placeholder for Sprint 1.5."""
+        return render_template("about_placeholder.html")
+
     @server.route('/admin/login', methods=['GET', 'POST'])
     def admin_login():
         """Admin login page."""

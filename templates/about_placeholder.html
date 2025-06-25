@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About Bittensor - TAO Analytics</title>
+    
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Learn about Bittensor, the decentralized AI network, and how subnets work. Educational content about the future of AI and blockchain.">
+    <meta name="keywords" content="Bittensor, decentralized AI, subnets, blockchain, AI network, TAO token">
+    <meta name="author" content="TAO Analytics">
+    <meta name="robots" content="index, follow">
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="hero-section">
+        <nav class="navbar">
+            <div class="nav-container">
+                <div class="nav-logo">
+                    <a href="/" class="nav-brand">TAO Analytics</a>
+                </div>
+                
+                <!-- Mobile menu button -->
+                <button class="mobile-menu-btn" id="mobile-menu-btn">
+                    <span class="hamburger-line"></span>
+                    <span class="hamburger-line"></span>
+                    <span class="hamburger-line"></span>
+                </button>
+                
+                <div class="nav-links" id="nav-links">
+                    <a href="/dash/explorer" class="nav-link">Explorer</a>
+                    <a href="/about" class="nav-link">About</a>
+                    {% if session.admin_authenticated %}
+                    <a href="/admin/system-info" class="nav-link">System Info</a>
+                    <a href="/admin/logout" class="nav-link">Logout</a>
+                    {% else %}
+                    <a href="/admin/login" class="nav-link">Admin Login</a>
+                    {% endif %}
+                </div>
+            </div>
+        </nav>
+        
+        <div class="hero-content">
+            <h1 class="hero-title">About Bittensor</h1>
+            <p class="hero-subtitle">
+                Understanding the decentralized AI network
+            </p>
+            
+            <!-- Placeholder content -->
+            <div class="container mt-5">
+                <div class="row justify-content-center">
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-body text-center">
+                                <h3>🚧 Coming Soon</h3>
+                                <p class="lead">
+                                    This page will provide a comprehensive introduction to Bittensor, 
+                                    explaining how the decentralized AI network works and why it matters.
+                                </p>
+                                <p>
+                                    <strong>Planned for Sprint 1.5</strong><br>
+                                    • What is Bittensor?<br>
+                                    • How do subnets work?<br>
+                                    • The role of validators and miners<br>
+                                    • Why decentralized AI matters
+                                </p>
+                                <a href="/dash/explorer" class="btn btn-primary">
+                                    Explore Subnets Now
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 TAO Analytics. Built with love for the decentralized future.</p>
+            <p class="footer-credits">
+                Data powered by <a href="https://tao.app" target="_blank" class="footer-link">TAO.app API</a> • 
+                Intelligence enhanced by <a href="https://openai.com" target="_blank" class="footer-link">OpenAI GPT-4</a>
+            </p>
+        </div>
+    </footer>
+
+    <script>
+        // Mobile menu toggle
+        document.addEventListener('DOMContentLoaded', function() {
+            const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+            const navLinks = document.getElementById('nav-links');
+            
+            mobileMenuBtn.addEventListener('click', function() {
+                navLinks.classList.toggle('nav-open');
+                mobileMenuBtn.classList.toggle('active');
+            });
+            
+            // Close menu when clicking on a link
+            const navLinkElements = navLinks.querySelectorAll('.nav-link');
+            navLinkElements.forEach(link => {
+                link.addEventListener('click', function() {
+                    navLinks.classList.remove('nav-open');
+                    mobileMenuBtn.classList.remove('active');
+                });
+            });
+            
+            // Close menu when clicking outside
+            document.addEventListener('click', function(event) {
+                if (!mobileMenuBtn.contains(event.target) && !navLinks.contains(event.target)) {
+                    navLinks.classList.remove('nav-open');
+                    mobileMenuBtn.classList.remove('active');
+                }
+            });
+        });
+    </script>
+</body>
+</html> 

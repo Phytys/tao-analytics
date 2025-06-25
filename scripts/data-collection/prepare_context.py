@@ -37,7 +37,7 @@ from collections import Counter
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from models import ScreenerRaw
+from models import ScreenerRaw, SubnetMeta
 from config import DB_URL
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -120,48 +120,57 @@ def fetch_website_content(url: str, max_retries: int = MAX_SCRAPING_RETRIES) -> 
         try:
             print(f"Attempt {attempt + 1}/{max_retries} to fetch {url}")
             
-            # Use httpx for better async support and modern HTTP features
-            with httpx.Client(timeout=WEBSITE_TIMEOUT, follow_redirects=True) as client:
-                response = client.get(url, headers=headers)
+            # Try with SSL verification first
+            try:
+                with httpx.Client(timeout=WEBSITE_TIMEOUT, follow_redirects=True) as client:
+                    response = client.get(url, headers=headers)
+            except httpx.ConnectError as e:
+                if "CERTIFICATE_VERIFY_FAILED" in str(e):
+                    print("SSL certificate verification failed, trying without verification...")
+                    # Fallback to no SSL verification
+                    with httpx.Client(timeout=WEBSITE_TIMEOUT, follow_redirects=True, verify=False) as client:
+                        response = client.get(url, headers=headers)
+                else:
+                    raise e
+            
+            # Handle successful responses
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, 'html.parser')
                 
-                # Handle successful responses
-                if response.status_code == 200:
-                    soup = BeautifulSoup(response.text, 'html.parser')
-                    
-                    # Remove unwanted elements
-                    for element in soup(['script', 'style', 'nav', 'header', 'footer', 'iframe', 'noscript']):
-                        element.decompose()
-                    
-                    # Enhanced content extraction with priority for headers and important sections
-                    text = extract_prioritized_content(soup)
-                    text = clean_text(text)
-                    
-                    if text:
-                        if len(text) > MAX_WEBSITE_CHARS:
-                            text = text[:MAX_WEBSITE_CHARS] + "..."
-                        return text
-                    else:
-                        print("No text content found in the page")
-                        return None
+                # Remove unwanted elements
+                for element in soup(['script', 'style', 'nav', 'header', 'footer', 'iframe', 'noscript']):
+                    element.decompose()
                 
-                # Handle rate limiting and access denied
-                elif response.status_code in [429, 403]:
-                    print(f"HTTP {response.status_code} error")
-                    if attempt < max_retries - 1:
-                        # Exponential backoff: 2, 4, 8 seconds
-                        wait_time = 2 ** (attempt + 1)
-                        print(f"Waiting {wait_time} seconds before retry...")
-                        time.sleep(wait_time)
-                    continue
+                # Enhanced content extraction with priority for headers and important sections
+                text = extract_prioritized_content(soup)
+                text = clean_text(text)
                 
-                # Handle other HTTP errors
-                elif response.status_code >= 400:
-                    print(f"HTTP {response.status_code} error")
-                    if attempt < max_retries - 1:
-                        print("Waiting before retry...")
-                        time.sleep(2)
-                    continue
-                    
+                if text:
+                    if len(text) > MAX_WEBSITE_CHARS:
+                        text = text[:MAX_WEBSITE_CHARS] + "..."
+                    return text
+                else:
+                    print("No text content found in the page")
+                    return None
+            
+            # Handle rate limiting and access denied
+            elif response.status_code in [429, 403]:
+                print(f"HTTP {response.status_code} error")
+                if attempt < max_retries - 1:
+                    # Exponential backoff: 2, 4, 8 seconds
+                    wait_time = 2 ** (attempt + 1)
+                    print(f"Waiting {wait_time} seconds before retry...")
+                    time.sleep(wait_time)
+                continue
+            
+            # Handle other HTTP errors
+            elif response.status_code >= 400:
+                print(f"HTTP {response.status_code} error")
+                if attempt < max_retries - 1:
+                    print("Waiting before retry...")
+                    time.sleep(2)
+                continue
+                
         except httpx.TimeoutException:
             print("Request timed out")
         except httpx.RequestError as e:
@@ -491,10 +500,11 @@ def prepare_context_with_fallback(netuid: int) -> Optional[SubnetContext]:
                 context.relevant_ngrams = extract_simple_keywords(wayback_content)
                 return context
     
-    # If all fallbacks failed, return None (will be skipped)
+    # If all fallbacks failed, return the context object anyway (even with low tokens)
+    # This allows the smart enrichment logic to handle low-context cases with model-only mode
     if context and context.token_count < MIN_CONTEXT_TOKENS:
-        print(f"❌ All fallbacks failed for subnet {netuid}, skipping enrichment")
-        return None
+        print(f"⚠️  All fallbacks failed for subnet {netuid}, but returning context for model-only enrichment")
+        return context
     
     return context
 
