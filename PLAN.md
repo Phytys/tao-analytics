@@ -21,8 +21,8 @@ _Owners_:
 | Page | Purpose | Status | Owner | Notes |
 |------|---------|--------|-------|-------|
 | `/` **Landing** | Snapshot of network health + CTA to explorer | 🟢 existing, needs polish | UX / cursor | Light hero, key stats, two CTAs ("Learn" & "Explore") |
-| `/about` **What is Bittensor?** | 3-scroll explainer with diagrams | 🔴 new | UX → cursor | Collapsible sections, SEO friendly |
-| `/dash/explorer` **Subnet Explorer** | Browse + compare subnets | 🟢 exists, needs onboarding | cursor | Add "Quick Start", tool-tips, filters |
+| `/about` **What is Bittensor?** | 3-scroll explainer with diagrams | 🟡 placeholder exists | UX → cursor | Collapsible sections, SEO friendly |
+| `/dash/explorer` **Subnet Explorer** | Browse + compare subnets | 🟢 ✅ Sprint 1 complete | cursor | Quick Start guide, tooltips, improved UX |
 | `/dash/subnet/<netuid>` **Subnet Detail** | Deep dive (metrics, team, TVI) | 🔴 new | cursor | Server-side pre-fetch via SDK |
 | `/dash/tvi` **Validator Intelligence** | Best validators to stake to | 🔴 new | cursor | TVI scoring, validator rankings |
 | `/dash/analytics` **Network Analytics** | Macro charts, category growth | 🟡 planned | cursor | Power-user tab |
@@ -41,18 +41,17 @@ About    Quick Start   Deep Dive    Stake Guide
 
 > **Each sprint ≈ 1 week**.  ✅ = quick win, 🔄 = iterative, 🛠 = infra/data
 
-| Sprint | Theme / Goals | Key tasks |
-|-------|---------------|-----------|
-| **0 – Hardening (DONE)** | • SDK connectivity (finney = main-net) <br>• Enrichment crawl | ✅ Pin `bittensor==9.7.*` w/ `grpcio` wheels <br>✅ `bt_endpoints.py` constants <br>✅ `sdk_smoketest.py` & logs |
-| **1 – UX Quick Wins** | • Lightweight onboarding in Explorer <br>• Tool-tips & hover defs | ✅ Collapsible "How to read this page" box <br>✅ Metric tool-tips via Dash `dcc.Markdown` + `html.Span` |
-| **1.5 – About Page** | • `/about` single-file page <br>• SVG diagram "How subnets, miners, validators fit" | 🔄 Write copy & icons <br>cursor: build Dash/Flask route |
-| **2 – Subnet cards v2** | • Add flags: `privacy_security_flag`, confidence bar <br>• Click-thru to detail page stub | cursor: extend card component <br>UX: style guidelines |
-| **3 – SDK Exploration Spike** | **Goal:** validate SDK viability in 3 days <br>• Stable RPC list <br>• p95 latency / error rate <br>• mini PoC chart in Dash <br>• Green/Yellow/Red write-up | 🛠 spike |
-| **4 – Subnet Detail page (API-only)** | Build on proven tao.app data | cursor |
-| **5 – Conditional SDK integration** | Execute **only** if Spike = Green/Yellow | cursor |
-| **6 – TVI / Validator hub** | Data source flexible | cursor |
-| **7 – Analytics dashboard** | Power-user charts | cursor |
-| **8 – Polish & SEO** | Lighthouse, meta, OG | UX / cursor |
+| Sprint | Theme / Goals | Key tasks | Status |
+|-------|---------------|-----------|--------|
+| **0 – Hardening (DONE)** | • SDK connectivity (finney = main-net) <br>• Enrichment crawl | ✅ Pin `bittensor==9.7.*` w/ `grpcio` wheels <br>✅ `bt_endpoints.py` constants <br>✅ `sdk_smoketest.py` & logs | ✅ **COMPLETE** |
+| **1 – UX Quick Wins (DONE)** | • Lightweight onboarding in Explorer <br>• Tool-tips & hover defs | ✅ Collapsible "Quick Start Guide" box <br>✅ Metric tool-tips for market cap, category, confidence <br>✅ About page navigation <br>✅ Category dropdown cleanup | ✅ **COMPLETE** |
+| **2 – Subnet cards v2** | • Add flags: `privacy_security_flag`, confidence bar <br>• Click-thru to detail page stub | cursor: extend card component <br>UX: style guidelines | 🔄 **NEXT** |
+| **3 – SDK Exploration Spike** | **Goal:** validate SDK viability in 3 days <br>• Stable RPC list <br>• p95 latency / error rate <br>• mini PoC chart in Dash <br>• Green/Yellow/Red write-up | 🛠 spike | 🔄 **PLANNED** |
+| **4 – Subnet Detail page (API-only)** | Build on proven tao.app data | cursor | 🔄 **PLANNED** |
+| **5 – Conditional SDK integration** | Execute **only** if Spike = Green/Yellow | cursor | 🔄 **PLANNED** |
+| **6 – TVI / Validator hub** | Data source flexible | cursor | 🔄 **PLANNED** |
+| **7 – Analytics dashboard** | Power-user charts | cursor | 🔄 **PLANNED** |
+| **8 – Polish & SEO** | Lighthouse, meta, OG | UX / cursor | 🔄 **PLANNED** |
 
 *(Road-map will evolve; we lock only the next two sprints.)*
 
@@ -97,14 +96,34 @@ About    Quick Start   Deep Dive    Stake Guide
 
 ---
 
-## 5. Immediate tickets for cursor agent (Sprint 1)
+## 5. Sprint 1 Completion Summary ✅
+
+**Completed Tasks:**
+- ✅ Added collapsible "Quick Start Guide" to `/dash/explorer` with onboarding help
+- ✅ Added tooltips for market cap (TAO/USD), category, and confidence metrics
+- ✅ Implemented confidence score as small badge next to subnet names
+- ✅ Cleaned up category dropdown and improved UX
+- ✅ Fixed About page navigation from landing page
+- ✅ Updated README.md with accurate project structure
+- ✅ All features tested and confirmed working
+
+**Key Improvements:**
+- Users now have clear onboarding guidance
+- Tooltips provide context for complex metrics
+- Visual confidence indicators improve scanability
+- About page accessible from main navigation
+- Documentation accurately reflects current codebase
+
+---
+
+## 6. Immediate tickets for cursor agent (Sprint 2)
 
 | # | Title | Est | Notes |
 |---|-------|-----|-------|
-| 1 | Add collapsible "Quick Start" section to `/dash/explorer` | 2h | Simple `dcc.Markdown` inside `dbc.Collapse` |
-| 2 | Add hover tool-tips for _APY_, _Stake_, _V-Trust_ columns | 1h | Use Dash Bootstrap `tooltips` |
-| 3 | Insert category hover-help text (pull from `CATEGORY_DESCRIPTIONS` dict) | 1h | |
-| 4 | Commit `PLAN.md` & update nav placeholder for `/about` | 0.5h | |
+| 1 | Add privacy/security flags to subnet cards | 2h | Extend card component with flag indicators |
+| 2 | Implement click-thru to subnet detail page stub | 3h | Create basic detail page with routing |
+| 3 | Add confidence bar visualization | 1h | Replace badge with progress bar |
+| 4 | Style guidelines for new card elements | 1h | Ensure consistency with existing design |
 
 ---
 

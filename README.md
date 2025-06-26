@@ -47,6 +47,7 @@ tao-analytics/
 │   ├── __init__.py
 │   ├── assets/
 │   │   ├── custom.css              # Dash app styling
+│   │   ├── favicon.ico             # Dash app favicon
 │   │   └── subnet_placeholder.svg  # Placeholder image
 │   └── pages/
 │       ├── explorer.py             # Main analytics page
@@ -62,24 +63,24 @@ tao-analytics/
 │   ├── bittensor/                  # Bittensor SDK scripts
 │   │   ├── __init__.py
 │   │   ├── bt_endpoints.py         # Network endpoint constants
-│   │   └── sdk_smoketest.py        # SDK connectivity test
+│   │   ├── sdk_smoketest.py        # SDK connectivity test
+│   │   └── subnet_check.py         # Subnet validation script
+│   ├── data-collection/            # Advanced data collection
+│   │   ├── __init__.py
+│   │   ├── enrich_with_openai.py   # AI-powered enrichment
+│   │   ├── parameter_settings.py   # Enrichment parameters
+│   │   ├── prepare_context.py      # Context preparation
+│   │   ├── batch_enrich.py         # Batch enrichment
+│   │   ├── fetch_screener.py       # Screener data collection
+│   │   ├── fetch_coingecko_data.py # CoinGecko data fetching
+│   │   └── processed_netuids.json  # Local enrichment tracking
 │   ├── fetch_favicons.py           # Favicon collection
 │   ├── analyze_enrichment_stats.py # Enrichment analysis
 │   ├── auto_fallback_enrich.py     # Automated enrichment
 │   ├── explore_raw_data.py         # Data exploration
 │   ├── export_db_table.py          # Database exports
 │   ├── inspect_raw_data.py         # Data inspection
-│   ├── reset_db.py                 # Database reset
-│   └── data-collection/            # Advanced data collection
-│       ├── __init__.py
-│       ├── enrich_with_openai.py   # AI-powered enrichment
-│   │   └── parameter_settings.py   # Enrichment parameters
-│   │       └── prepare_context.py      # Context preparation
-│   │           └── batch_enrich.py         # Batch enrichment
-│   │               └── fetch_screener.py       # Screener data collection
-│   │
-│   └── dev/                        # Development tools
-│       └── setup_bt_sdk.sh         # Bittensor SDK installation script
+│   └── reset_db.py                 # Database reset
 │
 ├── services/                       # Business logic modules
 │   ├── db_utils.py                 # Database utilities
@@ -93,10 +94,14 @@ tao-analytics/
 ├── static/                         # Static assets
 │   ├── css/
 │   │   └── main.css                # Main CSS
+│   ├── favicon.ico                 # Main favicon
+│   ├── favicon.png                 # PNG favicon
+│   ├── favicon.svg                 # SVG favicon
 │   └── favicons/                   # Cached favicons
 │
 ├── templates/                      # Flask templates
 │   ├── index.html                  # Landing page
+│   ├── about_placeholder.html      # About page template
 │   └── admin_login.html            # Admin login
 │
 ├── venv311/                        # Python 3.11 virtual environment (active)
@@ -251,20 +256,23 @@ Expected output:
   - **bittensor/**: Bittensor SDK scripts
     - `bt_endpoints.py`: Network endpoint constants
     - `sdk_smoketest.py`: Bittensor SDK connectivity test
+    - `subnet_check.py`: Subnet validation and health checks
+  - **data-collection/**: Advanced enrichment and data prep scripts
+    - `enrich_with_openai.py`: AI-powered enrichment using OpenAI
+    - `prepare_context.py`: Prepare context for enrichment
+    - `batch_enrich.py`: Batch enrichment runner
+    - `fetch_screener.py`: Fetch subnet screener data
+    - `fetch_coingecko_data.py`: Fetch market data from CoinGecko API
+    - `parameter_settings.py`: Parameter configs for enrichment
+    - `processed_netuids.json`: Local tracking of processed subnets
+  - **dev/**: Development tools
+    - `setup_bt_sdk.sh`: Bittensor SDK installation script
   - `analyze_enrichment_stats.py`: Analyze enrichment coverage and stats
   - `auto_fallback_enrich.py`: Automated fallback enrichment
   - `fetch_favicons.py`: Download and cache favicons for subnets
   - `explore_raw_data.py`, `inspect_raw_data.py`: Data exploration utilities
   - `export_db_table.py`: Export database tables to CSV
   - `reset_db.py`: Reset or initialize the database
-  - **data-collection/**: Advanced enrichment and data prep scripts
-    - `enrich_with_openai.py`: AI-powered enrichment using OpenAI
-    - `prepare_context.py`: Prepare context for enrichment
-    - `batch_enrich.py`: Batch enrichment runner
-    - `fetch_screener.py`: Fetch subnet screener data
-    - `parameter_settings.py`: Parameter configs for enrichment
-  - **dev/**: Development tools
-    - `setup_bt_sdk.sh`: Bittensor SDK installation script
 
 ---
 
@@ -284,13 +292,16 @@ Expected output:
 - **static/css/main.css:** Main CSS for Flask-rendered pages
 - **dash_app/assets/custom.css:** Custom CSS for Dash app (explorer and system info)
 - **static/favicons/**: Cached favicons for subnets
+- **static/favicon.ico, static/favicon.png, static/favicon.svg:** Main application favicons
 - **dash_app/assets/subnet_placeholder.svg:** Placeholder SVG for missing favicons
+- **dash_app/assets/favicon.ico:** Dash app favicon
 
 ---
 
 ## Templates
 
 - **templates/index.html:** Main landing page (Flask)
+- **templates/about_placeholder.html:** About page template
 - **templates/admin_login.html:** Admin login page
 
 ---

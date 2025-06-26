@@ -77,6 +77,11 @@ layout = dbc.Container(
         # --- Tesla-inspired header ---
         html.Div([
             html.H1("Bittensor Subnet Explorer", className="dashboard-title"),
+            html.A(
+                "Test Subnet Detail Page", 
+                href="/dash/subnet-detail", 
+                className="btn btn-outline-secondary btn-sm mt-2"
+            )
         ], className="dashboard-header"),
         
         # --- Quick Start section (collapsible) ---
@@ -514,15 +519,15 @@ def render_cards(json_df):
             mcap_str = f"{mcap:.0f} TAO"
         
         # Category class for border color
-        category_class = f"category-{row.primary_category.replace(' ', '-').replace('/', '-')}" if pd.notna(row.primary_category) else ""
+        category_class = f"category-{row.primary_category.replace(' ', '-').replace('/', '-')}" if bool(pd.notna(row.primary_category)) else ""
         
         # Subnet name with number
-        subnet_display_name = f"{row.netuid} {row.subnet_name}" if pd.notna(row.subnet_name) else f"Subnet {row.netuid}"
+        subnet_display_name = f"{row.netuid} {row.subnet_name}" if bool(pd.notna(row.subnet_name)) else f"Subnet {row.netuid}"
         
         # Get favicon for website
         favicon_element = html.Div()
         try:
-            if pd.notna(row.favicon_url) and row.favicon_url:
+            if bool(pd.notna(row.favicon_url)) and bool(row.favicon_url):
                 # Use cached favicon from database
                 favicon_element = html.Img(
                     src=row.favicon_url,
@@ -540,7 +545,7 @@ def render_cards(json_df):
             favicon_element = html.Div()
         
         # Confidence badge (simple, inline)
-        confidence_score = row.confidence if pd.notna(row.confidence) else 0
+        confidence_score = row.confidence if bool(pd.notna(row.confidence)) else 0
         confidence_color = (
             "success" if confidence_score >= 90 else
             "warning" if confidence_score >= 70 else
@@ -559,10 +564,9 @@ def render_cards(json_df):
             placement="top"
         )
         
-        # Market cap with badge and tooltip (show USD)
+        # Market cap with badge and tooltip (show USD) - safely calculate USD
         mcap_id = f"market-cap-{row.netuid}"
-        mcap_tao = row.mcap_tao if isinstance(row.mcap_tao, (float, int)) else 0.0  # type: ignore
-        mcap_usd = mcap_tao * float(TAO_PRICE_USD) if float(TAO_PRICE_USD) > 0 else 0
+        mcap_usd = mcap * TAO_PRICE_USD if TAO_PRICE_USD > 0 else 0
         if mcap_usd >= 1_000_000:
             mcap_usd_str = f"${mcap_usd/1_000_000:.1f}M"
         elif mcap_usd >= 1_000:
@@ -583,9 +587,14 @@ def render_cards(json_df):
         )
         # Category badge with tooltip directly on the badge
         cat_id = f"category-badge-{row.netuid}"
+        val = row.primary_category
+        if isinstance(val, (str, int, float)):
+            show_badge = val is not None and bool(pd.notna(val))
+        else:
+            show_badge = False
         category_badge = (
-            dbc.Badge(row.primary_category, color="info", className="mb-2", id=cat_id)
-            if pd.notna(row.primary_category)
+            dbc.Badge(val, color="info", className="mb-2", id=cat_id)
+            if show_badge
             else dbc.Badge("Uncategorized", color="secondary", className="mb-2", id=cat_id)
         )
         cat_tooltip = dbc.Tooltip(
@@ -594,6 +603,10 @@ def render_cards(json_df):
             placement="top"
         )
         # Card structure with tooltips directly on text
+        website_val = row.website_url
+        github_val = row.github_url
+        website_ok = isinstance(website_val, (str, int, float)) and website_val is not None and bool(pd.notna(website_val))
+        github_ok = isinstance(github_val, (str, int, float)) and github_val is not None and bool(pd.notna(github_val))
         card_body = [
             # Header with market cap
             html.Div([
@@ -623,7 +636,7 @@ def render_cards(json_df):
             # Expandable description with links
             html.Details([
                 html.Summary("What it does", className="text-primary fw-bold mb-2"),
-                html.P(row.what_it_does if pd.notna(row.what_it_does) else "No detailed description available.", className="card-text small mb-2"),
+                html.P(row.what_it_does if bool(pd.notna(row.what_it_does)) else "No detailed description available.", className="card-text small mb-2"),
                 html.Div([
                     html.A(
                         "🌐 Website", 
@@ -637,7 +650,7 @@ def render_cards(json_df):
                         target="_blank", 
                         className="btn btn-sm btn-outline-secondary"
                     )
-                ], className="mt-2") if (pd.notna(row.website_url) or pd.notna(row.github_url)) else html.Div()
+                ], className="mt-2") if (website_ok or github_ok) else html.Div()
             ], className="mb-2"),
             
             # New expandable section for use case and technical features
@@ -648,21 +661,35 @@ def render_cards(json_df):
                     html.Div([
                         html.Strong("Primary Use Case: ", className="text-info"),
                         html.Span(row.primary_use_case or "Not specified", className="small")
-                    ], className="mb-2") if pd.notna(row.primary_use_case) else html.Div(),
+                    ], className="mb-2") if bool(pd.notna(row.primary_use_case)) else html.Div(),
                     
                     # Key technical features
                     html.Div([
                         html.Strong("Key Technical Features: ", className="text-info"),
                         html.Span(row.key_technical_features or "Not specified", className="small")
-                    ], className="mb-2") if pd.notna(row.key_technical_features) else html.Div(),
+                    ], className="mb-2") if bool(pd.notna(row.key_technical_features)) else html.Div(),
                 ])
-            ], className="mb-2") if (pd.notna(row.primary_use_case) or pd.notna(row.key_technical_features)) else html.Div(),
+            ], className="mb-2") if (bool(pd.notna(row.primary_use_case)) or bool(pd.notna(row.key_technical_features))) else html.Div(),
             
             # Provenance info
             html.Small(
-                format_provenance(row.provenance) if pd.notna(row.provenance) else "",
+                format_provenance(row.provenance) if bool(pd.notna(row.provenance)) else "",
                 className="text-muted d-block"
-            ) if pd.notna(row.provenance) else html.Div()
+            ) if bool(pd.notna(row.provenance)) else html.Div(),
+            
+            # View Details button
+            html.Div([
+                dcc.Link(
+                    dbc.Button(
+                        "View Details",
+                        color="primary",
+                        size="sm",
+                        className="w-100"
+                    ),
+                    href=f"/dash/subnet-detail?netuid={row.netuid}",
+                    className="text-decoration-none"
+                )
+            ], className="mt-3")
         ]
         
         return dbc.Col(
