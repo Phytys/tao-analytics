@@ -10,7 +10,8 @@ import plotly.graph_objects as go
 from services.metrics import metrics_service
 from services.cache import cache_stats
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
+from services.tao_metrics import tao_metrics_service
 
 # Color schemes
 CATEGORY_COLORS = {
@@ -30,6 +31,36 @@ CATEGORY_COLORS = {
     "Confidential-Compute": "#4ecdc4"
 }
 
+# Helper to check for stale data
+STALE_THRESHOLD_HOURS = 2
+
+def get_stale_warnings(landing_kpis):
+    warnings = []
+    now = datetime.utcnow()
+    # TAO price
+    price_ts = landing_kpis.get('tao_price_updated')
+    if price_ts:
+        try:
+            price_dt = datetime.fromisoformat(price_ts.replace('Z', '+00:00'))
+            if (now - price_dt) > timedelta(hours=STALE_THRESHOLD_HOURS):
+                warnings.append(f"TAO price data is stale (last updated: {price_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC)")
+        except Exception:
+            warnings.append("TAO price data timestamp is invalid or unavailable.")
+    else:
+        warnings.append("TAO price data is unavailable.")
+    # Screener
+    screener_ts = landing_kpis.get('screener_updated')
+    if screener_ts:
+        try:
+            screener_dt = datetime.fromisoformat(screener_ts.replace('Z', '+00:00'))
+            if (now - screener_dt) > timedelta(hours=STALE_THRESHOLD_HOURS):
+                warnings.append(f"Subnet screener data is stale (last updated: {screener_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC)")
+        except Exception:
+            warnings.append("Subnet screener data timestamp is invalid or unavailable.")
+    else:
+        warnings.append("Subnet screener data is unavailable.")
+    return warnings
+
 layout = dbc.Container([
     # Header
     html.Div([
@@ -40,6 +71,9 @@ layout = dbc.Container([
             html.A("Logout", href="/admin/logout", className="btn btn-outline-secondary btn-sm")
         ], className="mt-2")
     ], className="dashboard-header mb-4"),
+    
+    # Warning Alert (at the top)
+    html.Div(id="warning-alert", className="mb-4"),
     
     # Control buttons
     html.Div([
@@ -90,11 +124,18 @@ def load_system_data(n_intervals):
         top_subnets = metrics_service.get_top_subnets(limit=10, sort_by='market_cap')
         cache_info = cache_stats()
         
+        # Get network overview for timestamp data
+        network_overview = tao_metrics_service.get_network_overview()
+        
+        # Add warnings for stale data using network overview timestamps
+        warnings = get_stale_warnings(network_overview)
+        
         return {
             'landing_kpis': landing_kpis,
             'category_stats': category_stats,
             'top_subnets': top_subnets,
             'cache_info': cache_info,
+            'warnings': warnings,
             'timestamp': datetime.now().isoformat()
         }
     except Exception as e:
@@ -404,11 +445,18 @@ def refresh_data(n_clicks):
         top_subnets = metrics_service.get_top_subnets(limit=10, sort_by='market_cap')
         cache_info = cache_stats()
         
+        # Get network overview for timestamp data
+        network_overview = tao_metrics_service.get_network_overview()
+        
+        # Add warnings for stale data using network overview timestamps
+        warnings = get_stale_warnings(network_overview)
+        
         return {
             'landing_kpis': landing_kpis,
             'category_stats': category_stats,
             'top_subnets': top_subnets,
             'cache_info': cache_info,
+            'warnings': warnings,
             'timestamp': datetime.now().isoformat()
         }
     except Exception as e:
@@ -434,11 +482,18 @@ def clear_cache(n_clicks):
         top_subnets = metrics_service.get_top_subnets(limit=10, sort_by='market_cap')
         cache_info = cache_stats()
         
+        # Get network overview for timestamp data
+        network_overview = tao_metrics_service.get_network_overview()
+        
+        # Add warnings for stale data using network overview timestamps
+        warnings = get_stale_warnings(network_overview)
+        
         return {
             'landing_kpis': landing_kpis,
             'category_stats': category_stats,
             'top_subnets': top_subnets,
             'cache_info': cache_info,
+            'warnings': warnings,
             'timestamp': datetime.now().isoformat()
         }
     except Exception as e:
@@ -464,16 +519,42 @@ def cleanup_cache(n_clicks):
         top_subnets = metrics_service.get_top_subnets(limit=10, sort_by='market_cap')
         cache_info = cache_stats()
         
+        # Get network overview for timestamp data
+        network_overview = tao_metrics_service.get_network_overview()
+        
+        # Add warnings for stale data using network overview timestamps
+        warnings = get_stale_warnings(network_overview)
+        
         return {
             'landing_kpis': landing_kpis,
             'category_stats': category_stats,
             'top_subnets': top_subnets,
             'cache_info': cache_info,
+            'warnings': warnings,
             'timestamp': datetime.now().isoformat()
         }
     except Exception as e:
         print(f"Error cleaning up cache: {e}")
         return {}
+
+@callback(
+    Output("warning-alert", "children"),
+    Input("system-data", "data")
+)
+def render_warnings(data):
+    """Render warning alerts for stale data."""
+    if not data:
+        return html.Div()
+    
+    warnings = data.get('warnings', [])
+    if not warnings:
+        return html.Div()
+    
+    return dbc.Alert([
+        html.H5("⚠️ Data Collection Warnings", className="alert-heading"),
+        html.P("The following data sources may be stale or unavailable:"),
+        html.Ul([html.Li(warning) for warning in warnings])
+    ], color="warning", dismissable=True, className="mb-4")
 
 def register_callbacks(dash_app):
     """Register all callbacks for the system info page."""

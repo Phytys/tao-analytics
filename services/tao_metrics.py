@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from typing import Dict, List, Any, Optional
 import pandas as pd
 import json
+from sqlalchemy.sql import text
 
 from .db import get_db, load_subnet_frame
 from .cache import cached, db_cache
@@ -53,17 +54,36 @@ class TaoMetricsService:
         # Network activity (subnets with positive flow)
         recent_subnets = len(df[df['flow_24h'] > 0])  # Subnets with positive net volume
         
-        # Get current TAO price and market cap
+        # Get current TAO price and market cap with timestamp
         tao_price_usd = 354.5  # Default fallback
         tao_market_cap_usd = 0  # Default fallback
+        tao_price_updated = None
         try:
             with get_db() as session:
                 latest_price = session.query(CoinGeckoPrice).order_by(CoinGeckoPrice.fetched_at.desc()).first()
                 if latest_price:
                     tao_price_usd = float(latest_price.price_usd)
                     tao_market_cap_usd = float(latest_price.market_cap_usd or 0)
+                    tao_price_updated = latest_price.fetched_at.isoformat()
         except Exception as e:
             print(f"Error fetching TAO data: {e}")
+        
+        # Get latest subnet screener data timestamp
+        screener_updated = None
+        try:
+            with get_db() as session:
+                latest_screener = session.execute(
+                    text("SELECT MAX(fetched_at) as latest FROM screener_raw")
+                ).fetchone()
+                if latest_screener and latest_screener[0]:
+                    # Convert to datetime if it's a string, then to ISO format
+                    if isinstance(latest_screener[0], str):
+                        dt = datetime.fromisoformat(latest_screener[0].replace('Z', '+00:00'))
+                        screener_updated = dt.isoformat()
+                    else:
+                        screener_updated = latest_screener[0].isoformat()
+        except Exception as e:
+            print(f"Error fetching screener timestamp: {e}")
         
         return {
             'total_subnets': total_subnets,
@@ -77,7 +97,9 @@ class TaoMetricsService:
             'recent_subnets': recent_subnets,
             'positive_flow_percentage': round((recent_subnets / total_subnets * 100), 1) if total_subnets > 0 else 0,
             'tao_price_usd': tao_price_usd,
-            'tao_market_cap_usd': round(tao_market_cap_usd / 1000000, 1)  # Convert to millions
+            'tao_market_cap_usd': round(tao_market_cap_usd / 1000000, 1),  # Convert to millions
+            'tao_price_updated': tao_price_updated,
+            'screener_updated': screener_updated
         }
     
     @cached(db_cache)

@@ -135,6 +135,29 @@
                 </div>
             </div>
             {% endif %}
+
+            <!-- Last updated timestamps for TAO price and screener data -->
+            <div class="last-updated-section" style="margin-top: 1.5rem; text-align: center;">
+                <small>
+                    <span>
+                        TAO price last updated:
+                        {% if network_data and network_data.tao_price_updated %}
+                            {{ network_data.tao_price_updated | replace('T', ' ') | replace('Z', '') }} UTC
+                        {% else %}
+                            Unavailable
+                        {% endif %}
+                    </span>
+                    <br/>
+                    <span>
+                        Subnet screener last updated:
+                        {% if network_data and network_data.screener_updated %}
+                            {{ network_data.screener_updated | replace('T', ' ') | replace('Z', '') }} UTC
+                        {% else %}
+                            Unavailable
+                        {% endif %}
+                    </span>
+                </small>
+            </div>
         </div>
     </div>
 
