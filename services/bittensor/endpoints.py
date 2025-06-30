@@ -14,6 +14,14 @@ ARCHIVE_RPC = "wss://archive.chain.opentensor.ai:443"
 # Lite RPC (optional)
 LITE_RPC = "wss://lite.chain.opentensor.ai:443"
 
+# Stable RPC pool with fallbacks for SDK probe
+RPC_POOL = [
+    "wss://entrypoint-finney.opentensor.ai:443",  # canonical
+    "wss://finney.opentensor.ai:443",             # alt DNS
+    "wss://bittensor-api.dwellir.com:443",        # Dwellir public
+    "wss://bittensor.publicnode.com:443",         # PublicNode
+]
+
 # Network aliases for bt.subtensor()
 NETWORK_ALIASES = {
     "main": MAIN_RPC,      # Main production network

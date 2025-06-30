@@ -555,7 +555,7 @@ def render_cards(json_df):
             f"{confidence_score:.0f}% AI confidence",
             color=confidence_color,
             className="ms-2 small fw-normal opacity-75",
-            style={"font-size": "0.85em", "font-weight": 400},
+            style={"font-size": "0.75em", "font-weight": 400},
             id=f"confidence-badge-{row.netuid}"
         )
         confidence_tooltip = dbc.Tooltip(
@@ -650,7 +650,7 @@ def render_cards(json_df):
                         target="_blank", 
                         className="btn btn-sm btn-outline-secondary"
                     )
-                ], className="mt-2") if (website_ok or github_ok) else html.Div()
+                ], className="mt-2") if (website_ok or github_ok) else html.Div(),
             ], className="mb-2"),
             
             # New expandable section for use case and technical features
@@ -677,20 +677,26 @@ def render_cards(json_df):
                 className="text-muted d-block"
             ) if bool(pd.notna(row.provenance)) else html.Div(),
             
-            # View Details button
+            # View Details button - prominent and clear
             html.Div([
-                dcc.Link(
+                html.A(
                     dbc.Button(
-                        "View Details",
+                        [
+                            html.I(className="bi bi-arrow-right me-2"),
+                            "View Details"
+                        ],
                         color="primary",
-                        size="sm",
-                        className="w-100"
+                        size="md",
+                        className="w-100 fw-bold"
                     ),
                     href=f"/dash/subnet-detail?netuid={row.netuid}",
                     className="text-decoration-none"
                 )
             ], className="mt-3")
         ]
+        
+        # Debug print for link generation
+        print(f"Generated link for subnet {row.netuid}: /dash/subnet-detail?netuid={row.netuid}")
         
         return dbc.Col(
             html.Div([

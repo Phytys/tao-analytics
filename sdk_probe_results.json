@@ -1,0 +1,85 @@
+{
+  "summary": {
+    "total_endpoints": 4,
+    "safe_endpoints": 1,
+    "unsafe_endpoints": 3,
+    "overall_avg_latency_ms": 488.47,
+    "overall_p95_latency_ms": 800.31,
+    "best_endpoint": "wss://entrypoint-finney.opentensor.ai:443",
+    "worst_safe_endpoint": "wss://entrypoint-finney.opentensor.ai:443",
+    "timestamp": "2025-06-26T18:33:57.143875Z"
+  },
+  "endpoint_results": [
+    {
+      "endpoint": "wss://entrypoint-finney.opentensor.ai:443",
+      "label": "RPC-1",
+      "total_calls": 10,
+      "successful_calls": 10,
+      "failed_calls": 0,
+      "failure_rate": 0.0,
+      "avg_latency_ms": 488.47,
+      "p95_latency_ms": 800.31,
+      "is_safe": true,
+      "network_info": {
+        "current_block": 5867382,
+        "root_neurons": 64
+      },
+      "timestamp": "2025-06-26T18:33:56.858220Z"
+    },
+    {
+      "endpoint": "wss://finney.opentensor.ai:443",
+      "label": "RPC-2",
+      "total_calls": 0,
+      "successful_calls": 0,
+      "failed_calls": 0,
+      "failure_rate": 1.0,
+      "avg_latency_ms": 0,
+      "p95_latency_ms": 0,
+      "is_safe": false,
+      "network_info": {
+        "error": "[Errno 8] nodename nor servname provided, or not known"
+      },
+      "timestamp": "2025-06-26T18:33:56.918225Z"
+    },
+    {
+      "endpoint": "wss://bittensor-api.dwellir.com:443",
+      "label": "RPC-3",
+      "total_calls": 0,
+      "successful_calls": 0,
+      "failed_calls": 0,
+      "failure_rate": 1.0,
+      "avg_latency_ms": 0,
+      "p95_latency_ms": 0,
+      "is_safe": false,
+      "network_info": {
+        "error": "[Errno 8] nodename nor servname provided, or not known"
+      },
+      "timestamp": "2025-06-26T18:33:56.947998Z"
+    },
+    {
+      "endpoint": "wss://bittensor.publicnode.com:443",
+      "label": "RPC-4",
+      "total_calls": 0,
+      "successful_calls": 0,
+      "failed_calls": 0,
+      "failure_rate": 1.0,
+      "avg_latency_ms": 0,
+      "p95_latency_ms": 0,
+      "is_safe": false,
+      "network_info": {
+        "error": "did not receive a valid HTTP response"
+      },
+      "timestamp": "2025-06-26T18:33:57.143725Z"
+    }
+  ],
+  "probe_config": {
+    "rpc_pool": [
+      "wss://entrypoint-finney.opentensor.ai:443",
+      "wss://finney.opentensor.ai:443",
+      "wss://bittensor-api.dwellir.com:443",
+      "wss://bittensor.publicnode.com:443"
+    ],
+    "calls_per_endpoint": 10,
+    "failure_threshold": 0.3
+  }
+}

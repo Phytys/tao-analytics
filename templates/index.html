@@ -74,6 +74,7 @@
                 Comprehensive analytics and insights for the decentralized AI network
             </p>
             <div class="hero-stats">
+                {% if data_available %}
                 <div class="stat-item">
                     <span class="stat-number">{{ network_data.total_subnets }}</span>
                     <span class="stat-label">Subnets</span>
@@ -99,6 +100,14 @@
                     <span class="stat-number">{{ "%.1f"|format(network_data.positive_flow_percentage) }}%</span>
                     <span class="stat-label">Positive Flow %</span>
                 </div>
+                {% else %}
+                <div class="data-error-message">
+                    <div class="error-icon">⚠️</div>
+                    <h3>Data Temporarily Unavailable</h3>
+                    <p>We're experiencing issues loading network data. Please try again later or contact support if the problem persists.</p>
+                    <button onclick="location.reload()" class="retry-button">Retry</button>
+                </div>
+                {% endif %}
             </div>
             <a href="/dash/explorer" class="cta-button">
                 <span>Explore Subnets</span>
@@ -108,6 +117,7 @@
             </a>
             
             <!-- Network Highlights -->
+            {% if data_available %}
             <div class="network-highlights">
                 <div class="highlight-card">
                     <div class="highlight-icon">🏆</div>
@@ -124,6 +134,7 @@
                     </div>
                 </div>
             </div>
+            {% endif %}
         </div>
     </div>
 

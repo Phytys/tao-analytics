@@ -8,6 +8,7 @@ import dash_bootstrap_components as dbc
 from dash_app.pages.explorer import layout as explorer_layout
 from dash_app.pages.system_info import layout as system_info_layout
 from dash_app.pages.subnet_detail import layout as subnet_detail_layout
+from dash_app.pages.sdk_poc import layout as sdk_poc_layout
 from flask import session, redirect
 
 def create_dash(server):
@@ -193,6 +194,10 @@ def create_dash(server):
         
         if pathname == "/dash/subnet-detail":
             return subnet_detail_layout()
+        
+        if pathname == "/dash/sdk-poc":
+            return sdk_poc_layout()
+        
         else:
             return html.Div([
                 html.H1("404 - Page Not Found", className="text-center mt-5"),

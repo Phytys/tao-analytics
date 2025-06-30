@@ -16,21 +16,13 @@ def create_app():
         # Get network overview for landing page
         try:
             network_data = tao_metrics_service.get_network_overview()
+            data_available = True
         except Exception as e:
             print(f"Error loading network data: {e}")
-            network_data = {
-                'total_subnets': 125,
-                'active_subnets': 125,
-                'total_market_cap': 1.8,
-                'avg_market_cap': 14.7,
-                'total_flow_24h': -6.9,
-                'positive_flow_subnets': 30,
-                'top_subnet_name': 'Chutes',
-                'top_subnet_mcap': 284.6,
-                'recent_subnets': 30,
-                'network_growth_rate': 24.0
-            }
-        return render_template("index.html", network_data=network_data)
+            network_data = None
+            data_available = False
+        
+        return render_template("index.html", network_data=network_data, data_available=data_available)
 
     @server.route("/about")
     def about():
