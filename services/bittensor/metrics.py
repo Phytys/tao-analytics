@@ -110,14 +110,32 @@ def calculate_subnet_metrics(netuid: int, endpoint: str = MAIN_RPC) -> Dict[str,
             mean_consensus = mg.consensus.mean()
             aligned = np.abs(mg.consensus - mean_consensus) < 0.10
             consensus_alignment = aligned.mean().item() * 100
+            pct_aligned = consensus_alignment  # Store the percentage
         else:
             consensus_alignment = None
+            mean_consensus = None
+            pct_aligned = None
             
         # Calculate trust score (average trust across all validators)
         if hasattr(mg, 'trust') and mg.trust is not None:
             trust_score = mg.trust.mean().item()
         else:
             trust_score = None
+        
+        # Calculate active validators count
+        active_validators = 0
+        if hasattr(mg, 'validator_permit') and mg.validator_permit is not None:
+            active_validators = int(mg.validator_permit.sum().item())
+        
+        # Get emission totals from emissions object
+        tao_in_emission = 0.0
+        alpha_out_emission = 0.0
+        if hasattr(mg, 'emissions'):
+            emissions_obj = mg.emissions
+            if hasattr(emissions_obj, 'tao_in_emission'):
+                tao_in_emission = float(emissions_obj.tao_in_emission)
+            if hasattr(emissions_obj, 'alpha_out_emission'):
+                alpha_out_emission = float(emissions_obj.alpha_out_emission)
         
         # Compile results
         metrics = {
@@ -138,7 +156,12 @@ def calculate_subnet_metrics(netuid: int, endpoint: str = MAIN_RPC) -> Dict[str,
             "total_emission_tao": float(round(total_emission_rao / 1_000_000_000, 12)),
             "uid_count": int(uid_count),
             "endpoint": endpoint,
-            "timestamp": datetime.utcnow().isoformat() + "Z"
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "mean_consensus": float(round(mean_consensus, 6)) if mean_consensus is not None else None,
+            "pct_aligned": float(round(pct_aligned, 6)) if pct_aligned is not None else None,
+            "tao_in_emission": float(round(tao_in_emission, 6)),
+            "alpha_out_emission": float(round(alpha_out_emission, 6)),
+            "active_validators": int(active_validators)
         }
         
         return metrics
