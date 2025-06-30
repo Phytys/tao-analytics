@@ -47,6 +47,7 @@ Thumbs.db
 # Generated/processed data files
 processed_netuids.json
 =2.9
+sdk_probe_results.json
 
 # Logs
 *.log
@@ -54,4 +55,18 @@ logs/
 
 # Temporary files
 *.tmp
-*.temp 
+*.temp
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Node modules (if any frontend tools are used)
+node_modules/
+npm-debug.log* 
