@@ -9,8 +9,7 @@
 - [Project Structure](#project-structure)
 - [Key Features](#key-features)
 - [System Overview](#system-overview)
-- [Data Pipeline & Storage](#data-pipeline--storage)
-- [APIs & External Services](#apis--external-services)
+- [Data Pipeline](#data-pipeline)
 - [Setup & Installation](#setup--installation)
 - [Bittensor SDK Setup](#bittensor-sdk-setup)
 - [Configuration](#configuration)
@@ -53,9 +52,9 @@ tao-analytics/
 │   │   └── subnet_placeholder.svg  # Placeholder image
 │   └── pages/
 │       ├── explorer.py             # Main analytics page
+│       ├── system_info.py          # Admin system info
 │       ├── subnet_detail.py        # Subnet detail page
-│       ├── sdk_poc.py              # Bittensor SDK proof-of-concept
-│       └── system_info.py          # Admin system info
+│       └── sdk_poc.py              # Bittensor SDK proof of concept
 │
 ├── db_export/                      # Data exports
 │   └── subnet_meta.csv
@@ -92,10 +91,8 @@ tao-analytics/
 │       ├── metrics.py              # Live subnet metrics
 │       ├── endpoints.py            # Network endpoints
 │       ├── cache.py                # SDK caching
-│       ├── probe.py                # Network connectivity
-│       ├── debug_emissions.py      # Emission debugging
-│       ├── debug_hyperparams.py    # Hyperparameter debugging
-│       ├── debug_metagraph.py      # Metagraph debugging
+│       ├── probe.py                # Connectivity testing
+│       ├── debug_*.py              # Debug utilities
 │       └── test_spike.py           # SDK testing
 │
 ├── static/                         # Static assets
@@ -125,7 +122,7 @@ tao-analytics/
 
 - **Modern Analytics Dashboard:** Real-time subnet and category analytics for Bittensor
 - **Bittensor SDK Integration:** Live on-chain data collection and analysis
-- **AI-Powered Enrichment:** Automated subnet classification and description using GPT-4
+- **AI-Powered Enrichment:** GPT-4 powered subnet classification and description
 - **Responsive UI:** Optimized for desktop with mobile support
 - **Admin System Info:** Secure admin login and system metrics dashboard
 - **Data Enrichment:** Automated scripts for AI-powered subnet enrichment
@@ -145,115 +142,57 @@ tao-analytics/
 
 ---
 
-## Data Pipeline & Storage
-
-### Database Schema
-
-The application uses SQLite with three main tables:
-
-#### `screener_raw` - Raw API Data
-- `netuid` (Primary Key): Subnet identifier
-- `raw_json` (JSON): Complete raw data from tao.app API
-- `fetched_at` (DateTime): When data was last fetched
-- `updated_at` (DateTime): Last update timestamp
-
-#### `subnet_meta` - Enriched Subnet Data
-- `netuid` (Primary Key): Subnet identifier
-- `subnet_name` (String): Human-readable subnet name
-- `tagline` (String): Concise description (≤15 words)
-- `what_it_does` (Text): Comprehensive explanation (≤100 words)
-- `primary_use_case` (Text): Specific use case (≤50 words)
-- `key_technical_features` (Text): Technical capabilities (≤75 words)
-- `primary_category` (String): Granular category classification
-- `category_suggestion` (Text): LLM suggestions for new categories
-- `secondary_tags` (Text): CSV string of normalized tags
-- `confidence` (Float): AI confidence score (0-100)
-- `context_hash` (String): MD5 hash of context for change detection
-- `context_tokens` (Integer): Available context token count
-- `provenance` (Text): JSON tracking data sources
-- `privacy_security_flag` (Boolean): Privacy/security focus indicator
-- `favicon_url` (String): Cached favicon URL
-- `last_enriched_at` (DateTime): Last AI enrichment timestamp
-- `updated_at` (DateTime): Last update timestamp
-
-#### `coingecko` - TAO Price Data
-- `id` (Primary Key): Auto-incrementing ID
-- `price_usd` (Float): TAO price in USD
-- `market_cap_usd` (Float): Total TAO market cap
-- `fetched_at` (DateTime): When data was fetched
-
-### Data Flow
-
-1. **Data Collection** (`scripts/data-collection/`)
-   - `fetch_screener.py`: Fetches raw subnet data from tao.app API
-   - `fetch_coingecko_data.py`: Fetches TAO price/market cap from CoinGecko
-   - `fetch_favicons.py`: Collects and caches subnet favicons
-
-2. **AI Enrichment** (`scripts/data-collection/`)
-   - `enrich_with_openai.py`: Uses GPT-4 to classify and describe subnets
-   - `prepare_context.py`: Prepares context from websites/GitHub for LLM
-   - `batch_enrich.py`: Batch processing for multiple subnets
-
-3. **Data Processing** (`services/`)
-   - `db.py`: Database operations and query building
-   - `tao_metrics.py`: Network overview and performance metrics
-   - `cache.py`: LRU caching for API responses and database queries
-
-4. **Live SDK Data** (`services/bittensor/`)
-   - `metrics.py`: Real-time subnet metrics from Bittensor SDK
-   - `probe.py`: Network connectivity testing
-   - `cache.py`: SDK data caching
-
-### Caching Strategy
-
-- **API Cache**: 1-hour TTL for external API responses
-- **Database Cache**: 30-minute TTL for database queries
-- **SDK Cache**: 5-minute TTL for Bittensor SDK data
-- **Favicon Cache**: Persistent storage with URL mapping
-
----
-
-## APIs & External Services
+## Data Pipeline
 
 ### Primary Data Sources
 
 1. **tao.app API** (`https://api.tao.app/api/beta/subnet_screener`)
    - **Purpose**: Raw subnet data (market cap, volume, URLs)
    - **Authentication**: API key required (`TAO_APP_API_KEY`)
-   - **Frequency**: Manual/automated collection
-   - **Data**: Market metrics, GitHub repos, websites
+   - **Frequency**: Manual/automated collection via `fetch_screener.py`
+   - **Storage**: `screener_raw` table with JSON field
 
 2. **CoinGecko API** (`https://api.coingecko.com/api/v3/`)
    - **Purpose**: TAO price and market cap data
    - **Authentication**: API key required (`COINGECKO_API_KEY`)
-   - **Frequency**: Regular updates
-   - **Data**: Current TAO price, total market cap
+   - **Frequency**: Regular updates via `fetch_coingecko_data.py`
+   - **Storage**: `coingecko` table
 
 3. **Bittensor SDK** (Live on-chain data)
    - **Purpose**: Real-time subnet metrics and emissions
    - **Endpoints**: Multiple RPC endpoints with fallbacks
-   - **Frequency**: Real-time (with caching)
-   - **Data**: Stake distribution, emissions, consensus, trust scores
-
-### Enrichment Services
+   - **Frequency**: Real-time (with 5-minute caching)
+   - **Storage**: In-memory cache + real-time calculations
 
 4. **OpenAI GPT-4** (`https://api.openai.com/v1/chat/completions`)
    - **Purpose**: AI-powered subnet classification and description
-   - **Authentication**: API key required (`OPENAI_API_KEY`)
    - **Model**: GPT-4o (optimal balance of quality and cost)
    - **Features**: 
-     - Granular category classification
+     - Granular category classification (14 categories)
      - Confidence scoring with provenance tracking
-     - Context-aware enrichment
+     - Context-aware enrichment from websites/GitHub
      - Tag normalization and deduplication
+   - **Storage**: `subnet_meta` table with enriched fields
 
-### Web Scraping
+### Database Schema
 
-5. **Subnet Websites & GitHub**
-   - **Purpose**: Context collection for AI enrichment
-   - **Tools**: BeautifulSoup4, httpx, fake-useragent
-   - **Data**: README files, website content, project descriptions
-   - **Processing**: TF-IDF analysis, token counting, context preparation
+#### Core Tables
+- **`screener_raw`**: Raw API data with JSON field for flexibility
+- **`subnet_meta`**: Enriched data with AI-generated classifications
+- **`coingecko`**: TAO price and market cap history
+
+#### Key Fields in `subnet_meta`
+- `primary_category`: 14 granular categories (LLM-Inference, Serverless-Compute, etc.)
+- `confidence`: AI confidence score (0-100) with provenance tracking
+- `privacy_security_flag`: Boolean for privacy/security focus
+- `context_hash`: MD5 hash for change detection
+- `provenance`: JSON tracking of data sources (context vs model knowledge)
+
+### Caching Strategy
+- **API Cache**: 1-hour TTL for external API responses
+- **Database Cache**: 30-minute TTL for database queries
+- **SDK Cache**: 5-minute TTL for Bittensor SDK data
+- **Favicon Cache**: Persistent storage with URL mapping
 
 ---
 
@@ -276,11 +215,12 @@ The application uses SQLite with three main tables:
    pip install -r requirements.txt
    ```
 
-4. **Set environment variables:**
-   - `TAO_APP_API_KEY` - tao.app API key for subnet data
-   - `OPENAI_API_KEY` - OpenAI API key for AI enrichment
-   - `COINGECKO_API_KEY` - CoinGecko API key for price data
-   - `SECRET_KEY` - Flask session security (optional)
+4. **Set environment variables (optional):**
+   - `SECRET_KEY` for Flask session security
+   - `TAO_APP_API_KEY` for tao.app API access
+   - `OPENAI_API_KEY` for AI enrichment
+   - `COINGECKO_API_KEY` for price data
+   - Admin credentials as needed (see `admin_config.md`)
 
 ---
 
@@ -326,32 +266,35 @@ Expected output:
 
 ## Configuration
 
+### Environment Variables
+```bash
+# Required for full functionality
+TAO_APP_API_KEY=your_tao_app_key
+OPENAI_API_KEY=your_openai_key
+COINGECKO_API_KEY=your_coingecko_key
+
+# Optional
+SECRET_KEY=your_flask_secret_key
+```
+
 ### Primary Categories
+The system defines 14 granular categories for subnet classification, with 13 currently active in the database:
+- LLM-Inference
+- LLM-Training / Fine-tune
+- Data-Feeds & Oracles
+- Serverless-Compute
+- AI-Verification & Trust
+- Confidential-Compute *(defined but not yet used)*
+- Hashrate-Mining (BTC / PoW)
+- Finance-Trading & Forecasting
+- Security & Auditing
+- Privacy / Anonymity
+- Media-Vision / 3-D
+- Science-Research (Non-financial)
+- Consumer-AI & Games
+- Dev-Tooling
 
-The system uses 14 granular categories for subnet classification:
-
-1. **LLM-Inference** - AI text generation and language model services
-2. **LLM-Training / Fine-tune** - Training and fine-tuning large language models
-3. **Data-Feeds & Oracles** - Real-time data feeds and blockchain oracles
-4. **Serverless-Compute** - GPU computing power and model deployment
-5. **AI-Verification & Trust** - AI verification, zero-knowledge proofs, and trust systems
-6. **Confidential-Compute** - Secure and private AI execution
-7. **Hashrate-Mining (BTC / PoW)** - Bitcoin mining and proof-of-work services
-8. **Finance-Trading & Forecasting** - Financial trading and prediction services
-9. **Security & Auditing** - Security analysis and auditing services
-10. **Privacy / Anonymity** - Privacy-focused AI and anonymity services
-11. **Media-Vision / 3-D** - Computer vision, 3D modeling, and media AI
-12. **Science-Research (Non-financial)** - Scientific research and non-financial AI
-13. **Consumer-AI & Games** - Consumer AI applications and gaming
-14. **Dev-Tooling** - Developer tools, SDKs, and validator utilities
-
-### Enrichment Settings
-
-- **Model**: GPT-4o (optimal balance of quality and cost)
-- **Max Tokens**: Configurable per field type
-- **Confidence Thresholds**: Automatic confidence scoring
-- **Provenance Tracking**: Context vs model knowledge tracking
-- **Category Re-ask**: Fallback for better classification accuracy
+*Note: The dropdown and charts dynamically show only categories that have subnets classified with them. Currently 13 categories are active.*
 
 ---
 
@@ -359,198 +302,163 @@ The system uses 14 granular categories for subnet classification:
 
 ### Development Mode
 ```bash
+source venv311/bin/activate
 python app.py
 ```
-Access at: `http://localhost:5001`
+
+The app will be available at `http://localhost:5001`
 
 ### Production Mode
 ```bash
-gunicorn app:create_app
-```
-
-### Data Collection Scripts
-
-```bash
-# Fetch latest subnet data
-python scripts/data-collection/fetch_screener.py
-
-# Fetch TAO price data
-python scripts/data-collection/fetch_coingecko_data.py
-
-# Enrich a specific subnet
-python scripts/data-collection/enrich_with_openai.py --netuid 64
-
-# Enrich all subnets
-python scripts/data-collection/enrich_with_openai.py
-
-# Collect favicons
-python scripts/fetch_favicons.py
+# For Heroku deployment
+gunicorn app:create_app()
 ```
 
 ---
 
 ## Dash App Pages
 
-### `/dash/explorer` - Main Analytics Dashboard
-- **Purpose**: Browse and compare subnets
-- **Features**: 
-  - Category filtering and search
-  - Market cap and flow metrics
-  - AI confidence indicators
-  - Quick start guide
-  - Interactive charts
-  - Subnet cards with detailed information
+### `/dash/explorer` - Main Analytics Page
+- Browse and filter subnets by category
+- Search functionality with multiple field matching
+- Interactive charts and visualizations
+- Quick Start guide for new users
+- Confidence scores and tooltips
 
 ### `/dash/subnet-detail` - Subnet Detail Page
-- **Purpose**: Deep dive into individual subnets
-- **Features**:
-  - Comprehensive subnet information
-  - Links to website and GitHub
-  - Future: Detailed metrics, validator performance, historical data
+- Deep dive into individual subnet data
+- Links to website and GitHub
+- Basic metrics and descriptions
+- Future: Historical data and validator performance
 
-### `/dash/sdk-poc` - Bittensor SDK Proof of Concept
-- **Purpose**: Test live on-chain data integration
-- **Features**:
-  - Real-time subnet metrics
-  - Stake distribution analysis
-  - Emission split visualization
-  - Rolling window calculations
-  - Interactive charts and gauges
+### `/dash/sdk-poc` - SDK Proof of Concept
+- Live on-chain data from Bittensor SDK
+- Real-time subnet metrics (stake, emissions, consensus)
+- Interactive charts and visualizations
+- Performance testing and validation
 
 ### `/dash/system-info` - Admin System Info
-- **Purpose**: Development and monitoring tools
-- **Access**: Admin authentication required
-- **Features**: System metrics, cache statistics, database info
+- Secure admin access required
+- System metrics and performance data
+- Cache statistics and database info
+- Development tools and debugging
 
 ---
 
 ## Database & Data Flow
 
-### Query Architecture
+### Data Collection Process
+1. **Raw Data Collection**: `fetch_screener.py` collects data from tao.app API
+2. **Price Data**: `fetch_coingecko_data.py` updates TAO price and market cap
+3. **AI Enrichment**: `enrich_with_openai.py` processes subnets with GPT-4
+4. **Live Metrics**: Bittensor SDK provides real-time on-chain data
+5. **Caching**: Multi-layer caching optimizes performance
 
-The application uses SQLAlchemy ORM with database-agnostic JSON extraction:
+### Data Enrichment Pipeline
+1. **Context Preparation**: Gather website and GitHub data
+2. **LLM Processing**: GPT-4 classification and description
+3. **Quality Scoring**: Confidence and provenance tracking
+4. **Storage**: Save enriched data to `subnet_meta` table
 
-```python
-# Base query with JSON field extraction
-query = select(
-    SubnetMeta,
-    func.coalesce(json_field(ScreenerRaw.raw_json, 'market_cap_tao'), 0).label('mcap_tao'),
-    func.coalesce(json_field(ScreenerRaw.raw_json, 'net_volume_tao_24h'), 0).label('flow_24h'),
-    json_field(ScreenerRaw.raw_json, 'github_repo').label('github_url'),
-    json_field(ScreenerRaw.raw_json, 'subnet_url').label('website_url')
-).select_from(
-    SubnetMeta.__table__.outerjoin(ScreenerRaw.__table__, SubnetMeta.netuid == ScreenerRaw.netuid)
-)
-```
-
-### Data Processing Pipeline
-
-1. **Raw Data Ingestion**: tao.app API → `screener_raw` table
-2. **AI Enrichment**: Website/GitHub scraping → GPT-4 analysis → `subnet_meta` table
-3. **Price Data**: CoinGecko API → `coingecko` table
-4. **Live Metrics**: Bittensor SDK → Real-time calculations
-5. **Caching**: LRU cache for performance optimization
-6. **Display**: Dash dashboard with interactive visualizations
+### Performance Optimization
+- **LRU Caching**: Reduces API calls and database queries
+- **JSON Field Extraction**: Database-agnostic JSON handling
+- **Connection Pooling**: Efficient database connections
+- **Static Asset Caching**: Favicon and CSS optimization
 
 ---
 
 ## Scripts
 
-### Data Collection
-- `fetch_screener.py` - Fetch raw subnet data from tao.app
-- `fetch_coingecko_data.py` - Fetch TAO price and market cap
-- `fetch_favicons.py` - Collect and cache subnet favicons
+### Data Collection Scripts
+- `fetch_screener.py`: Collect raw subnet data from tao.app
+- `fetch_coingecko_data.py`: Update TAO price and market cap
+- `fetch_favicons.py`: Collect and cache subnet favicons
 
-### AI Enrichment
-- `enrich_with_openai.py` - AI-powered subnet classification
-- `prepare_context.py` - Context preparation for LLM
-- `batch_enrich.py` - Batch processing for multiple subnets
-- `auto_fallback_enrich.py` - Automated enrichment with fallbacks
+### Enrichment Scripts
+- `enrich_with_openai.py`: AI-powered subnet enrichment
+- `batch_enrich.py`: Process multiple subnets
+- `auto_fallback_enrich.py`: Automated enrichment with fallbacks
+- `analyze_enrichment_stats.py`: Analyze enrichment quality
 
-### Analysis & Utilities
-- `analyze_enrichment_stats.py` - Enrichment quality analysis
-- `explore_raw_data.py` - Data exploration and debugging
-- `export_db_table.py` - Database export utilities
-- `inspect_raw_data.py` - Raw data inspection
-- `reset_db.py` - Database reset utilities
+### Utility Scripts
+- `export_db_table.py`: Export data to CSV
+- `explore_raw_data.py`: Data exploration and analysis
+- `inspect_raw_data.py`: Raw data inspection
+- `reset_db.py`: Database reset utility
 
 ---
 
 ## Services
 
 ### Core Services
-- `tao_metrics.py` - Network overview and performance metrics
-- `db.py` - Database operations and query building
-- `cache.py` - LRU caching for API responses and database queries
-- `auth.py` - Admin authentication and session management
-- `favicons.py` - Favicon collection and caching
+- **`tao_metrics.py`**: Network overview and subnet performance metrics
+- **`db.py`**: Database operations and query optimization
+- **`cache.py`**: LRU caching with TTL support
+- **`auth.py`**: Admin authentication and session management
+- **`favicons.py`**: Favicon management and caching
 
-### Bittensor Services
-- `bittensor/metrics.py` - Live subnet metrics from SDK
-- `bittensor/endpoints.py` - Network endpoint management
-- `bittensor/cache.py` - SDK data caching
-- `bittensor/probe.py` - Network connectivity testing
-- `bittensor/debug_*.py` - Various debugging utilities
+### Bittensor SDK Services
+- **`bittensor/metrics.py`**: Live subnet metrics calculation
+- **`bittensor/endpoints.py`**: Network endpoint management
+- **`bittensor/cache.py`**: SDK-specific caching
+- **`bittensor/probe.py`**: Connectivity testing and validation
 
 ### Utility Services
-- `db_utils.py` - Database-agnostic utilities
-- `metrics.py` - General metrics calculation
+- **`db_utils.py`**: Database-agnostic utilities
+- **`metrics.py`**: General metrics calculation
 
 ---
 
 ## Static Assets
 
-### CSS Architecture
-- `main.css` - Tesla-inspired design system
-- Responsive grid layouts
-- Error handling UI components
-- Interactive hover states
-- Mobile-first responsive design
+### CSS Styling
+- **`main.css`**: Tesla-inspired design with modern aesthetics
+- **`custom.css`**: Dash app specific styling
+- Responsive design for mobile and desktop
 
-### Favicon System
-- Automatic favicon collection from subnet websites
-- Caching system for performance
+### Favicons
+- Automated favicon collection and caching
 - Fallback to placeholder images
-- Multiple format support (ICO, PNG, SVG)
+- Optimized for performance
 
 ---
 
 ## Templates
 
 ### Flask Templates
-- `index.html` - Landing page with network overview
-- `about_placeholder.html` - About page template
-- `admin_login.html` - Admin authentication
+- **`index.html`**: Landing page with network overview
+- **`about_placeholder.html`**: About page template
+- **`admin_login.html`**: Admin authentication page
 
 ### Error Handling
-- Graceful data loading failures
+- Graceful handling of data loading failures
 - User-friendly error messages
-- Retry mechanisms
-- Fallback content display
+- Retry functionality for failed requests
 
 ---
 
 ## Deployment
 
 ### Heroku Deployment
-- **Buildpack**: Python 3.10.14
-- **Process**: Gunicorn web server
-- **Database**: SQLite (can be upgraded to PostgreSQL)
-- **Environment**: Production-ready with proper logging
-
-### Environment Variables
 ```bash
-TAO_APP_API_KEY=your_tao_app_key
-OPENAI_API_KEY=your_openai_key
-COINGECKO_API_KEY=your_coingecko_key
-SECRET_KEY=your_flask_secret_key
+# Procfile configuration
+web: gunicorn app:create_app()
+
+# Runtime specification
+python-3.10.14
 ```
 
-### Performance Optimization
-- LRU caching for API responses and database queries
-- Favicon caching for faster page loads
-- Database query optimization with proper indexing
-- Static asset compression and caching
+### Environment Setup
+- Python 3.10.14 for Heroku compatibility
+- Pre-built `grpcio` wheels to avoid compilation issues
+- Environment variables for API keys and secrets
+
+### Performance Considerations
+- Database query optimization
+- Static asset compression
+- Cache warming strategies
+- Connection pooling
 
 ---
 
@@ -606,6 +514,26 @@ SECRET_KEY=your_flask_secret_key
    - Build validator intelligence scoring
    - Create validator ranking system
    - Implement staking recommendations
+
+### Technical Architecture
+
+#### Data Pipeline
+- Multi-source data collection with redundancy
+- AI-powered enrichment with quality scoring
+- Real-time on-chain data integration
+- Comprehensive caching strategy
+
+#### Performance Optimization
+- Database query optimization with JSON fields
+- Multi-layer caching (API, DB, SDK, static assets)
+- Connection pooling and resource management
+- Static asset compression and caching
+
+#### Scalability Considerations
+- SQLite to PostgreSQL migration path
+- API rate limiting and respect
+- SDK connection pooling
+- Cache memory usage optimization
 
 ---
 

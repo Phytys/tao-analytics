@@ -1,0 +1,297 @@
+"""
+Automated Data Collection for TAO Analytics.
+Replaces manual scripts with scheduled collection.
+"""
+
+import argparse
+import schedule
+import time
+import sys
+from datetime import datetime, timedelta
+from pathlib import Path
+import logging
+
+# Add project root to path for imports
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
+from services.quota_guard import QuotaGuard, QuotaExceededError
+from scripts.data_collection.fetch_screener import main as fetch_subnet_screener
+from scripts.data_collection.fetch_coingecko_data import main as fetch_coingecko_data
+from services.db import get_db
+from services.db_utils import get_database_type
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('logs/cron_fetch.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+def log_data_collection(session, source: str, method: str, success: bool, details: str = ""):
+    """Log data collection activity."""
+    try:
+        # Simple logging for now - can be enhanced with database logging later
+        logger.info(f"Data collection: {source} via {method} - {'SUCCESS' if success else 'FAILED'} - {details}")
+    except Exception as e:
+        logger.error(f"Error logging data collection: {e}")
+
+def safe_fetch_subnet_screener():
+    """Safely call fetch_subnet_screener with error handling."""
+    try:
+        fetch_subnet_screener()
+        return True
+    except Exception as e:
+        logger.error(f"Error in fetch_subnet_screener: {e}")
+        return False
+
+def safe_fetch_coingecko_data():
+    """Safely call fetch_coingecko_data with error handling."""
+    try:
+        fetch_coingecko_data()
+        return True
+    except Exception as e:
+        logger.error(f"Error in fetch_coingecko_data: {e}")
+        return False
+
+class CronFetch:
+    """Automated data collection with quota management."""
+    
+    def __init__(self):
+        """Initialize cron fetch system."""
+        self.quota_guard = QuotaGuard()
+        self.session = get_db()
+        
+        # Ensure logs directory exists
+        Path('logs').mkdir(exist_ok=True)
+    
+    def fetch_subnet_data(self):
+        """Fetch subnet screener data with quota enforcement."""
+        try:
+            logger.info("Starting subnet screener fetch...")
+            
+            # Check quota before making call
+            if not self.quota_guard.check_quota('/subnet_screener'):
+                logger.error("Quota exceeded for subnet screener")
+                return False
+            
+            # Fetch data
+            success = safe_fetch_subnet_screener()
+            
+            if success:
+                # Increment quota count
+                new_count = self.quota_guard.increment_call_count('/subnet_screener')
+                logger.info(f"Subnet screener fetch successful. Quota count: {new_count}")
+                
+                # Log collection
+                log_data_collection(
+                    self.session,
+                    'subnet_screener',
+                    'automated',
+                    success=True,
+                    details=f"Quota count: {new_count}"
+                )
+                return True
+            else:
+                logger.error("Subnet screener fetch failed")
+                log_data_collection(
+                    self.session,
+                    'subnet_screener', 
+                    'automated',
+                    success=False,
+                    details="Fetch failed"
+                )
+                return False
+                
+        except QuotaExceededError as e:
+            logger.error(f"Quota exceeded: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Error in subnet screener fetch: {e}")
+            log_data_collection(
+                self.session,
+                'subnet_screener',
+                'automated', 
+                success=False,
+                details=f"Error: {str(e)}"
+            )
+            return False
+    
+    def fetch_coingecko_data(self):
+        """Fetch CoinGecko data with quota enforcement."""
+        try:
+            logger.info("Starting CoinGecko data fetch...")
+            
+            # Check quota before making call
+            if not self.quota_guard.check_quota('/analytics/macro/aggregated'):
+                logger.error("Quota exceeded for CoinGecko analytics")
+                return False
+            
+            # Fetch data
+            success = safe_fetch_coingecko_data()
+            
+            if success:
+                # Increment quota count
+                new_count = self.quota_guard.increment_call_count('/analytics/macro/aggregated')
+                logger.info(f"CoinGecko fetch successful. Quota count: {new_count}")
+                
+                # Log collection
+                log_data_collection(
+                    self.session,
+                    'coingecko_data',
+                    'automated',
+                    success=True,
+                    details=f"Quota count: {new_count}"
+                )
+                return True
+            else:
+                logger.error("CoinGecko fetch failed")
+                log_data_collection(
+                    self.session,
+                    'coingecko_data',
+                    'automated',
+                    success=False,
+                    details="Fetch failed"
+                )
+                return False
+                
+        except QuotaExceededError as e:
+            logger.error(f"Quota exceeded: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Error in CoinGecko fetch: {e}")
+            log_data_collection(
+                self.session,
+                'coingecko_data',
+                'automated',
+                success=False,
+                details=f"Error: {str(e)}"
+            )
+            return False
+    
+    def nightly_collection(self):
+        """Nightly data collection (all sources)."""
+        logger.info("Starting nightly data collection...")
+        
+        results = {
+            'subnet_screener': self.fetch_subnet_data(),
+            'coingecko': self.fetch_coingecko_data()
+        }
+        
+        success_count = sum(1 for success in results.values() if success)
+        total_count = len(results)
+        
+        logger.info(f"Nightly collection complete: {success_count}/{total_count} successful")
+        
+        # Log overall collection
+        log_data_collection(
+            self.session,
+            'nightly_collection',
+            'automated',
+            success=success_count > 0,
+            details=f"Results: {results}"
+        )
+        
+        return results
+    
+    def hourly_collection(self):
+        """Hourly data collection (subnet screener only)."""
+        logger.info("Starting hourly subnet data collection...")
+        
+        success = self.fetch_subnet_data()
+        
+        logger.info(f"Hourly collection complete: {'success' if success else 'failed'}")
+        
+        # Log overall collection
+        log_data_collection(
+            self.session,
+            'hourly_collection',
+            'automated',
+            success=success,
+            details="Subnet screener only"
+        )
+        
+        return success
+    
+    def run_once(self, collection_type: str):
+        """Run collection once."""
+        logger.info(f"Running {collection_type} collection once...")
+        
+        if collection_type == 'nightly':
+            return self.nightly_collection()
+        elif collection_type == 'hourly':
+            return self.hourly_collection()
+        elif collection_type == 'subnet':
+            return self.fetch_subnet_data()
+        elif collection_type == 'coingecko':
+            return self.fetch_coingecko_data()
+        else:
+            logger.error(f"Unknown collection type: {collection_type}")
+            return False
+    
+    def start_scheduler(self):
+        """Start the scheduled collection."""
+        logger.info("Starting scheduled data collection...")
+        
+        # Schedule nightly collection at 2 AM
+        schedule.every().day.at("02:00").do(self.nightly_collection)
+        logger.info("Scheduled nightly collection at 02:00")
+        
+        # Schedule hourly collection every hour
+        schedule.every().hour.do(self.hourly_collection)
+        logger.info("Scheduled hourly collection every hour")
+        
+        # Run initial collection
+        logger.info("Running initial collection...")
+        self.nightly_collection()
+        
+        # Keep running
+        while True:
+            schedule.run_pending()
+            time.sleep(60)  # Check every minute
+
+def main():
+    """CLI interface for cron fetch."""
+    parser = argparse.ArgumentParser(description="TAO Analytics Automated Data Collection")
+    parser.add_argument("--once", type=str, choices=['nightly', 'hourly', 'subnet', 'coingecko'],
+                       help="Run collection once")
+    parser.add_argument("--schedule", action="store_true", help="Start scheduled collection")
+    parser.add_argument("--test", action="store_true", help="Test collection without quota enforcement")
+    
+    args = parser.parse_args()
+    
+    cron = CronFetch()
+    
+    if args.once:
+        result = cron.run_once(args.once)
+        print(f"Collection result: {result}")
+        sys.exit(0 if result else 1)
+    
+    elif args.schedule:
+        try:
+            cron.start_scheduler()
+        except KeyboardInterrupt:
+            logger.info("Scheduler stopped by user")
+            sys.exit(0)
+    
+    elif args.test:
+        logger.info("Running test collection...")
+        # Test without quota enforcement
+        try:
+            subnet_result = safe_fetch_subnet_screener()
+            coingecko_result = safe_fetch_coingecko_data()
+            print(f"Test results - Subnet: {subnet_result}, CoinGecko: {coingecko_result}")
+        except Exception as e:
+            logger.error(f"Test failed: {e}")
+            sys.exit(1)
+    
+    else:
+        # Default: show help
+        parser.print_help()
+
+if __name__ == "__main__":
+    main() 
