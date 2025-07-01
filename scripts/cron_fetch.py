@@ -7,9 +7,12 @@ import argparse
 import schedule
 import time
 import sys
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 import logging
+from typing import Optional
+import asyncio
 
 # Add project root to path for imports
 project_root = Path(__file__).parent.parent
@@ -22,7 +25,10 @@ from services.db import get_db
 from services.db_utils import get_database_type
 from services.bittensor.metrics import calculate_subnet_metrics
 from services.bittensor.async_metrics import collect_all_subnet_metrics_async, collect_all_subnet_metrics_sync
-from models import MetricsSnap, SubnetMeta, ScreenerRaw
+from models import MetricsSnap, SubnetMeta, ScreenerRaw, DailyEmissionStats, ApiQuota, GptInsightsNew
+from services.calc_metrics import calculate_all_metrics, validate_metrics, calculate_reserve_momentum, calculate_emission_roi
+import numpy as np
+from services.bittensor.async_utils import run_blocking
 
 # Configure logging
 logging.basicConfig(
@@ -176,148 +182,521 @@ class CronFetch:
             )
             return False
     
-    def fetch_sdk_snapshot(self):
-        """Fetch SDK metrics snapshot for all subnets with improved reliability."""
+    def fetch_daily_emission_stats(self, netuid: int, session) -> Optional[float]:
+        """
+        Fetch daily emission stats using the efficient diff method.
+        
+        Args:
+            netuid: Subnet ID
+            session: Database session
+            
+        Returns:
+            Daily emission in TAO, or None if failed
+        """
+        try:
+            import bittensor as bt
+            
+            # Get current block
+            sub = bt.subtensor()
+            head = sub.get_current_block()
+            
+            # Try native RPC first (SDK ≥9.8)
+            delta = None
+            method = None
+            
+            if hasattr(sub, "emission_since"):
+                try:
+                    tao_prev = sub.emission_since(block=head-199, netuid=netuid)  # 200 blocks ago
+                    tao_now = sub.emission_since(block=head, netuid=netuid)
+                    delta = tao_now - tao_prev
+                    method = "native"
+                    logger.debug(f"Subnet {netuid}: Using native emission_since RPC")
+                except Exception as e:
+                    logger.debug(f"Subnet {netuid}: Native emission_since failed: {e}")
+                    delta = None
+                    method = None
+            
+            # Fallback to two-metagraph diff
+            if delta is None:
+                try:
+                    import asyncio
+                    from services.bittensor.async_utils import run_blocking
+                    import bittensor as bt
+
+                    async def fetch_metagraphs():
+                        mg_prev, mg_now = await asyncio.gather(
+                            run_blocking(lambda: bt.subtensor().metagraph(netuid=netuid, block=head-199, lite=True)),
+                            run_blocking(lambda: bt.subtensor().metagraph(netuid=netuid, block=head, lite=True)),
+                        )
+                        return mg_prev, mg_now
+
+                    # Run async function
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    mg_prev, mg_now = loop.run_until_complete(fetch_metagraphs())
+                    loop.close()
+
+                    delta = mg_now.tao_in_emission.sum() - mg_prev.tao_in_emission.sum()
+                    method = "diff-200-unweighted"
+                    logger.info(f"Subnet {netuid}: Using metagraph diff method (diff-200-unweighted)")
+
+                except Exception as e:
+                    logger.error(f"Subnet {netuid}: Both emission methods failed: {e}")
+                    return None
+            
+            # Convert and store (only if method is not unweighted)
+            if delta is not None and "unweighted" not in method:
+                daily_emission_tao = delta / 1e9  # RAO → TAO
+                
+                # Store in daily_emission_stats
+                today = datetime.utcnow().date()
+                emission_stat = DailyEmissionStats(
+                    netuid=netuid,
+                    date=today,
+                    tao_emission=daily_emission_tao,
+                    method=method
+                )
+                session.add(emission_stat)
+                session.commit()
+                logger.info(f"daily_emission_stats insert ok method={method} netuid={netuid} value={daily_emission_tao}")
+                
+                return daily_emission_tao
+            elif delta is not None and "unweighted" in method:
+                logger.debug(f"Subnet {netuid}: Skipping emission stats (unweighted method)")
+                return None
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error fetching daily emission for subnet {netuid}: {e}")
+            return None
+
+    def fetch_sdk_snapshot(self, limit: int = None):
+        """Fetch SDK metrics snapshot for all subnets with optimized performance."""
         try:
             logger.info("Starting SDK metrics snapshot...")
+            
+            # Check for test mode
+            fast_test_mode = os.getenv("FAST_METRICS_TEST", "0").lower() in ("1", "true", "yes")
             
             # Get current timestamp for snapshot
             snapshot_time = datetime.utcnow()
             
-            # Get list of all subnets from screener data
+            # Get list of subnets from screener data
             with get_db() as session:
                 screener_data = session.query(ScreenerRaw.netuid).distinct().all()
                 
-                subnet_ids = [row[0] for row in screener_data]
+                all_subnet_ids = [row[0] for row in screener_data]
                 
-                if not subnet_ids:
-                    logger.warning("No subnet data available for SDK snapshot")
-                    return False
-                
-                logger.info(f"Collecting SDK metrics for {len(subnet_ids)} subnets...")
-                
-                # Try async collection first with reduced concurrency
-                metrics_list = []
-                success_rate = 0
-                
-                try:
-                    import asyncio
-                    logger.info("Attempting async SDK collection with 4 workers...")
-                    metrics_list = asyncio.run(collect_all_subnet_metrics_async(subnet_ids, max_workers=4))
-                    
-                    # Calculate success rate
-                    successful_metrics = [m for m in metrics_list if "error" not in m or not m["error"]]
-                    success_rate = (len(successful_metrics) / len(subnet_ids)) * 100
-                    
-                    logger.info(f"Async collection completed with {success_rate:.1f}% success rate")
-                    
-                    # If success rate is too low, try sync fallback
-                    if success_rate < 40:
-                        logger.warning(f"Low async success rate ({success_rate:.1f}%), trying sync fallback...")
-                        sync_metrics = collect_all_subnet_metrics_sync(subnet_ids)
-                        sync_successful = [m for m in sync_metrics if "error" not in m or not m["error"]]
-                        sync_success_rate = (len(sync_successful) / len(subnet_ids)) * 100
-                        
-                        if sync_success_rate > success_rate:
-                            logger.info(f"Sync fallback improved success rate to {sync_success_rate:.1f}%")
-                            metrics_list = sync_metrics
-                            success_rate = sync_success_rate
-                        else:
-                            logger.info(f"Sync fallback didn't improve success rate ({sync_success_rate:.1f}%), keeping async results")
-                    
-                except Exception as e:
-                    logger.warning(f"Async collection failed, falling back to sync: {e}")
-                    metrics_list = collect_all_subnet_metrics_sync(subnet_ids)
-                    successful_metrics = [m for m in metrics_list if "error" not in m or not m["error"]]
-                    success_rate = (len(successful_metrics) / len(subnet_ids)) * 100
-                    logger.info(f"Sync collection completed with {success_rate:.1f}% success rate")
-                
-                # Log overall success rate
-                if success_rate < 30:
-                    logger.error(f"Very low success rate ({success_rate:.1f}%). Network connectivity issues detected.")
-                elif success_rate < 60:
-                    logger.warning(f"Moderate success rate ({success_rate:.1f}%). Some subnets may be temporarily unavailable.")
+                # Apply test mode or limit
+                if fast_test_mode:
+                    # Sample subnets for fast testing
+                    sample_subnets = [1, 3, 4, 11, 64, 100]
+                    subnet_ids = [netuid for netuid in sample_subnets if netuid in all_subnet_ids]
+                    logger.info(f"FAST_METRICS_TEST mode: Processing {len(subnet_ids)} sample subnets: {subnet_ids}")
+                elif limit:
+                    subnet_ids = all_subnet_ids[:limit]
+                    logger.info(f"Limited to {len(subnet_ids)} subnets for testing: {subnet_ids}")
                 else:
-                    logger.info(f"Good success rate ({success_rate:.1f}%). Collection proceeding normally.")
+                    subnet_ids = all_subnet_ids
+                    logger.info(f"Processing all {len(subnet_ids)} subnets")
                 
-                successful_snapshots = 0
-                failed_snapshots = 0
+                logger.info(f"Total subnets available: {len(all_subnet_ids)}")
+            
+            if not subnet_ids:
+                logger.warning("No subnet data available for SDK snapshot")
+                return False
+            
+            logger.info(f"Collecting SDK metrics for {len(subnet_ids)} subnets...")
+            
+            # Try async collection with optimized settings
+            metrics_list = []
+            success_rate = 0
+            
+            # Determine worker count and collection mode
+            if fast_test_mode:
+                max_workers = 4
+                logger.info("FAST_METRICS_TEST mode: Using 4 workers with lite metagraphs")
+            else:
+                max_workers = 16
+                logger.info(f"Production mode: Using {max_workers} workers with full metagraphs")
+            
+            try:
+                logger.info(f"Attempting async SDK collection with {max_workers} workers...")
+                metrics_list = asyncio.run(collect_all_subnet_metrics_async(subnet_ids, max_workers=max_workers, lite_mode=fast_test_mode))
                 
-                for metrics in metrics_list:
-                    try:
-                        if "error" in metrics and metrics["error"]:
-                            logger.debug(f"Error getting metrics for subnet {metrics['netuid']}: {metrics['error']}")
-                            failed_snapshots += 1
-                            continue
-                        
-                        netuid = metrics['netuid']
-                        
-                        # Get subnet metadata for reference
-                        subnet_meta = session.query(SubnetMeta).filter_by(netuid=netuid).first()
-                        
-                        # Create metrics snapshot record with all new fields
-                        snapshot = MetricsSnap(
-                            timestamp=snapshot_time,
-                            netuid=netuid,
-                            
-                            # Market metrics (will be filled from screener data later)
-                            market_cap_tao=None,  # TODO: Join with screener data
-                            flow_24h=None,        # TODO: Join with screener data
-                            price_tao=None,       # TODO: Join with screener data
-                            
-                            # SDK metrics
-                            total_stake_tao=metrics.get('total_stake_tao'),
-                            stake_hhi=metrics.get('stake_hhi'),
-                            uid_count=metrics.get('uid_count'),
-                            mean_incentive=metrics.get('mean_incentive'),
-                            p95_incentive=metrics.get('p95_incentive'),
-                            consensus_alignment=metrics.get('consensus_alignment'),
-                            trust_score=metrics.get('trust_score'),
-                            mean_consensus=metrics.get('mean_consensus'),
-                            pct_aligned=metrics.get('pct_aligned'),
-                            
-                            # Emission metrics
-                            emission_owner=metrics.get('emission_split', {}).get('owner'),
-                            emission_miners=metrics.get('emission_split', {}).get('miners'),
-                            emission_validators=metrics.get('emission_split', {}).get('validators'),
-                            total_emission_tao=metrics.get('total_emission_tao'),
-                            tao_in_emission=metrics.get('tao_in_emission'),
-                            alpha_out_emission=metrics.get('alpha_out_emission'),
-                            
-                            # Network activity metrics
-                            active_validators=metrics.get('active_validators'),
-                            
-                            # Metadata
-                            subnet_name=subnet_meta.subnet_name if subnet_meta else None,
-                            category=subnet_meta.primary_category if subnet_meta else None,
-                            confidence=subnet_meta.confidence if subnet_meta else None
-                        )
-                        
-                        session.add(snapshot)
-                        successful_snapshots += 1
-                        
-                    except Exception as e:
-                        logger.error(f"Error processing subnet {metrics.get('netuid', 'unknown')}: {e}")
+                # Calculate success rate
+                successful_metrics = [m for m in metrics_list if "error" not in m or not m["error"]]
+                success_rate = (len(successful_metrics) / len(subnet_ids)) * 100
+                
+                logger.info(f"Async collection completed with {success_rate:.1f}% success rate")
+                
+                # If success rate is too low, try sync fallback
+                if success_rate < 40:
+                    logger.warning(f"Low async success rate ({success_rate:.1f}%), trying sync fallback...")
+                    sync_metrics = collect_all_subnet_metrics_sync(subnet_ids)
+                    sync_successful = [m for m in sync_metrics if "error" not in m or not m["error"]]
+                    sync_success_rate = (len(sync_successful) / len(subnet_ids)) * 100
+                    
+                    if sync_success_rate > success_rate:
+                        logger.info(f"Sync fallback improved success rate to {sync_success_rate:.1f}%")
+                        metrics_list = sync_metrics
+                        success_rate = sync_success_rate
+                    else:
+                        logger.info(f"Sync fallback didn't improve success rate ({sync_success_rate:.1f}%), keeping async results")
+                
+            except Exception as e:
+                logger.warning(f"Async collection failed, falling back to sync: {e}")
+                metrics_list = collect_all_subnet_metrics_sync(subnet_ids)
+                successful_metrics = [m for m in metrics_list if "error" not in m or not m["error"]]
+                success_rate = (len(successful_metrics) / len(subnet_ids)) * 100
+                logger.info(f"Sync collection completed with {success_rate:.1f}% success rate")
+            
+            # Log overall success rate
+            if success_rate < 30:
+                logger.error(f"Very low success rate ({success_rate:.1f}%). Network connectivity issues detected.")
+            elif success_rate < 60:
+                logger.warning(f"Moderate success rate ({success_rate:.1f}%). Some subnets may be temporarily unavailable.")
+            else:
+                logger.info(f"Good success rate ({success_rate:.1f}%). Collection proceeding normally.")
+            
+            successful_snapshots = 0
+            failed_snapshots = 0
+            
+            logger.info(f"Processing {len(metrics_list)} subnet metrics...")
+            
+            for i, metrics in enumerate(metrics_list):
+                try:
+                    if "error" in metrics and metrics["error"]:
+                        logger.debug(f"Error getting metrics for subnet {metrics['netuid']}: {metrics['error']}")
                         failed_snapshots += 1
                         continue
-                
-                # Commit all snapshots
-                session.commit()
-                
-                final_success_rate = (successful_snapshots / len(subnet_ids)) * 100
-                logger.info(f"SDK snapshot complete: {successful_snapshots} successful, {failed_snapshots} failed ({final_success_rate:.1f}% final success rate)")
-                
-                # Log collection with success rate
-                log_data_collection(
-                    self.session,
-                    'sdk_snapshot',
-                    'automated',
-                    success=successful_snapshots > 0,
-                    details=f"Processed {successful_snapshots}/{len(subnet_ids)} subnets ({final_success_rate:.1f}% success)"
-                )
-                
-                return successful_snapshots > 0
-                
+                    
+                    netuid = metrics['netuid']
+                    
+                    # Get subnet metadata for reference
+                    subnet_meta = session.query(SubnetMeta).filter_by(netuid=netuid).first()
+                    
+                    # Get latest screener data for price/flow metrics
+                    latest_screener = session.query(ScreenerRaw).filter_by(netuid=netuid)\
+                        .order_by(ScreenerRaw.fetched_at.desc()).first()
+                    
+                    # Get previous screener data for reserve momentum calculation
+                    # Look for yesterday's data specifically (not just previous record)
+                    yesterday = snapshot_time - timedelta(days=1)
+                    previous_screener = session.query(ScreenerRaw).filter_by(netuid=netuid)\
+                        .filter(ScreenerRaw.fetched_at >= yesterday)\
+                        .order_by(ScreenerRaw.fetched_at.desc()).first()
+                    
+                    # Skip emission ROI until SDK 9.8+ is available
+                    daily_emission_tao = None
+                    
+                    # Get yesterday's TAO-in for reserve momentum from metrics_snap time series
+                    yesterday_tao_in = None
+                    yesterday_metrics = session.query(MetricsSnap).filter_by(netuid=netuid)\
+                        .filter(MetricsSnap.timestamp < snapshot_time)\
+                        .order_by(MetricsSnap.timestamp.desc()).first()
+                    
+                    if yesterday_metrics and yesterday_metrics.tao_in is not None:
+                        yesterday_tao_in = yesterday_metrics.tao_in
+                        logger.debug(f"Subnet {netuid}: Using yesterday's tao_in from metrics_snap: {yesterday_tao_in}")
+                    else:
+                        logger.debug(f"Subnet {netuid}: No yesterday's tao_in available in metrics_snap")
+                    
+                    # Extract screener data for time series - include all available fields
+                    screener_metrics = {}
+                    if latest_screener is not None and latest_screener.raw_json is not None:
+                        screener_data = latest_screener.raw_json
+                        screener_metrics = {
+                            # Core market metrics
+                            'price_tao': screener_data.get('price'),
+                            'market_cap_tao': screener_data.get('market_cap_tao'),
+                            'fdv_tao': screener_data.get('fdv_tao'),
+                            
+                            # Volume metrics
+                            'buy_volume_tao_1d': screener_data.get('buy_volume_tao_1d'),
+                            'sell_volume_tao_1d': screener_data.get('sell_volume_tao_1d'),
+                            'total_volume_tao_1d': screener_data.get('total_volume_tao_1d'),
+                            'net_volume_tao_1h': screener_data.get('net_volume_tao_1h'),
+                            'flow_24h': screener_data.get('net_volume_tao_24h'),
+                            'net_volume_tao_7d': screener_data.get('net_volume_tao_7d'),
+                            
+                            # Price action metrics
+                            'price_1h_change': screener_data.get('price_1h_pct_change'),
+                            'price_1d_change': screener_data.get('price_1d_pct_change'),
+                            'price_7d_change': screener_data.get('price_7d_pct_change'),
+                            'price_30d_change': screener_data.get('price_1m_pct_change'),
+                            'buy_volume_pct_change': screener_data.get('buy_volume_pct_change'),
+                            'sell_volume_pct_change': screener_data.get('sell_volume_pct_change'),
+                            'total_volume_pct_change': screener_data.get('total_volume_pct_change'),
+                            
+                            # Flow metrics
+                            'tao_in': screener_data.get('tao_in'),
+                            'alpha_in': screener_data.get('alpha_in'),
+                            'alpha_out': screener_data.get('alpha_out'),
+                            'alpha_circ': screener_data.get('alpha_circ'),
+                            'alpha_prop': screener_data.get('alpha_prop'),
+                            'root_prop': screener_data.get('root_prop'),
+                            
+                            # Emission metrics
+                            'emission_pct': screener_data.get('emission_pct'),
+                            'alpha_emitted_pct': screener_data.get('alpha_emitted_pct'),
+                            
+                            # PnL metrics
+                            'realized_pnl_tao': screener_data.get('realized_pnl_tao'),
+                            'unrealized_pnl_tao': screener_data.get('unrealized_pnl_tao'),
+                            
+                            # Price extremes
+                            'ath_60d': screener_data.get('ath_60d'),
+                            'atl_60d': screener_data.get('atl_60d'),
+                            
+                            # Distribution metrics
+                            'gini_coeff_top_100': screener_data.get('gini_coeff_top_100'),
+                            'hhi': screener_data.get('hhi'),
+                            
+                            # Metadata
+                            'symbol': screener_data.get('symbol'),
+                            'github_repo': screener_data.get('github_repo'),
+                            'subnet_contact': screener_data.get('subnet_contact'),
+                            'subnet_url': screener_data.get('subnet_url'),
+                            'subnet_website': screener_data.get('subnet_website'),
+                            'discord': screener_data.get('discord'),
+                            'additional': screener_data.get('additional'),
+                            'owner_coldkey': screener_data.get('owner_coldkey'),
+                            'owner_hotkey': screener_data.get('owner_hotkey')
+                        }
+                    
+                    # Calculate all metrics using the new calculation service
+                    # Use SDK metrics directly (they're already calculated correctly)
+                    # Only calculate reserve momentum and emission ROI which need additional data
+                    calculated_metrics = {
+                        # Market data from screener (use as-is)
+                        'price_tao': screener_metrics.get('price_tao'),
+                        'market_cap_tao': screener_metrics.get('market_cap_tao'),
+                        'fdv_tao': screener_metrics.get('fdv_tao'),
+                        'buy_vol_tao_1d': screener_metrics.get('buy_volume_tao_1d'),
+                        'sell_vol_tao_1d': screener_metrics.get('sell_volume_tao_1d'),
+                        'tao_in': screener_metrics.get('tao_in'),
+                        
+                        # Additional screener fields (use as-is)
+                        'total_volume_tao_1d': screener_metrics.get('total_volume_tao_1d'),
+                        'net_volume_tao_1h': screener_metrics.get('net_volume_tao_1h'),
+                        'net_volume_tao_24h': screener_metrics.get('flow_24h'),
+                        'net_volume_tao_7d': screener_metrics.get('net_volume_tao_7d'),
+                        'price_1h_change': screener_metrics.get('price_1h_change'),
+                        'price_1d_change': screener_metrics.get('price_1d_change'),
+                        'price_7d_change': screener_metrics.get('price_7d_change'),
+                        'price_30d_change': screener_metrics.get('price_30d_change'),
+                        'buy_volume_pct_change': screener_metrics.get('buy_volume_pct_change'),
+                        'sell_volume_pct_change': screener_metrics.get('sell_volume_pct_change'),
+                        'total_volume_pct_change': screener_metrics.get('total_volume_pct_change'),
+                        'alpha_in': screener_metrics.get('alpha_in'),
+                        'alpha_out': screener_metrics.get('alpha_out'),
+                        'alpha_circ': screener_metrics.get('alpha_circ'),
+                        'alpha_prop': screener_metrics.get('alpha_prop'),
+                        'root_prop': screener_metrics.get('root_prop'),
+                        'emission_pct': screener_metrics.get('emission_pct'),
+                        'alpha_emitted_pct': screener_metrics.get('alpha_emitted_pct'),
+                        'realized_pnl_tao': screener_metrics.get('realized_pnl_tao'),
+                        'unrealized_pnl_tao': screener_metrics.get('unrealized_pnl_tao'),
+                        'ath_60d': screener_metrics.get('ath_60d'),
+                        'atl_60d': screener_metrics.get('atl_60d'),
+                        'gini_coeff_top_100': screener_metrics.get('gini_coeff_top_100'),
+                        'hhi': screener_metrics.get('hhi'),
+                        'symbol': screener_metrics.get('symbol'),
+                        'github_repo': screener_metrics.get('github_repo'),
+                        'subnet_contact': screener_metrics.get('subnet_contact'),
+                        'subnet_url': screener_metrics.get('subnet_url'),
+                        'subnet_website': screener_metrics.get('subnet_website'),
+                        'discord': screener_metrics.get('discord'),
+                        'additional': screener_metrics.get('additional'),
+                        'owner_coldkey': screener_metrics.get('owner_coldkey'),
+                        'owner_hotkey': screener_metrics.get('owner_hotkey'),
+                        
+                        # SDK metrics (use as-is from SDK collection)
+                        'total_stake_tao': metrics.get('total_stake_tao'),
+                        'stake_hhi': metrics.get('stake_hhi'),
+                        'stake_quality': metrics.get('stake_quality'),
+                        'consensus_alignment': metrics.get('consensus_alignment'),
+                        'trust_score': metrics.get('trust_score'),
+                        'active_validators': metrics.get('active_validators'),
+                        'validators_active': metrics.get('validators_active'),
+                        'uid_count': metrics.get('uid_count'),
+                        'mean_incentive': metrics.get('mean_incentive'),
+                        'p95_incentive': metrics.get('p95_incentive'),
+                        'mean_consensus': metrics.get('mean_consensus'),
+                        'pct_aligned': metrics.get('pct_aligned'),
+                        
+                        # Emission metrics (use as-is from SDK collection)
+                        'emission_owner': metrics.get('emission_split', {}).get('owner'),
+                        'emission_miners': metrics.get('emission_split', {}).get('miners'),
+                        'emission_validators': metrics.get('emission_split', {}).get('validators'),
+                        'total_emission_tao': metrics.get('total_emission_tao'),
+                        'tao_in_emission': metrics.get('tao_in_emission'),
+                        'alpha_out_emission': metrics.get('alpha_out_emission'),
+                    }
+                    
+                    # Calculate reserve momentum using yesterday's data
+                    tao_in_today = screener_metrics.get('tao_in')
+                    tao_in_yesterday_val = yesterday_tao_in
+                    market_cap = screener_metrics.get('market_cap_tao')
+                    
+                    if tao_in_today is not None and tao_in_yesterday_val is not None and market_cap is not None:
+                        calculated_metrics['reserve_momentum'] = calculate_reserve_momentum(
+                            float(tao_in_today),
+                            float(tao_in_yesterday_val),
+                            float(market_cap)
+                        )
+                    else:
+                        calculated_metrics['reserve_momentum'] = None
+                    
+                    # Calculate emission ROI using daily emission data
+                    if daily_emission_tao is not None and metrics.get('total_stake_tao') is not None:
+                        calculated_metrics['emission_roi'] = calculate_emission_roi(
+                            daily_emission_tao,
+                            metrics.get('total_stake_tao')
+                        )
+                    else:
+                        calculated_metrics['emission_roi'] = None
+                    
+                    # Validate metrics before storing
+                    is_valid, error_msg = validate_metrics(calculated_metrics)
+                    if not is_valid:
+                        logger.error(f"Validation failed for subnet {netuid}: {error_msg}")
+                        failed_snapshots += 1
+                        continue
+                    
+                    # Set data quality flag
+                    data_quality_flag = 'complete' if daily_emission_tao is not None else 'partial'
+                    
+                    # Create metrics snapshot record with calculated metrics
+                    snapshot = MetricsSnap(
+                        timestamp=snapshot_time,
+                        netuid=netuid,
+                        
+                        # Market metrics from screener
+                        market_cap_tao=calculated_metrics.get('market_cap_tao'),
+                        flow_24h=screener_metrics.get('flow_24h'),
+                        price_tao=calculated_metrics.get('price_tao'),
+                        
+                        # Price action metrics from screener
+                        price_1d_change=screener_metrics.get('price_1d_change'),
+                        price_7d_change=screener_metrics.get('price_7d_change'),
+                        price_30d_change=screener_metrics.get('price_30d_change'),
+                        buy_volume_tao_1d=calculated_metrics.get('buy_vol_tao_1d'),
+                        sell_volume_tao_1d=calculated_metrics.get('sell_vol_tao_1d'),
+                        
+                        # Flow metrics from screener
+                        tao_in=calculated_metrics.get('tao_in'),
+                        alpha_circ=screener_metrics.get('alpha_circ'),
+                        alpha_prop=screener_metrics.get('alpha_prop'),
+                        root_prop=screener_metrics.get('root_prop'),
+                        
+                        # SDK metrics
+                        total_stake_tao=calculated_metrics.get('total_stake_tao'),
+                        stake_hhi=calculated_metrics.get('stake_hhi'),
+                        uid_count=calculated_metrics.get('uid_count'),
+                        mean_incentive=metrics.get('mean_incentive'),
+                        p95_incentive=metrics.get('p95_incentive'),
+                        consensus_alignment=calculated_metrics.get('consensus_alignment'),
+                        trust_score=calculated_metrics.get('trust_score'),
+                        mean_consensus=metrics.get('mean_consensus'),
+                        pct_aligned=metrics.get('pct_aligned'),
+                        
+                        # Emission metrics
+                        emission_owner=metrics.get('emission_split', {}).get('owner'),
+                        emission_miners=metrics.get('emission_split', {}).get('miners'),
+                        emission_validators=metrics.get('emission_split', {}).get('validators'),
+                        total_emission_tao=metrics.get('total_emission_tao'),
+                        tao_in_emission=metrics.get('tao_in_emission'),
+                        alpha_out_emission=metrics.get('alpha_out_emission'),
+                        
+                        # Network activity metrics
+                        active_validators=metrics.get('active_validators'),
+                        
+                        # Calculated metrics using new formulas
+                        stake_quality=calculated_metrics.get('stake_quality'),
+                        reserve_momentum=calculated_metrics.get('reserve_momentum'),
+                        emission_roi=calculated_metrics.get('emission_roi'),
+                        validators_active=calculated_metrics.get('validators_active'),
+                        
+                        # NEW: Investor-focused fields
+                        fdv_tao=calculated_metrics.get('fdv_tao'),
+                        buy_vol_tao_1d=calculated_metrics.get('buy_vol_tao_1d'),
+                        sell_vol_tao_1d=calculated_metrics.get('sell_vol_tao_1d'),
+                        data_quality_flag=data_quality_flag,
+                        last_screener_update=latest_screener.fetched_at if latest_screener else None,
+                        
+                        # Additional screener fields
+                        total_volume_tao_1d=calculated_metrics.get('total_volume_tao_1d'),
+                        net_volume_tao_1h=calculated_metrics.get('net_volume_tao_1h'),
+                        net_volume_tao_7d=calculated_metrics.get('net_volume_tao_7d'),
+                        price_1h_change=calculated_metrics.get('price_1h_change'),
+                        buy_volume_pct_change=calculated_metrics.get('buy_volume_pct_change'),
+                        sell_volume_pct_change=calculated_metrics.get('sell_volume_pct_change'),
+                        total_volume_pct_change=calculated_metrics.get('total_volume_pct_change'),
+                        alpha_in=calculated_metrics.get('alpha_in'),
+                        alpha_out=calculated_metrics.get('alpha_out'),
+                        emission_pct=calculated_metrics.get('emission_pct'),
+                        alpha_emitted_pct=calculated_metrics.get('alpha_emitted_pct'),
+                        realized_pnl_tao=calculated_metrics.get('realized_pnl_tao'),
+                        unrealized_pnl_tao=calculated_metrics.get('unrealized_pnl_tao'),
+                        ath_60d=calculated_metrics.get('ath_60d'),
+                        atl_60d=calculated_metrics.get('atl_60d'),
+                        gini_coeff_top_100=calculated_metrics.get('gini_coeff_top_100'),
+                        hhi=calculated_metrics.get('hhi'),
+                        symbol=calculated_metrics.get('symbol'),
+                        github_repo=calculated_metrics.get('github_repo'),
+                        subnet_contact=calculated_metrics.get('subnet_contact'),
+                        subnet_url=calculated_metrics.get('subnet_url'),
+                        subnet_website=calculated_metrics.get('subnet_website'),
+                        discord=calculated_metrics.get('discord'),
+                        additional=calculated_metrics.get('additional'),
+                        owner_coldkey=calculated_metrics.get('owner_coldkey'),
+                        owner_hotkey=calculated_metrics.get('owner_hotkey'),
+                        
+                        # Metadata
+                        subnet_name=subnet_meta.subnet_name if subnet_meta else None,
+                        category=subnet_meta.primary_category if subnet_meta else None,
+                        confidence=subnet_meta.confidence if subnet_meta else None
+                    )
+                    
+                    session.add(snapshot)
+                    successful_snapshots += 1
+                    
+                    # Log progress every 10 subnets or at the end
+                    if (i + 1) % 10 == 0 or (i + 1) == len(metrics_list):
+                        progress = (i + 1) / len(metrics_list) * 100
+                        logger.info(f"Database progress: {i + 1}/{len(metrics_list)} subnets ({progress:.1f}%) - {successful_snapshots} successful, {failed_snapshots} failed")
+                    
+                except Exception as e:
+                    logger.error(f"Error processing subnet {metrics.get('netuid', 'unknown')}: {e}")
+                    failed_snapshots += 1
+                    continue
+            
+            # Commit all snapshots
+            session.commit()
+            
+            # Compute category statistics for peer comparisons
+            self.compute_category_stats(session)
+            
+            # Compute rank percentages for expert-level GPT insights
+            self.compute_rank_percentages(session)
+            
+            final_success_rate = (successful_snapshots / len(subnet_ids)) * 100
+            logger.info(f"SDK snapshot complete: {successful_snapshots} successful, {failed_snapshots} failed ({final_success_rate:.1f}% final success rate)")
+            
+            # Log collection with success rate
+            log_data_collection(
+                self.session,
+                'sdk_snapshot',
+                'automated',
+                success=successful_snapshots > 0,
+                details=f"Processed {successful_snapshots}/{len(subnet_ids)} subnets ({final_success_rate:.1f}% success)"
+            )
+            
+            return successful_snapshots > 0
+            
         except Exception as e:
             logger.error(f"Error in SDK snapshot: {e}")
             log_data_collection(
@@ -328,6 +707,110 @@ class CronFetch:
                 details=f"Error: {str(e)}"
             )
             return False
+    
+    def compute_category_stats(self, session):
+        """Compute category-level statistics for peer comparisons."""
+        try:
+            logger.info("Computing category statistics...")
+            
+            # Get latest metrics for each subnet
+            from models import CategoryStats
+            from sqlalchemy import func
+            
+            # Get the latest timestamp
+            latest_timestamp = session.query(func.max(MetricsSnap.timestamp)).scalar()
+            
+            if not latest_timestamp:
+                logger.warning("No metrics data available for category stats")
+                return
+            
+            # Compute median stats by category
+            category_stats = session.query(
+                MetricsSnap.category,
+                func.avg(MetricsSnap.stake_quality).label('median_stake_quality'),
+                func.avg(MetricsSnap.emission_roi).label('median_emission_roi'),
+                func.count(MetricsSnap.netuid).label('subnet_count')
+            ).filter(
+                MetricsSnap.timestamp == latest_timestamp,
+                MetricsSnap.category.isnot(None)
+            ).group_by(MetricsSnap.category).all()
+            
+            # Clear existing stats
+            session.query(CategoryStats).delete()
+            
+            # Insert new stats
+            for stat in category_stats:
+                category_stat = CategoryStats(
+                    category=stat.category,
+                    median_stake_quality=stat.median_stake_quality,
+                    median_emission_roi=stat.median_emission_roi,
+                    subnet_count=stat.subnet_count,
+                    timestamp=datetime.utcnow()
+                )
+                session.add(category_stat)
+            
+            session.commit()
+            logger.info(f"Computed stats for {len(category_stats)} categories")
+            
+        except Exception as e:
+            logger.error(f"Error computing category stats: {e}")
+            session.rollback()
+    
+    def compute_rank_percentages(self, session):
+        """Compute rank percentages for expert-level GPT insights."""
+        try:
+            logger.info("Computing rank percentages...")
+            
+            from sqlalchemy import func
+            from services.calc_metrics import calculate_rank_percentage, calculate_validator_utilization, calculate_buy_sell_ratio
+            
+            # Get the latest timestamp
+            latest_timestamp = session.query(func.max(MetricsSnap.timestamp)).scalar()
+            
+            if not latest_timestamp:
+                logger.warning("No metrics data available for rank percentages")
+                return
+            
+            # Get all subnets with latest metrics
+            latest_metrics = session.query(MetricsSnap).filter(
+                MetricsSnap.timestamp == latest_timestamp
+            ).all()
+            
+            # Group by category for ranking
+            categories = {}
+            for metric in latest_metrics:
+                if metric.category:
+                    if metric.category not in categories:
+                        categories[metric.category] = []
+                    categories[metric.category].append(metric)
+            
+            # Compute rank percentages for each subnet
+            for metric in latest_metrics:
+                if metric.category and metric.category in categories:
+                    category_metrics = categories[metric.category]
+                    
+                    # Stake quality rank (higher is better)
+                    if metric.stake_quality is not None:
+                        category_qualities = [m.stake_quality for m in category_metrics if m.stake_quality is not None]
+                        metric.stake_quality_rank_pct = calculate_rank_percentage(metric.stake_quality, category_qualities)
+                    
+                    # Momentum rank (higher is better)
+                    if metric.reserve_momentum is not None:
+                        category_momentums = [m.reserve_momentum for m in category_metrics if m.reserve_momentum is not None]
+                        metric.momentum_rank_pct = calculate_rank_percentage(metric.reserve_momentum, category_momentums)
+                    
+                    # Validator utilization
+                    metric.validator_util_pct = calculate_validator_utilization(metric.active_validators)
+                    
+                    # Buy/sell ratio
+                    metric.buy_sell_ratio = calculate_buy_sell_ratio(metric.buy_volume_tao_1d, metric.sell_volume_tao_1d)
+            
+            session.commit()
+            logger.info(f"Computed rank percentages for {len(latest_metrics)} subnets")
+            
+        except Exception as e:
+            logger.error(f"Error computing rank percentages: {e}")
+            session.rollback()
     
     def nightly_collection(self):
         """Nightly data collection (all sources)."""
@@ -420,13 +903,17 @@ def main():
                        help="Run collection once")
     parser.add_argument("--schedule", action="store_true", help="Start scheduled collection")
     parser.add_argument("--test", action="store_true", help="Test collection without quota enforcement")
+    parser.add_argument("--limit", type=int, help="Limit number of subnets for SDK snapshot (for testing)")
     
     args = parser.parse_args()
     
     cron = CronFetch()
     
     if args.once:
-        result = cron.run_once(args.once)
+        if args.once == 'sdk_snapshot' and args.limit:
+            result = cron.fetch_sdk_snapshot(limit=args.limit)
+        else:
+            result = cron.run_once(args.once)
         print(f"Collection result: {result}")
         sys.exit(0 if result else 1)
     

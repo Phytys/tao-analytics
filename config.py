@@ -11,6 +11,7 @@ OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 COINGECKO_API_KEY = os.getenv('COINGECKO_API_KEY')
 
 TAO_ENDPOINT = "https://api.tao.app/api/beta/subnet_screener"
+TAO_APP_BASE_URL = "https://api.tao.app/api/beta"  # Base URL for TAO.app API endpoints
 
 DB_PATH = BASE_DIR / "tao.sqlite"
 DB_URL = f"sqlite:///{DB_PATH}"

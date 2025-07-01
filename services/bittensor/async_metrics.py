@@ -37,7 +37,7 @@ def get_endpoint_priority() -> List[str]:
     ]
     return priority_endpoints
 
-async def calculate_subnet_metrics_async(netuid: int, endpoint: Optional[str] = None, max_retries: int = 3) -> Dict[str, Any]:
+async def calculate_subnet_metrics_async(netuid: int, endpoint: Optional[str] = None, max_retries: int = 3, lite_mode: bool = False) -> Dict[str, Any]:
     """
     Calculate subnet metrics asynchronously with retry logic.
     
@@ -45,6 +45,7 @@ async def calculate_subnet_metrics_async(netuid: int, endpoint: Optional[str] = 
         netuid: Subnet ID to analyze
         endpoint: RPC endpoint to use (random if None)
         max_retries: Maximum retry attempts
+        lite_mode: Use lite metagraphs for faster collection
         
     Returns:
         Dictionary with subnet metrics
@@ -65,7 +66,8 @@ async def calculate_subnet_metrics_async(netuid: int, endpoint: Optional[str] = 
                         executor, 
                         calculate_subnet_metrics_sync, 
                         netuid, 
-                        try_endpoint
+                        try_endpoint,
+                        lite_mode
                     )
                 
                 # Check if we got valid metrics (not just an error response)
@@ -89,17 +91,22 @@ async def calculate_subnet_metrics_async(netuid: int, endpoint: Optional[str] = 
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
 
-def calculate_subnet_metrics_sync(netuid: int, endpoint: str) -> Dict[str, Any]:
+def calculate_subnet_metrics_sync(netuid: int, endpoint: str, lite_mode: bool = False) -> Dict[str, Any]:
     """
     Synchronous version of subnet metrics calculation with improved error handling.
     This is the same as the original function but optimized for async calls.
+    
+    Args:
+        netuid: Subnet ID to analyze
+        endpoint: RPC endpoint to use
+        lite_mode: Use lite metagraphs for faster collection
     """
     try:
         # Connect to Bittensor network with timeout
         sub = bt.subtensor(endpoint)
         
-        # Get metagraph for the subnet
-        mg = sub.metagraph(netuid=netuid)
+        # Get metagraph for the subnet (lite mode for faster collection)
+        mg = sub.metagraph(netuid=netuid, lite=lite_mode)
         
         # Validate metagraph data
         if mg is None or len(mg.uids) == 0:
@@ -199,6 +206,19 @@ def calculate_subnet_metrics_sync(netuid: int, endpoint: str) -> Dict[str, Any]:
         if hasattr(mg, 'validator_permit') and mg.validator_permit is not None:
             active_validators = int(mg.validator_permit.sum().item())
         
+        # NEW: Sprint 5 computed metrics
+        # Stake Quality: HHI-adjusted score (0-100)
+        stake_quality = max(0, 100 - (hhi / 100)) if hhi is not None else None
+        
+        # Reserve Momentum: Δ TAO-in 24h / supply (placeholder - needs historical data)
+        reserve_momentum = None  # TODO: Calculate from historical emission data
+        
+        # Emission ROI: Will be calculated from daily emission diff in cron_fetch.py
+        emission_roi = None  # Calculated from daily_emission_tao / total_stake_tao in main collection
+        
+        # Validators Active: Same as active_validators but renamed for clarity
+        validators_active = active_validators
+        
         # Get emission totals from emissions object
         tao_in_emission = 0.0
         alpha_out_emission = 0.0
@@ -232,7 +252,11 @@ def calculate_subnet_metrics_sync(netuid: int, endpoint: str) -> Dict[str, Any]:
             "pct_aligned": float(round(pct_aligned, 6)) if pct_aligned is not None else None,
             "tao_in_emission": float(round(tao_in_emission, 6)),
             "alpha_out_emission": float(round(alpha_out_emission, 6)),
-            "active_validators": int(active_validators)
+            "active_validators": int(active_validators),
+            "stake_quality": float(round(stake_quality, 6)) if stake_quality is not None else None,
+            "reserve_momentum": float(round(reserve_momentum, 6)) if reserve_momentum is not None else None,
+            "emission_roi": float(round(emission_roi, 6)) if emission_roi is not None else None,
+            "validators_active": int(validators_active)
         }
         
         return metrics
@@ -245,13 +269,14 @@ def calculate_subnet_metrics_sync(netuid: int, endpoint: str) -> Dict[str, Any]:
             "timestamp": datetime.utcnow().isoformat() + "Z"
         }
 
-async def collect_all_subnet_metrics_async(subnet_ids: List[int], max_workers: int = 4) -> List[Dict[str, Any]]:
+async def collect_all_subnet_metrics_async(subnet_ids: List[int], max_workers: int = 4, lite_mode: bool = False) -> List[Dict[str, Any]]:
     """
     Collect metrics for all subnets concurrently with improved reliability.
     
     Args:
         subnet_ids: List of subnet IDs to collect
-        max_workers: Maximum concurrent workers (reduced to 4 for better reliability)
+        max_workers: Maximum concurrent workers
+        lite_mode: Use lite metagraphs for faster collection (skips consensus/trust)
         
     Returns:
         List of metrics dictionaries
@@ -263,12 +288,12 @@ async def collect_all_subnet_metrics_async(subnet_ids: List[int], max_workers: i
     
     async def collect_with_semaphore(netuid: int) -> Dict[str, Any]:
         async with semaphore:
-            return await calculate_subnet_metrics_async(netuid, max_retries=2)
+            return await calculate_subnet_metrics_async(netuid, max_retries=2, lite_mode=lite_mode)
     
     # Create tasks for all subnets
     tasks = [collect_with_semaphore(netuid) for netuid in subnet_ids]
     
-    # Execute all tasks concurrently
+    # Execute all tasks concurrently with progress tracking
     results = await asyncio.gather(*tasks, return_exceptions=True)
     
     # Filter out exceptions and log them
@@ -280,6 +305,12 @@ async def collect_all_subnet_metrics_async(subnet_ids: List[int], max_workers: i
             failed_count += 1
         else:
             valid_results.append(result)
+        
+        # Log progress every 10 subnets or at the end
+        if (i + 1) % 10 == 0 or (i + 1) == len(subnet_ids):
+            progress = (i + 1) / len(subnet_ids) * 100
+            success_rate = (len(valid_results) / (i + 1)) * 100
+            logger.info(f"Progress: {i + 1}/{len(subnet_ids)} subnets ({progress:.1f}%) - {success_rate:.1f}% success")
     
     success_rate = (len(valid_results) / len(subnet_ids)) * 100
     logger.info(f"Completed async collection: {len(valid_results)}/{len(subnet_ids)} successful ({success_rate:.1f}%)")

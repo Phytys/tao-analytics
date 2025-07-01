@@ -1,7 +1,7 @@
 # --- core ---
 grpcio>=1.73.0            # force modern wheel first
 grpcio-tools>=1.73.0      # needed by bittensor CLI
-bittensor==9.7.*          # pin working version
+bittensor==9.7.*          # pin working version (9.8.2+ not yet available on PyPI)
 rich                       # pretty CLI output
 
 # --- existing dependencies ---

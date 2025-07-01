@@ -54,14 +54,7 @@ CONFIDENCE_COLORS = {
     'low': '#dc3545'        # Red for 0-69
 }
 
-# Get latest TAO price in USD (cached at module load)
-try:
-    from models import Session
-    _session = Session()
-    _tao_price_row = _session.query(CoinGeckoPrice).order_by(CoinGeckoPrice.fetched_at.desc()).first()
-    TAO_PRICE_USD = _tao_price_row.price_usd if _tao_price_row else 0
-except Exception:
-    TAO_PRICE_USD = 0
+# Remove static TAO price cache - will be queried dynamically in callbacks
 
 def get_confidence_color(score):
     """Get confidence ribbon color based on score."""
@@ -461,6 +454,13 @@ def render_cards(json_df):
     
     df = pd.read_json(StringIO(json_df), orient="split").sort_values("mcap_tao", ascending=False)
     
+    # Get latest TAO price from database for USD conversions
+    from services.db import get_db
+    from models import CoinGeckoPrice
+    with get_db() as session:
+        tao_price_row = session.query(CoinGeckoPrice).order_by(CoinGeckoPrice.fetched_at.desc()).first()
+        tao_price_usd = tao_price_row.price_usd if tao_price_row else 0
+    
     def format_url(url):
         """Format URL to ensure it has proper protocol and is valid."""
         if pd.isna(url) or not url or url.strip() == "":
@@ -566,7 +566,7 @@ def render_cards(json_df):
         
         # Market cap with badge and tooltip (show USD) - safely calculate USD
         mcap_id = f"market-cap-{row.netuid}"
-        mcap_usd = mcap * TAO_PRICE_USD if TAO_PRICE_USD > 0 else 0
+        mcap_usd = mcap * tao_price_usd if tao_price_usd > 0 else 0
         if mcap_usd >= 1_000_000:
             mcap_usd_str = f"${mcap_usd/1_000_000:.1f}M"
         elif mcap_usd >= 1_000:

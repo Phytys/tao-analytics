@@ -193,7 +193,7 @@ def create_dash(server):
             return explorer_layout
         
         if pathname == "/dash/subnet-detail":
-            return subnet_detail_layout()
+            return subnet_detail_layout
         
         if pathname == "/dash/sdk-poc":
             return sdk_poc_layout()

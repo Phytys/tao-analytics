@@ -8,6 +8,7 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 import logging
+from sqlalchemy import inspect
 
 # Add project root to path for imports
 project_root = Path(__file__).parent.parent
@@ -333,6 +334,75 @@ class DataMigration:
         print(f"  - Ready for automated collection")
         
         return True
+
+    def ensure_required_columns(self):
+        """Ensure all required columns exist in metrics_snap table."""
+        try:
+            logger.info("Checking for required columns in metrics_snap table...")
+            
+            # Check if required columns exist
+            inspector = inspect(self.session.bind)
+            columns = inspector.get_columns('metrics_snap')
+            column_names = [col['name'] for col in columns]
+            
+            required_columns = [
+                'price_tao',
+                'market_cap_tao', 
+                'reserve_momentum',
+                'stake_quality',
+                'emission_roi',
+                'active_validators'
+            ]
+            
+            missing_columns = []
+            for col in required_columns:
+                if col not in column_names:
+                    missing_columns.append(col)
+            
+            if missing_columns:
+                logger.warning(f"Missing columns in metrics_snap: {missing_columns}")
+                logger.info("Please run database migration to add missing columns")
+                return False
+            else:
+                logger.info("All required columns exist in metrics_snap table")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error checking required columns: {e}")
+            return False
+    
+    def ensure_cache_tables(self):
+        """Ensure all required cache tables exist."""
+        try:
+            logger.info("Checking for required cache tables...")
+            
+            # Check if cache tables exist
+            inspector = inspect(self.session.get_binds()[0])
+            existing_tables = inspector.get_table_names()
+            
+            required_tables = [
+                'gpt_insights',
+                'aggregated_cache', 
+                'holders_cache',
+                'category_stats'
+            ]
+            
+            missing_tables = []
+            for table in required_tables:
+                if table not in existing_tables:
+                    missing_tables.append(table)
+            
+            if missing_tables:
+                logger.warning(f"Missing cache tables: {missing_tables}")
+                logger.info("Please run database migration to create missing tables")
+                return False
+            else:
+                logger.info("All required cache tables exist")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error checking cache tables: {e}")
+            return False
 
 def main():
     """CLI interface for data migration."""
