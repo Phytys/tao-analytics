@@ -45,9 +45,9 @@ def create_app():
 
     @server.route("/about")
     def about():
-        """About page - placeholder for Sprint 1.5."""
+        """About page."""
         logger.info(f"About page accessed by {request.remote_addr}")
-        return render_template("about_placeholder.html")
+        return render_template("about.html")
 
     @server.route('/admin/login', methods=['GET', 'POST'])
     def admin_login():

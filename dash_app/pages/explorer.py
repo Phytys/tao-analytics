@@ -69,7 +69,7 @@ layout = dbc.Container(
     [
         # --- Tesla-inspired header ---
         html.Div([
-            html.H1("Bittensor Subnet Explorer", className="dashboard-title"),
+            html.H1("Bittensor Explorer", className="dashboard-title"),
             html.A(
                 "Test Subnet Detail Page", 
                 href="/dash/subnet-detail", 

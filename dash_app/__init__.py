@@ -124,7 +124,7 @@ def create_dash(server):
                 html.Div([
                     # Close button for mobile menu
                     html.Button("×", id="mobile-menu-close", className="mobile-menu-close-btn", n_clicks=0),
-                    html.A("Subnet Explorer", href="/dash/explorer", className="nav-link"),
+                    html.A("Explorer", href="/dash/explorer", className="nav-link"),
                     html.A("Screener", href="/dash/screener", className="nav-link"),
                     html.A("About", href="/about", className="nav-link", id="about-nav-link"),
                     html.A("System Info", href="/dash/system-info", className="nav-link", id="system-info-nav-link"),
