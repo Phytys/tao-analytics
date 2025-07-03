@@ -5,6 +5,7 @@ Implements the exact formulas specified in the feedback.
 
 import numpy as np
 import logging
+import os
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, Tuple, Union
 
@@ -88,7 +89,7 @@ def calculate_reserve_momentum(tao_in_today: float, tao_in_yesterday: float, mar
     tao_in_change = tao_in_today - tao_in_yesterday
     return tao_in_change / market_cap_tao
 
-def calculate_consensus_alignment(consensus: np.ndarray, stakes: np.ndarray) -> float:
+def calculate_consensus_alignment(consensus: np.ndarray, stakes: np.ndarray) -> Optional[float]:
     """
     Calculate consensus alignment using stake-weighted ±2σ rule.
     
@@ -131,18 +132,19 @@ def calculate_consensus_alignment(consensus: np.ndarray, stakes: np.ndarray) -> 
         logger.error(f"Error calculating consensus alignment: {e}")
         return None
 
-def calculate_trust_score(trust: np.ndarray, stakes: np.ndarray) -> float:
+def calculate_trust_score(trust: np.ndarray, stakes: np.ndarray) -> Optional[float]:
     """
     Calculate stake-weighted trust score.
     
-    Formula: trust_score = np.average(mg.trust, weights=mg.S)
+    Formula: weights = stakes / stakes.sum()
+             trust_score = (trust * weights).sum()
     
     Args:
         trust: Trust values array
         stakes: Stake weights array
         
     Returns:
-        Trust score
+        Stake-weighted trust score (0-1)
     """
     if trust is None or stakes is None or len(trust) == 0 or len(stakes) == 0:
         return None
@@ -152,8 +154,17 @@ def calculate_trust_score(trust: np.ndarray, stakes: np.ndarray) -> float:
         trust = np.array(trust)
         stakes = np.array(stakes)
         
-        # Calculate stake-weighted mean
-        trust_score = np.average(trust, weights=stakes)
+        # Calculate total stake
+        total_stake = stakes.sum()
+        
+        if total_stake <= 0:
+            return None
+        
+        # Calculate stake weights
+        weights = stakes / total_stake
+        
+        # Calculate stake-weighted trust score
+        trust_score = (trust * weights).sum()
         
         return float(trust_score)
         
@@ -161,7 +172,112 @@ def calculate_trust_score(trust: np.ndarray, stakes: np.ndarray) -> float:
         logger.error(f"Error calculating trust score: {e}")
         return None
 
-def calculate_stake_hhi(stakes: np.ndarray) -> float:
+def calculate_tao_score(
+    stake_quality: Optional[float],
+    consensus_alignment: Optional[float], 
+    active_stake_ratio: Optional[float],
+    emission_roi: Optional[float],
+    reserve_momentum: Optional[float],
+    validator_util_pct: Optional[float],
+    inflation_pct: Optional[float] = None,
+    price_7d_change: Optional[float] = None,
+    session = None
+) -> Optional[float]:
+    """
+    Calculate TAO-Score v1.1 using updated weights and scaling.
+    
+    Core metrics (required): stake_quality, consensus_alignment, active_stake_ratio
+    Optional metrics: validator_util_pct, inflation_pct, price_7d_change
+    
+    Args:
+        stake_quality: Stake quality score (0-100)
+        consensus_alignment: Consensus alignment percentage (0-100)
+        active_stake_ratio: Active stake ratio percentage (0-100)
+        emission_roi: Emission ROI (deprecated, kept for backward compatibility)
+        reserve_momentum: Reserve momentum (deprecated, replaced with price_7d_change)
+        validator_util_pct: Validator utilization percentage (0-100)
+        inflation_pct: Annual inflation percentage
+        price_7d_change: 7-day price change percentage
+        session: Database session for momentum z-score calculation
+        
+    Returns:
+        TAO-Score (0-100) or None if core metrics are missing
+    """
+    # Core metrics are required
+    if any(metric is None for metric in [stake_quality, consensus_alignment, active_stake_ratio]):
+        return None
+    
+    try:
+        # Pre-scale all inputs to 0-100 range
+        sq = max(0, min(100, stake_quality or 0))  # Stake quality (0-100)
+        cons = max(0, min(100, consensus_alignment or 0))  # Consensus alignment (0-100)
+        active_stake = max(0, min(100, active_stake_ratio or 0))  # Active stake ratio (0-100)
+        
+        # Optional metrics with scaling
+        util = max(0, min(100, validator_util_pct or 0)) if validator_util_pct is not None else None
+        
+        # Inflation sanity check (penalize deviation from 8% target)
+        target_inflation = float(os.getenv('TAO_INF_TARGET', '8'))
+        infl = None
+        if inflation_pct is not None:
+            infl = max(0, 100 - abs((inflation_pct or 0) - target_inflation) * 4)
+        
+        # Momentum scaling: z-score of 7-day price change clipped to ±2 → 0-100
+        mom = None
+        if price_7d_change is not None:
+            # Simple z-score approximation: assume normal distribution with ±20% range
+            # Clip to ±2 standard deviations, then scale to 0-100
+            z_score = max(-2, min(2, price_7d_change / 10))  # Assume 10% = 1 std dev
+            mom = max(0, min(100, (z_score + 2) * 25))  # Scale -2 to +2 → 0 to 100
+        
+        # Updated base weights per v1.1 spec
+        base_w = {
+            'sq': 0.35, 'util': 0.20, 'cons': 0.15,
+            'active_stake': 0.15, 'infl': 0.10, 'mom': 0.05
+        }
+        
+        # Check which optional metrics are missing
+        missing = []
+        if util is None:
+            missing.append('util')
+        if infl is None:
+            missing.append('infl')
+        if mom is None:
+            missing.append('mom')
+        
+        # Redistribute missing weights ONLY to core metrics (sq, cons, active_stake)
+        if missing:
+            redist = sum(base_w[m] for m in missing)
+            core_metrics = ['sq', 'cons', 'active_stake']
+            core_weight_sum = sum(base_w[c] for c in core_metrics)
+            
+            # Zero out missing weights
+            for m in missing:
+                base_w[m] = 0
+            
+            # Redistribute to core metrics proportionally
+            for c in core_metrics:
+                base_w[c] += redist * (base_w[c] / core_weight_sum)
+        
+        # Calculate final score
+        tao_score = (
+            sq * base_w['sq'] +
+            (util if util is not None else 0) * base_w['util'] +
+            cons * base_w['cons'] +
+            active_stake * base_w['active_stake'] +
+            (infl if infl is not None else 0) * base_w['infl'] +
+            (mom if mom is not None else 0) * base_w['mom']
+        )
+        
+        # Apply hard caps and round
+        tao_score = max(0, min(tao_score, 100))
+        return round(tao_score, 1)
+        
+    except Exception as e:
+        logger.error(f"Error calculating TAO-Score: {e}")
+        return None
+
+def calculate_stake_hhi(stakes: np.ndarray) -> Optional[float]:
     """
     Calculate Herfindahl-Hirschman Index for stake concentration.
     
@@ -258,6 +374,36 @@ def calculate_validator_utilization(active_validators: int, total_possible: int 
         
     except Exception as e:
         logger.error(f"Error calculating validator utilization: {e}")
+        return None
+
+def calculate_active_stake_ratio(stakes: np.ndarray, validator_permit: np.ndarray) -> Optional[float]:
+    """
+    Calculate active stake ratio.
+    
+    Formula: (stake on permitted validators / total stake) * 100
+    
+    Args:
+        stakes: Array of stake amounts
+        validator_permit: Array of validator permit flags (True/False)
+        
+    Returns:
+        Active stake ratio as percentage (0-100)
+    """
+    if stakes is None or validator_permit is None:
+        return None
+    
+    try:
+        total_stake = stakes.sum()
+        if total_stake == 0:
+            return 0.0
+        
+        active_stake = stakes[validator_permit].sum()
+        ratio = (active_stake / total_stake) * 100
+        
+        return round(ratio, 1)
+        
+    except Exception as e:
+        logger.error(f"Error calculating active stake ratio: {e}")
         return None
 
 def calculate_buy_sell_ratio(buy_volume: float, sell_volume: float) -> Optional[float]:
@@ -407,6 +553,10 @@ def calculate_all_metrics(
     # Calculate trust score
     if trust is not None and stakes is not None:
         results['trust_score'] = calculate_trust_score(trust, stakes)
+    
+    # Calculate active stake ratio
+    if stakes is not None and validator_permit is not None:
+        results['active_stake_ratio'] = calculate_active_stake_ratio(stakes, validator_permit)
     
     # Calculate active validators
     if validator_permit is not None:

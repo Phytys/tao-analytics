@@ -79,7 +79,8 @@ layout = dbc.Container([
     html.Div([
         dbc.Button("Refresh Data", id="refresh-btn", color="primary", className="me-2"),
         dbc.Button("Clear Cache", id="clear-cache-btn", color="warning", className="me-2"),
-        dbc.Button("Cleanup Cache", id="cleanup-cache-btn", color="info"),
+        dbc.Button("Cleanup Cache", id="cleanup-cache-btn", color="info", className="me-2"),
+        dbc.Button("Clear GPT Insights", id="clear-gpt-btn", color="danger"),
     ], className="mb-4"),
     
     # KPI Cards
@@ -535,6 +536,46 @@ def cleanup_cache(n_clicks):
         }
     except Exception as e:
         print(f"Error cleaning up cache: {e}")
+        return {}
+
+@callback(
+    Output("system-data", "data", allow_duplicate=True),
+    Input("clear-gpt-btn", "n_clicks"),
+    prevent_initial_call=True
+)
+def clear_gpt_insights(n_clicks):
+    """Clear GPT insights cache."""
+    print(f"[DEBUG] Clear GPT insights button clicked: {n_clicks}")
+    try:
+        from services.gpt_insight import clear_gpt_insights_cache
+        success = clear_gpt_insights_cache()
+        if success:
+            print("GPT insights cache cleared successfully")
+        else:
+            print("Failed to clear GPT insights cache")
+        
+        # Reload data after clearing cache
+        landing_kpis = metrics_service.get_landing_kpis()
+        category_stats = metrics_service.get_category_stats()
+        top_subnets = metrics_service.get_top_subnets(limit=10, sort_by='market_cap')
+        cache_info = cache_stats()
+        
+        # Get network overview for timestamp data
+        network_overview = tao_metrics_service.get_network_overview()
+        
+        # Add warnings for stale data using network overview timestamps
+        warnings = get_stale_warnings(network_overview)
+        
+        return {
+            'landing_kpis': landing_kpis,
+            'category_stats': category_stats,
+            'top_subnets': top_subnets,
+            'cache_info': cache_info,
+            'warnings': warnings,
+            'timestamp': datetime.now().isoformat()
+        }
+    except Exception as e:
+        print(f"Error clearing GPT insights cache: {e}")
         return {}
 
 @callback(

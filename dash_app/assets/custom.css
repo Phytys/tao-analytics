@@ -1008,4 +1008,160 @@ details .btn-outline-secondary:hover {
     .mobile-menu-close-btn {
         display: block;
     }
+}
+
+/* Metrics Grid Responsive Styling */
+.metrics-grid .card-body {
+    padding: 1rem;
+}
+
+.metrics-grid .card-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.metrics-grid h5 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.metrics-grid small {
+    font-size: 0.75rem;
+    line-height: 1.2;
+}
+
+/* Mobile optimizations for metrics */
+@media (max-width: 768px) {
+    .metrics-grid .card-body {
+        padding: 0.75rem;
+    }
+    
+    .metrics-grid .card-title {
+        font-size: 0.8rem;
+        margin-bottom: 0.25rem;
+    }
+    
+    .metrics-grid h5 {
+        font-size: 1.1rem;
+        margin-bottom: 0.2rem;
+    }
+    
+    .metrics-grid small {
+        font-size: 0.7rem;
+    }
+    
+    /* Reduce spacing between metric cards */
+    .metrics-grid .row {
+        margin-bottom: 0.75rem !important;
+    }
+    
+    .metrics-grid .col {
+        margin-bottom: 0.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .metrics-grid .card-body {
+        padding: 0.5rem;
+    }
+    
+    .metrics-grid .card-title {
+        font-size: 0.75rem;
+    }
+    
+    .metrics-grid h5 {
+        font-size: 1rem;
+    }
+    
+    .metrics-grid small {
+        font-size: 0.65rem;
+    }
+}
+
+/* Subnet name styling */
+#subnet-name {
+    font-weight: 600;
+    color: var(--bs-primary) !important;
+}
+
+/* External links styling */
+#visit-site-link, #github-link {
+    color: var(--bs-primary);
+    transition: color 0.2s ease;
+}
+
+#visit-site-link:hover, #github-link:hover {
+    color: var(--bs-primary-dark);
+    text-decoration: underline !important;
+}
+
+/* Overview Card Responsive Styling */
+.overview-card .card-body {
+    padding: 1rem;
+}
+
+.overview-card h5 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.overview-card h6 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.overview-card .fs-6 {
+    font-size: 0.875rem !important;
+}
+
+/* Mobile optimizations for overview */
+@media (max-width: 768px) {
+    .overview-card .card-body {
+        padding: 0.75rem;
+    }
+    
+    .overview-card h5 {
+        font-size: 1.1rem;
+        margin-bottom: 0.2rem;
+    }
+    
+    .overview-card h6 {
+        font-size: 0.8rem;
+        margin-bottom: 0.25rem;
+    }
+    
+    .overview-card .fs-6 {
+        font-size: 0.8rem !important;
+    }
+    
+    /* Reduce spacing between overview items */
+    .overview-card .row {
+        margin-bottom: 0.75rem !important;
+    }
+    
+    .overview-card .col {
+        margin-bottom: 0.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .overview-card .card-body {
+        padding: 0.5rem;
+    }
+    
+    .overview-card h5 {
+        font-size: 1rem;
+    }
+    
+    .overview-card h6 {
+        font-size: 0.75rem;
+    }
+    
+    .overview-card .fs-6 {
+        font-size: 0.75rem !important;
+    }
 } 

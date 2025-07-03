@@ -11,22 +11,28 @@ from openai import OpenAI
 
 from .db import get_db
 from models import GptInsights, MetricsSnap, SubnetMeta, CategoryStats
-from config import OPENAI_KEY, OPENAI_MODEL
+from config import OPENAI_KEY
 
 logger = logging.getLogger(__name__)
 
 # Initialize OpenAI client
 client = OpenAI(api_key=OPENAI_KEY) if OPENAI_KEY else None
 
+# GPT Insight v4 Configuration
+MODEL_NAME = "gpt-4o-2024-05-13"
+MAX_WORDS = 200
+MAX_TOKENS = 400
+
 def get_subnet_metrics_for_insight(netuid: int) -> Dict[str, Any]:
     """
-    Get expert-level subnet metrics for GPT analysis with rank percentages.
+    Get comprehensive subnet metrics for GPT v4 analysis with expanded context.
+    Ensures data consistency with the metrics display.
     
     Args:
         netuid: Subnet ID to analyze
         
     Returns:
-        Dictionary with distilled metrics for expert commentary
+        Dictionary with comprehensive metrics for expert commentary
     """
     try:
         with get_db() as session:
@@ -37,25 +43,49 @@ def get_subnet_metrics_for_insight(netuid: int) -> Dict[str, Any]:
             # Get subnet metadata
             subnet_meta = session.query(SubnetMeta).filter_by(netuid=netuid).first()
             
+            # Get category stats for peer comparison
+            category_stats = None
+            if latest_metrics and latest_metrics.category:
+                category_stats = session.query(CategoryStats).filter_by(category=latest_metrics.category).first()
+            
             if not latest_metrics:
                 return {}
             
-            # Build expert-level payload with only essential cues
+            # Calculate validator utilization percentage to ensure consistency
+            active_validators = latest_metrics.active_validators or 0
+            max_validators = latest_metrics.max_validators or 64
+            validator_util_pct = (active_validators / max_validators * 100) if max_validators > 0 else 0
+            
+            # Calculate buy/sell ratio to ensure consistency
+            buy_volume = latest_metrics.buy_volume_tao_1d or 0
+            sell_volume = latest_metrics.sell_volume_tao_1d or 0
+            buy_sell_ratio = (buy_volume / sell_volume) if sell_volume > 0 else 0
+            
+            # Build comprehensive v4 payload with expanded context
             metrics = {
-                'netuid': netuid,
                 'name': subnet_meta.subnet_name if subnet_meta else f'Subnet {netuid}',
+                'id': netuid,
                 'category': latest_metrics.category or 'Unknown',
-                
-                # Core metrics with rank percentages
-                'stake_quality_score': latest_metrics.stake_quality,
-                'stake_quality_rank_pct': latest_metrics.stake_quality_rank_pct,
-                'momentum_pct': latest_metrics.reserve_momentum,
-                'momentum_rank_pct': latest_metrics.momentum_rank_pct,
-                'validators_active': latest_metrics.active_validators,
-                'validator_util_pct': latest_metrics.validator_util_pct,
-                'consensus_alignment': latest_metrics.consensus_alignment,
-                'trust_score': latest_metrics.trust_score,
-                'buy_sell_ratio': latest_metrics.buy_sell_ratio,
+                'price_tao': round(latest_metrics.price_tao, 3) if latest_metrics.price_tao else None,
+                'mcap_tao': int(latest_metrics.market_cap_tao) if latest_metrics.market_cap_tao else None,
+                'fdv_tao': int(latest_metrics.fdv_tao) if latest_metrics.fdv_tao else None,
+                'stake_weight': int(latest_metrics.total_stake_tao) if latest_metrics.total_stake_tao else None,
+                'stake_quality': round(latest_metrics.stake_quality, 1) if latest_metrics.stake_quality else None,
+                'sq_rank_pct': latest_metrics.stake_quality_rank_pct,
+                'validator_util_pct': round(validator_util_pct, 1),
+                'max_validators': max_validators,
+                'active_validators': active_validators,
+                'active_stake_ratio': round(latest_metrics.active_stake_ratio, 1) if latest_metrics.active_stake_ratio else None,
+                'consensus_align_pct': round(latest_metrics.consensus_alignment, 1) if latest_metrics.consensus_alignment else None,
+                'inflation_pct': round(latest_metrics.emission_pct, 2) if latest_metrics.emission_pct else None,
+                'alpha_emitted_pct': round(latest_metrics.alpha_emitted_pct, 2) if latest_metrics.alpha_emitted_pct else None,
+                'reserve_mom': latest_metrics.reserve_momentum,
+                'buy_sell_ratio_24h': round(buy_sell_ratio, 2),
+                'price_1d_pct': round(latest_metrics.price_1d_change, 1) if latest_metrics.price_1d_change else None,
+                'price_7d_pct': round(latest_metrics.price_7d_change, 1) if latest_metrics.price_7d_change else None,
+                'tao_score': round(latest_metrics.tao_score, 1) if latest_metrics.tao_score else None,
+                'tao_score_rank_pct': latest_metrics.tao_score_rank_pct if hasattr(latest_metrics, 'tao_score_rank_pct') else None,
+                'category_subnet_count': category_stats.subnet_count if category_stats else None
             }
             
             return metrics
@@ -66,66 +96,57 @@ def get_subnet_metrics_for_insight(netuid: int) -> Dict[str, Any]:
 
 def format_metrics_for_gpt(metrics: Dict[str, Any]) -> str:
     """
-    Format metrics for expert-level GPT analysis with rank percentages.
+    Format metrics for GPT v4 analysis with comprehensive context.
     
     Args:
-        metrics: Subnet metrics dictionary with rank percentages
+        metrics: Subnet metrics dictionary with comprehensive data
         
     Returns:
-        Formatted string for GPT prompt
+        Formatted JSON string for GPT prompt
     """
     if not metrics:
         return "No metrics available for analysis."
     
-    # Extract expert-level metrics
-    netuid = metrics.get('netuid', 'Unknown')
-    name = metrics.get('name', f'Subnet {netuid}')
-    category = metrics.get('category', 'Unknown')
+    # Format reserve momentum
+    reserve_mom = metrics.get('reserve_mom')
+    if reserve_mom is None:
+        reserve_mom_str = '"n/a"'
+    else:
+        reserve_mom_str = f'{reserve_mom:.3f}'
     
-    # Core metrics with rank percentages
-    stake_quality_score = metrics.get('stake_quality_score')
-    stake_quality_rank_pct = metrics.get('stake_quality_rank_pct')
-    momentum_pct = metrics.get('momentum_pct')
-    momentum_rank_pct = metrics.get('momentum_rank_pct')
-    validators_active = metrics.get('validators_active')
-    validator_util_pct = metrics.get('validator_util_pct')
-    consensus_alignment = metrics.get('consensus_alignment')
-    trust_score = metrics.get('trust_score')
-    buy_sell_ratio = metrics.get('buy_sell_ratio')
+    # Build comprehensive context JSON
+    context_json = {
+        "name": metrics.get('name', 'Unknown'),
+        "id": metrics.get('id', 0),
+        "category": metrics.get('category', 'Unknown'),
+        "price_tao": metrics.get('price_tao'),
+        "mcap_tao": metrics.get('mcap_tao'),
+        "fdv_tao": metrics.get('fdv_tao'),
+        "stake_weight": metrics.get('stake_weight'),
+        "stake_quality": metrics.get('stake_quality'),
+        "sq_rank_pct": metrics.get('sq_rank_pct'),
+        "validator_util_pct": metrics.get('validator_util_pct'),
+        "max_validators": metrics.get('max_validators'),
+        "active_stake_ratio": metrics.get('active_stake_ratio'),
+        "consensus_align_pct": metrics.get('consensus_align_pct'),
+        "inflation_pct": metrics.get('inflation_pct'),
+        "alpha_emitted_pct": metrics.get('alpha_emitted_pct'),
+        "reserve_mom": reserve_mom_str,
+        "buy_sell_ratio_24h": metrics.get('buy_sell_ratio_24h'),
+        "price_1d_pct": metrics.get('price_1d_pct'),
+        "price_7d_pct": metrics.get('price_7d_pct'),
+        "tao_score": metrics.get('tao_score'),
+        "tao_score_rank_pct": metrics.get('tao_score_rank_pct'),
+        "category_subnet_count": metrics.get('category_subnet_count')
+    }
     
-    # Format the expert-level prompt
-    formatted = f"""
-You are writing a 90-110-word briefing for crypto investors.
-
-Data:
-{{
-  "netuid": {netuid},
-  "name": "{name}",
-  "category": "{category}",
-  "stake_quality_score": {stake_quality_score},
-  "stake_quality_rank_pct": {stake_quality_rank_pct},
-  "momentum_pct": {momentum_pct},
-  "momentum_rank_pct": {momentum_rank_pct},
-  "validators_active": {validators_active},
-  "validator_util_pct": {validator_util_pct},
-  "consensus_alignment": {consensus_alignment},
-  "trust_score": {trust_score},
-  "buy_sell_ratio": {buy_sell_ratio}
-}}
-
-Write 2–3 sentences:
-• Sentence 1 – what the subnet does (use name + category).
-• Sentence 2 – health: stake quality vs peer %, validator utilisation, consensus / trust.
-• Sentence 3 – capital flow: buy:sell ratio and momentum rank; flag risk or upside.
-
-Avoid numeric overkill: max 5 numbers. No questions; no bullet points.
-"""
-    
-    return formatted
+    import json
+    return json.dumps(context_json, indent=2)
 
 def get_cached_insight(netuid: int) -> Optional[str]:
     """
-    Get cached insight from database if fresh (within 24 hours).
+    Get cached insight from database if fresh (within 12 hours).
+    Reduced TTL to ensure more frequent updates.
     
     Args:
         netuid: Subnet ID
@@ -135,8 +156,8 @@ def get_cached_insight(netuid: int) -> Optional[str]:
     """
     try:
         with get_db() as session:
-            # Check for fresh insight (within 24 hours)
-            cutoff_time = datetime.utcnow() - timedelta(hours=24)
+            # Check for fresh insight (within 12 hours instead of 24)
+            cutoff_time = datetime.utcnow() - timedelta(hours=12)
             cached_insight = session.query(GptInsights).filter(
                 GptInsights.netuid == netuid,
                 GptInsights.ts > cutoff_time
@@ -189,96 +210,149 @@ def save_insight_to_db(netuid: int, text: str) -> bool:
         logger.error(f"Error saving insight for subnet {netuid}: {e}")
         return False
 
-def generate_insight(netuid: int) -> str:
+def clear_gpt_insights_cache() -> bool:
     """
-    Generate AI-powered insight for a subnet.
+    Clear all GPT insights from the database cache.
     
-    Args:
-        netuid: Subnet ID to analyze
-        
     Returns:
-        AI-generated insight text (120 words max) or fallback message
+        True if cleared successfully
     """
-    # Check if we're in development mode or no OpenAI key
-    if not client or os.getenv('FLASK_ENV') == 'development':
-        logger.info(f"GPT disabled in dev mode for subnet {netuid}")
-        return "(demo insight – GPT disabled in dev)"
-    
     try:
-        # Get subnet metrics
-        metrics = get_subnet_metrics_for_insight(netuid)
-        if not metrics:
-            logger.warning(f"No metrics available for subnet {netuid}")
-            return "Unable to generate insight - no subnet data available."
-        
-        # Add netuid to metrics for context
-        metrics['netuid'] = netuid
-        
-        # Format metrics for GPT
-        formatted_metrics = format_metrics_for_gpt(metrics)
-        
-        # Call OpenAI API with v1 prompt format
-        def make_api_call(max_tokens=300):
-            if not client:
-                return "(demo insight – GPT disabled in dev)"
-            response = client.chat.completions.create(
-                model=OPENAI_MODEL,
-                messages=[
-                    {"role": "user", "content": formatted_metrics}
-                ],
-                max_tokens=max_tokens,
-                temperature=0.3
-            )
-            return response.choices[0].message.content.strip() if response.choices[0].message.content else ""
-        
-        # First attempt
-        insight = make_api_call(max_tokens=300)
-        
-        if insight:
-            # Check for truncation: too short or doesn't end with proper punctuation
-            words = insight.split()
-            if len(words) < 15 or not insight.rstrip().endswith((".", "!", "?")):
-                logger.info(f"Insight appears truncated for subnet {netuid}, retrying with more tokens...")
-                # Retry with more tokens
-                insight = make_api_call(max_tokens=400)
+        with get_db() as session:
+            # Delete all GPT insights
+            session.query(GptInsights).delete()
+            session.commit()
+            logger.info("Cleared all GPT insights cache")
+            return True
             
-            # Final length check (120 words ≈ 600 characters)
-            if len(insight) > 600:
-                insight = insight[:597] + "..."
-            
-            logger.info(f"Generated insight for subnet {netuid}: {len(insight.split())} words, {len(insight)} characters")
-            return insight
-        else:
-            logger.warning(f"No insight generated for subnet {netuid}")
-            return "Unable to generate AI insight at this time."
-        
     except Exception as e:
-        logger.error(f"Error generating insight for subnet {netuid}: {e}")
-        return "Error generating insight - please try again later."
+        logger.error(f"Error clearing GPT insights cache: {e}")
+        return False
 
-def get_insight(netuid: int) -> str:
+def clear_subnet_insight_cache(netuid: int) -> bool:
     """
-    Get insight for a subnet - cached or generate new.
+    Clear cached insight for a specific subnet to force regeneration.
     
     Args:
         netuid: Subnet ID
         
     Returns:
-        Insight text (cached or newly generated)
+        True if cleared successfully
     """
-    # First try to get from cache
-    cached_insight = get_cached_insight(netuid)
-    if cached_insight:
-        return cached_insight
+    try:
+        with get_db() as session:
+            # Delete insight for specific subnet
+            session.query(GptInsights).filter(GptInsights.netuid == netuid).delete()
+            session.commit()
+            logger.info(f"Cleared insight cache for subnet {netuid}")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Error clearing insight cache for subnet {netuid}: {e}")
+        return False
+
+def generate_insight(netuid: int) -> str:
+    """
+    Generate GPT insight for a subnet with comprehensive analysis.
     
-    # Generate new insight
-    insight = generate_insight(netuid)
+    Args:
+        netuid: Subnet ID to analyze
+        
+    Returns:
+        Generated insight text
+    """
+    if not client:
+        return "GPT analysis unavailable - API key not configured."
     
-    # Save to database (only if it's not a demo/error message)
-    if insight and not insight.startswith("(demo") and not insight.startswith("Unable to") and not insight.startswith("Error"):
-        save_insight_to_db(netuid, insight)
+    try:
+        # Get comprehensive metrics
+        metrics = get_subnet_metrics_for_insight(netuid)
+        if not metrics:
+            return "No metrics available for analysis."
+        
+        # Format context for GPT
+        context_json = format_metrics_for_gpt(metrics)
+        
+        # GPT v4 Prompt Template
+        system_prompt = """You are "TAO-Analytics Insight", a sell-side research analyst covering Bittensor subnets.
+Audience: professional crypto investors. Tone: crisp, numbers-first, no hype, no emojis."""
+
+        user_prompt = f"""Context JSON:
+{context_json}
+
+TASK – ≤200 words, three paragraphs, plain text:
+
+1) **What it does** – one crisp sentence, include subnet name.
+
+2) **Network health** – comment on stake-quality (incl rank), validator utilisation (X/Y), consensus, active-stake, TAO-Score (colour), inflation & supply-emitted; call out any red flags or strengths.
+
+3) **Market angle** – price momentum (1d/7d), buy:sell, reserve-momentum if present, and how {metrics.get('name', 'this subnet')} ranks versus its category peers ({metrics.get('category_subnet_count', 0)}). Conclude with a one-word Buy-Signal (1–5) per rule:  
+ TAO-Score ≥75 → 5; 60-74 → 4; 45-59 → 3; 30-44 → 2; <30 → 1.  
+ Return as: "Buy-Signal: 3 /5 (neutral)".
+
+Return exactly three paragraphs, no bullet lists, no markdown."""
+
+        def make_api_call(max_tokens=MAX_TOKENS):
+            """Make API call with retry logic."""
+            try:
+                response = client.chat.completions.create(
+                    model=MODEL_NAME,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    max_tokens=max_tokens,
+                    temperature=0.3,
+                    top_p=0.9
+                )
+                return response.choices[0].message.content.strip()
+            except Exception as e:
+                logger.error(f"OpenAI API error: {e}")
+                return f"Analysis error: {str(e)}"
+        
+        # Generate insight with retry logic
+        insight = make_api_call()
+        
+        # Check word count and retry if needed
+        word_count = len(insight.split())
+        if word_count > MAX_WORDS:
+            logger.warning(f"Insight too long ({word_count} words), retrying with reduced tokens")
+            insight = make_api_call(max_tokens=MAX_TOKENS // 2)
+        
+        return insight
+        
+    except Exception as e:
+        logger.error(f"Error generating insight for subnet {netuid}: {e}")
+        return f"Error generating analysis: {str(e)}"
+
+def get_insight(netuid: int) -> str:
+    """
+    Get GPT insight for a subnet with caching.
     
-    return insight
+    Args:
+        netuid: Subnet ID
+        
+    Returns:
+        Insight text (cached or generated)
+    """
+    try:
+        # Check cache first
+        cached = get_cached_insight(netuid)
+        if cached:
+            return cached
+        
+        # Generate new insight
+        insight = generate_insight(netuid)
+        
+        # Save to cache
+        if insight and not insight.startswith("Error"):
+            save_insight_to_db(netuid, insight)
+        
+        return insight
+        
+    except Exception as e:
+        logger.error(f"Error getting insight for subnet {netuid}: {e}")
+        return f"Error retrieving analysis: {str(e)}"
 
 # Global instance for easy access
 gpt_insight_service = {

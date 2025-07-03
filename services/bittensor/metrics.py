@@ -118,7 +118,9 @@ def calculate_subnet_metrics(netuid: int, endpoint: str = MAIN_RPC) -> Dict[str,
             
         # Calculate trust score (average trust across all validators)
         if hasattr(mg, 'trust') and mg.trust is not None:
-            trust_score = mg.trust.mean().item()
+            # Calculate stake-weighted trust score
+            stake_weights = mg.S / mg.S.sum()
+            trust_score = (mg.trust * stake_weights).sum().item()
         else:
             trust_score = None
         
@@ -126,6 +128,18 @@ def calculate_subnet_metrics(netuid: int, endpoint: str = MAIN_RPC) -> Dict[str,
         active_validators = 0
         if hasattr(mg, 'validator_permit') and mg.validator_permit is not None:
             active_validators = int(mg.validator_permit.sum().item())
+        
+        # NEW: Calculate active stake ratio
+        active_stake_ratio = None
+        if hasattr(mg, 'validator_permit') and mg.validator_permit is not None and total_stake > 0:
+            try:
+                # Calculate stake on active validators
+                active_stake = (mg.stake * mg.validator_permit).sum().item()
+                active_stake_ratio = (active_stake / total_stake) * 100
+                active_stake_ratio = round(active_stake_ratio, 1)
+            except Exception as e:
+                print(f"Error calculating active stake ratio for subnet {netuid}: {e}")
+                active_stake_ratio = None
         
         # Get emission totals from emissions object
         tao_in_emission = 0.0

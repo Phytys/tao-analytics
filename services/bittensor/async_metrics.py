@@ -197,7 +197,9 @@ def calculate_subnet_metrics_sync(netuid: int, endpoint: str, lite_mode: bool = 
             
         # Calculate trust score (average trust across all validators)
         if hasattr(mg, 'trust') and mg.trust is not None:
-            trust_score = mg.trust.mean().item()
+            # Calculate stake-weighted trust score
+            stake_weights = mg.S / mg.S.sum()
+            trust_score = (mg.trust * stake_weights).sum().item()
         else:
             trust_score = None
         
@@ -205,6 +207,18 @@ def calculate_subnet_metrics_sync(netuid: int, endpoint: str, lite_mode: bool = 
         active_validators = 0
         if hasattr(mg, 'validator_permit') and mg.validator_permit is not None:
             active_validators = int(mg.validator_permit.sum().item())
+        
+        # NEW: Calculate active stake ratio
+        active_stake_ratio = None
+        if hasattr(mg, 'validator_permit') and mg.validator_permit is not None and total_stake > 0:
+            try:
+                # Calculate stake on active validators
+                active_stake = (mg.stake * mg.validator_permit).sum().item()
+                active_stake_ratio = (active_stake / total_stake) * 100
+                active_stake_ratio = round(active_stake_ratio, 1)
+            except Exception as e:
+                logger.warning(f"Error calculating active stake ratio for subnet {netuid}: {e}")
+                active_stake_ratio = None
         
         # NEW: Sprint 5 computed metrics
         # Stake Quality: HHI-adjusted score (0-100)
@@ -256,7 +270,8 @@ def calculate_subnet_metrics_sync(netuid: int, endpoint: str, lite_mode: bool = 
             "stake_quality": float(round(stake_quality, 6)) if stake_quality is not None else None,
             "reserve_momentum": float(round(reserve_momentum, 6)) if reserve_momentum is not None else None,
             "emission_roi": float(round(emission_roi, 6)) if emission_roi is not None else None,
-            "validators_active": int(validators_active)
+            "validators_active": int(validators_active),
+            "active_stake_ratio": float(round(active_stake_ratio, 1)) if active_stake_ratio is not None else None
         }
         
         return metrics

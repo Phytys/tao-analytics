@@ -23,20 +23,24 @@ def create_header_bar(netuid: int) -> dbc.Card:
             dbc.Row([
                 dbc.Col([
                     html.H3(f"Subnet {netuid}", className="mb-1"),
-                    html.Span(id="subnet-name", children="Loading...", className="text-muted")
+                    html.Span(id="subnet-name", children="Loading...", className="text-primary fw-bold")
                 ], width=6),
                 dbc.Col([
                     html.Div([
                         dbc.Badge(id="subnet-category", children="Loading...", color="primary", className="me-2"),
                         html.A(
                             "Visit site ↗",
+                            id="visit-site-link",
                             href="#",
-                            className="text-decoration-none me-2"
+                            className="text-decoration-none me-2",
+                            target="_blank"
                         ),
                         html.A(
                             "GitHub",
+                            id="github-link",
                             href="#",
-                            className="text-decoration-none"
+                            className="text-decoration-none",
+                            target="_blank"
                         )
                     ], className="text-end")
                 ], width=6)
@@ -54,7 +58,7 @@ def create_overview_card(netuid: int) -> dbc.Card:
             html.Div(id="overview-content", children=[
                 dbc.Spinner(html.Div("Loading overview data..."), size="sm")
             ])
-        ])
+        ], className="overview-card")
     ], className="mb-3")
 
 def create_metrics_grid(netuid: int) -> dbc.Card:
@@ -64,13 +68,22 @@ def create_metrics_grid(netuid: int) -> dbc.Card:
             html.H5("Key Metrics", className="mb-0")
         ]),
         dbc.CardBody([
-            # First row: Stake Quality, Reserve Momentum, Active Validators
+            # First row: TAO-Score, Stake Quality, Reserve Momentum
             dbc.Row([
                 dbc.Col([
                     dbc.Card([
                         dbc.CardBody([
+                            html.H6("TAO-Score", className="card-title", id="tao-score-label"),
+                            html.H5(id="tao-score", children="--", className="mb-1"),
+                            html.Small("composite metric", className="text-muted")
+                        ])
+                    ], className="text-center")
+                ], width=4),
+                dbc.Col([
+                    dbc.Card([
+                        dbc.CardBody([
                             html.H6("Stake Quality", className="card-title", id="stake-quality-label"),
-                            html.H4(id="stake-quality", children="--"),
+                            html.H5(id="stake-quality", children="--", className="mb-1"),
                             html.Small("vs category median", className="text-muted")
                         ])
                     ], className="text-center")
@@ -79,29 +92,29 @@ def create_metrics_grid(netuid: int) -> dbc.Card:
                     dbc.Card([
                         dbc.CardBody([
                             html.H6("Reserve Momentum", className="card-title", id="reserve-momentum-label"),
-                            html.H4(id="reserve-momentum", children="--"),
+                            html.H5(id="reserve-momentum", children="--", className="mb-1"),
                             html.Small("Δ TAO-in 24h / supply", className="text-muted")
+                        ])
+                    ], className="text-center")
+                ], width=4)
+            ], className="mb-3"),
+            
+            # Second row: Validator Utilization, Consensus Alignment, Active-Stake Ratio
+            dbc.Row([
+                dbc.Col([
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.H6("Validator Util", className="card-title", id="validator-util-label"),
+                            html.H5(id="validator-util", children="--", className="mb-1"),
+                            html.Small("active / max (utilization %)", className="text-muted")
                         ])
                     ], className="text-center")
                 ], width=4),
                 dbc.Col([
                     dbc.Card([
                         dbc.CardBody([
-                            html.H6("Active Validators", className="card-title", id="active-validators-label"),
-                            html.H4(id="active-validators", children="--"),
-                            html.Small("of 256 UIDs", className="text-muted")
-                        ])
-                    ], className="text-center")
-                ], width=4)
-            ], className="mb-3"),
-            
-            # Second row: Consensus Alignment, Trust Score, Annual Inflation
-            dbc.Row([
-                dbc.Col([
-                    dbc.Card([
-                        dbc.CardBody([
                             html.H6("Consensus Alignment", className="card-title", id="consensus-alignment-label"),
-                            html.H4(id="consensus-alignment", children="--"),
+                            html.H5(id="consensus-alignment", children="--", className="mb-1"),
                             html.Small("stake-weighted %", className="text-muted")
                         ])
                     ], className="text-center")
@@ -109,25 +122,25 @@ def create_metrics_grid(netuid: int) -> dbc.Card:
                 dbc.Col([
                     dbc.Card([
                         dbc.CardBody([
-                            html.H6("Trust Score", className="card-title", id="trust-score-label"),
-                            html.H4(id="trust-score", children="--"),
-                            html.Small("0-1 scale", className="text-muted")
-                        ])
-                    ], className="text-center")
-                ], width=4),
-                dbc.Col([
-                    dbc.Card([
-                        dbc.CardBody([
-                            html.H6("Annual Inflation", className="card-title", id="annual-inflation-label"),
-                            html.H4(id="annual-inflation", children="--"),
-                            html.Small("α-token supply growth", className="text-muted")
+                            html.H6("Active-Stake Ratio", className="card-title", id="active-stake-label"),
+                            html.H5(id="active-stake", children="--", className="mb-1"),
+                            html.Small("% of total stake", className="text-muted")
                         ])
                     ], className="text-center")
                 ], width=4)
             ], className="mb-3"),
             
-            # Third row: Emission Progress
+            # Third row: Annual Inflation, Emission Progress
             dbc.Row([
+                dbc.Col([
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.H6("Annual Inflation", className="card-title", id="annual-inflation-label"),
+                            html.H5(id="annual-inflation", children="--", className="mb-1"),
+                            html.Small("α-token supply growth", className="text-muted")
+                        ])
+                    ], className="text-center")
+                ], width=6),
                 dbc.Col([
                     dbc.Card([
                         dbc.CardBody([
@@ -136,43 +149,48 @@ def create_metrics_grid(netuid: int) -> dbc.Card:
                             html.Small("of max α-supply", className="text-muted")
                         ])
                     ], className="text-center")
-                ], width=12)
-            ])
-        ]),
+                ], width=6)
+            ], className="mb-3")
+        ], className="metrics-grid"),
         
-        # Tooltips
+        # Tooltips - Updated to match v1.1 spec exactly
         dbc.Tooltip(
-            "Decentralisation score (0–100). Derived from stake-HHI; higher = more evenly distributed stake.",
+            "TAO-Score 0-100 – composite health index. 35% decentralisation, 20% validator-utilisation, 15% consensus integrity, 15% active-stake, 10% inflation sanity (8% target), 5% 7-day price momentum. Weights auto-rebalance if some data is missing. ≥70 green, 40-70 amber, <40 red.",
+            target="tao-score-label",
+            placement="top"
+        ),
+        dbc.Tooltip(
+            "Decentralisation (0-100). Higher = more even stake distribution.",
             target="stake-quality-label",
             placement="top"
         ),
         dbc.Tooltip(
-            "24 h net change in TAO reserves, normalised by market-cap. Positive = inflow, negative = outflow.",
+            "24h net TAO-reserve change ÷ market-cap. ↑ inflow, ↓ outflow.",
             target="reserve-momentum-label",
             placement="top"
         ),
         dbc.Tooltip(
-            "Active validators ÷ 256 slots. Low utilisation may signal under-secured network.",
-            target="active-validators-label",
+            "Active validators ÷ max allowed (64). Shows capacity usage.",
+            target="validator-util-label",
             placement="top"
         ),
         dbc.Tooltip(
-            "Stake-weighted % of validators whose consensus value is within ±2 σ of the subnet mean.",
+            "Stake-weighted % of validators whose consensus score is within two standard deviations of the subnet mean.",
             target="consensus-alignment-label",
             placement="top"
         ),
         dbc.Tooltip(
-            "Stake-weighted mean trust (0–1). Higher = validators more often agree with the canonical chain.",
-            target="trust-score-label",
+            "% of all bonded TAO that sits on validators currently online (validator-permit = True). A low ratio means most stake is idle.",
+            target="active-stake-label",
             placement="top"
         ),
         dbc.Tooltip(
-            "Projected α-token supply growth over the next 12 months, assuming the current mint schedule.",
+            "Projected α-supply growth if current mint schedule continues.",
             target="annual-inflation-label",
             placement="top"
         ),
         dbc.Tooltip(
-            "Share of the fully-diluted α-supply already minted.",
+            "% of max α-supply already minted.",
             target="emission-progress-label",
             placement="top"
         )
@@ -248,23 +266,20 @@ def create_subnet_detail_layout(netuid: int) -> html.Div:
         # Header bar
         create_header_bar(netuid),
         
+        # GPT insight panel (moved above Overview)
+        create_gpt_insight_panel(netuid),
+        
         # Overview card
         create_overview_card(netuid),
         
         # Metrics grid
         create_metrics_grid(netuid),
         
-        # GPT insight panel
-        create_gpt_insight_panel(netuid),
-        
         # Enriched description
         create_enriched_description(netuid),
         
         # Tabs
         create_tabs(netuid),
-        
-        # Holders & Validators section
-        create_holders_validators_section(netuid),
         
         # Footer
         create_footer(netuid)
@@ -442,8 +457,8 @@ def update_overview(search):
                 # First row: Price, Market Cap, FDV, Total Stake Weight
                 dbc.Row([
                     dbc.Col([
-                        html.H6("Price (Alpha)", className="text-muted", id="price-label"),
-                        html.H4([
+                        html.H6("Price (α)", className="text-muted", id="price-label"),
+                        html.H5([
                             f"{price_formatted} TAO" if price_formatted != "--" else "--",
                             html.Br(),
                             html.Span(price_usd_formatted, className="text-muted fs-6") if price_usd_formatted else ""
@@ -451,7 +466,7 @@ def update_overview(search):
                     ], width=3),
                     dbc.Col([
                         html.H6("Market Cap (TAO)", className="text-muted", id="market-cap-label"),
-                        html.H4([
+                        html.H5([
                             f"{market_cap_formatted} TAO" if market_cap_formatted != "--" else "--",
                             html.Br(),
                             html.Span(market_cap_usd_formatted, className="text-muted fs-6") if market_cap_usd_formatted else ""
@@ -459,30 +474,30 @@ def update_overview(search):
                     ], width=3),
                     dbc.Col([
                         html.H6("FDV (TAO)", className="text-muted", id="fdv-label"),
-                        html.H4([
+                        html.H5([
                             f"{fdv_formatted} TAO" if fdv_formatted != "--" else "--",
                             html.Br(),
                             html.Span(fdv_usd_formatted, className="text-muted fs-6") if fdv_usd_formatted else ""
                         ])
                     ], width=3),
                     dbc.Col([
-                        html.H6("Total Stake Weight", className="text-muted", id="total-stake-label"),
-                        html.H4(f"{total_stake_formatted} TAO" if total_stake_formatted != "--" else "--")
+                        html.H6("Total-Stake Weight", className="text-muted", id="total-stake-label"),
+                        html.H5(f"{total_stake_formatted} TAO" if total_stake_formatted != "--" else "--")
                     ], width=3)
                 ], className="mb-3"),
                 
                 # Second row: Price changes and flow data
                 dbc.Row([
                     dbc.Col([
-                        html.H6("24h Δ", className="text-muted", id="price-1d-label"),
+                        html.H6("24 h Δ", className="text-muted", id="price-1d-label"),
                         html.H5(price_1d_formatted, className=price_1d_color)
                     ], width=2),
                     dbc.Col([
-                        html.H6("7d Δ", className="text-muted", id="price-7d-label"),
+                        html.H6("7 d Δ", className="text-muted", id="price-7d-label"),
                         html.H5(price_7d_formatted, className=price_7d_color)
                     ], width=2),
                     dbc.Col([
-                        html.H6("30d Δ", className="text-muted", id="price-30d-label"),
+                        html.H6("30 d Δ", className="text-muted", id="price-30d-label"),
                         html.H5(price_30d_formatted, className=price_30d_color)
                     ], width=2),
                     dbc.Col([
@@ -497,47 +512,47 @@ def update_overview(search):
                 
                 # Tooltips
                 dbc.Tooltip(
-                    "Last traded price of the subnet's α-token, quoted in TAO.",
+                    "Last traded α-token price, quoted in TAO.",
                     target="price-label",
                     placement="top"
                 ),
                 dbc.Tooltip(
-                    "Circulating α-supply × price. Measures economic size of the subnet token.",
+                    "Circulating α-supply × price. Economic size of the subnet token.",
                     target="market-cap-label",
                     placement="top"
                 ),
                 dbc.Tooltip(
-                    "α-price × max α-supply; theoretical fully-diluted valuation, useful for upside comparison.",
+                    "α-price × max α-supply (fully-diluted valuation).",
                     target="fdv-label",
                     placement="top"
                 ),
                 dbc.Tooltip(
-                    "Validator bond weight measured in TAO-equivalent units. Historical weights can exceed circulating TAO.",
+                    "Total validator bond weight. > circulating TAO is normal because weights include locked supply.",
                     target="total-stake-label",
                     placement="top"
                 ),
                 dbc.Tooltip(
-                    "Price change of the α-token over the stated window.",
+                    "Price change over 24h.",
                     target="price-1d-label",
                     placement="top"
                 ),
                 dbc.Tooltip(
-                    "Price change of the α-token over the stated window.",
+                    "Price change over 7 days.",
                     target="price-7d-label",
                     placement="top"
                 ),
                 dbc.Tooltip(
-                    "Price change of the α-token over the stated window.",
+                    "Price change over 30 days.",
                     target="price-30d-label",
                     placement="top"
                 ),
                 dbc.Tooltip(
-                    "TAO value of α-tokens bought in the last 24 h. Gauges demand.",
+                    "TAO value of α bought in last 24h.",
                     target="buy-volume-label",
                     placement="top"
                 ),
                 dbc.Tooltip(
-                    "TAO held in the subnet reserve (α↔TAO pool). Used for liquidity and emissions.",
+                    "TAO locked in the subnet's reserve pool.",
                     target="tao-reserves-label",
                     placement="top"
                 )
@@ -548,11 +563,12 @@ def update_overview(search):
         return "Error loading overview data"
 
 @callback(
-    [Output("stake-quality", "children"),
+    [Output("tao-score", "children"),
+     Output("stake-quality", "children"),
      Output("reserve-momentum", "children"),
-     Output("active-validators", "children"),
+     Output("validator-util", "children"),
      Output("consensus-alignment", "children"),
-     Output("trust-score", "children"),
+     Output("active-stake", "children"),
      Output("annual-inflation", "children"),
      Output("emission-progress-gauge", "children")],
     Input("url", "search")
@@ -665,12 +681,12 @@ def update_metrics_grid(search):
             else:
                 consensus_formatted = "--"
             
-            # Format trust score
-            trust_score = latest_metrics.trust_score
-            if trust_score is not None:
-                trust_formatted = f"{trust_score:.3f}"
+            # Format active stake ratio
+            active_stake_ratio = latest_metrics.active_stake_ratio
+            if active_stake_ratio is not None:
+                active_stake_formatted = f"{active_stake_ratio:.1f}%"
             else:
-                trust_formatted = "--"
+                active_stake_formatted = "--"
             
             # Format annual inflation with color coding
             annual_inflation = latest_metrics.emission_pct
@@ -706,11 +722,50 @@ def update_metrics_grid(search):
             else:
                 progress_formatted = "--"
             
-            return stake_quality_formatted, momentum_formatted, validators_formatted, consensus_formatted, trust_formatted, inflation_formatted, progress_formatted
+            # Format TAO-Score with color coding
+            tao_score = latest_metrics.tao_score
+            if tao_score is not None:
+                # Color coding: green if >70, amber 40-70, red <40
+                if tao_score > 70:
+                    tao_color = "text-success"
+                elif tao_score >= 40:
+                    tao_color = "text-warning"
+                else:
+                    tao_color = "text-danger"
+                
+                tao_score_formatted = html.Span(
+                    f"{tao_score:.1f}",
+                    className=tao_color
+                )
+            else:
+                tao_score_formatted = "--"
+            
+            # Format validator utilization with new format and color coding
+            active_validators = latest_metrics.active_validators
+            max_validators = latest_metrics.max_validators or 64  # Default to 64 if not set
+            validator_util_pct = latest_metrics.validator_util_pct
+            
+            if active_validators is not None and validator_util_pct is not None:
+                # Color coding: green if ≥50%, amber 25-50%, red <25%
+                if validator_util_pct >= 50:
+                    util_color = "text-success"
+                elif validator_util_pct >= 25:
+                    util_color = "text-warning"
+                else:
+                    util_color = "text-danger"
+                
+                util_formatted = html.Span(
+                    f"{validator_util_pct:.1f}% util ({active_validators} / {max_validators} validators)",
+                    className=util_color
+                )
+            else:
+                util_formatted = "--"
+            
+            return tao_score_formatted, stake_quality_formatted, momentum_formatted, util_formatted, consensus_formatted, active_stake_formatted, inflation_formatted, progress_formatted
         
     except Exception as e:
         logger.error(f"Error updating metrics grid: {e}")
-        return "--", "--", "--", "--", "--", "--", "--"
+        return "--", "--", "--", "--", "--", "--", "--", "--"
 
 @callback(
     Output("gpt-insight", "children"),
@@ -827,6 +882,46 @@ def update_holders_validators(search):
     except Exception as e:
         logger.error(f"Error updating holders/validators: {e}")
         return "Error loading holders/validators data"
+
+@callback(
+    [Output("visit-site-link", "href"),
+     Output("github-link", "href")],
+    Input("url", "search")
+)
+def update_external_links(search):
+    """Update the external links with actual URLs."""
+    if not search:
+        return "#", "#"
+    
+    try:
+        import urllib.parse
+        params = urllib.parse.parse_qs(search.lstrip('?'))
+        netuid = int(params.get('netuid', [None])[0])
+        
+        if netuid is None:
+            return "#", "#"
+        
+        # Get subnet metadata
+        with get_db() as session:
+            latest_metrics = session.query(MetricsSnap).filter_by(netuid=netuid)\
+                .order_by(MetricsSnap.timestamp.desc()).first()
+            
+            if not latest_metrics:
+                return "#", "#"
+            
+            # Get URLs from screener data and format properly
+            visit_site_url = latest_metrics.subnet_website or latest_metrics.subnet_url or "#"
+            github_url = latest_metrics.github_repo or "#"
+            
+            # Add https:// protocol if missing for visit site URL
+            if visit_site_url and visit_site_url != "#" and not visit_site_url.startswith(('http://', 'https://')):
+                visit_site_url = f"https://{visit_site_url}"
+            
+            return visit_site_url, github_url
+        
+    except Exception as e:
+        logger.error(f"Error updating external links: {e}")
+        return "#", "#"
 
 # Main layout
 layout = html.Div([

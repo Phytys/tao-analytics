@@ -302,6 +302,63 @@ class CronFetch:
                     logger.info(f"Processing all {len(subnet_ids)} subnets")
                 
                 logger.info(f"Total subnets available: {len(all_subnet_ids)}")
+                
+                # OPTIMIZATION: Pre-fetch yesterday's TAO-in data for all subnets in a single query
+                logger.info("Pre-fetching yesterday's TAO-in data for all subnets...")
+                yesterday = snapshot_time - timedelta(days=1)
+                yesterday_data = session.query(MetricsSnap.netuid, MetricsSnap.tao_in)\
+                    .filter(MetricsSnap.netuid.in_(subnet_ids))\
+                    .filter(MetricsSnap.timestamp >= yesterday)\
+                    .order_by(MetricsSnap.netuid, MetricsSnap.timestamp.desc())\
+                    .all()
+                
+                # Create lookup dictionary for yesterday's TAO-in data
+                yesterday_tao_in_lookup = {}
+                for netuid, tao_in in yesterday_data:
+                    if netuid not in yesterday_tao_in_lookup:  # Keep only the most recent
+                        yesterday_tao_in_lookup[netuid] = tao_in
+                
+                logger.info(f"Pre-fetched yesterday's data for {len(yesterday_tao_in_lookup)} subnets")
+            
+            # OPTIMIZATION: Pre-fetch all subnet metadata in a single query
+            logger.info("Pre-fetching subnet metadata for all subnets...")
+            subnet_metadata = session.query(SubnetMeta).filter(SubnetMeta.netuid.in_(subnet_ids)).all()
+            subnet_meta_lookup = {meta.netuid: meta for meta in subnet_metadata}
+            logger.info(f"Pre-fetched metadata for {len(subnet_meta_lookup)} subnets")
+            
+            # OPTIMIZATION: Pre-fetch all latest screener data in a single query
+            logger.info("Pre-fetching latest screener data for all subnets...")
+            from sqlalchemy import func
+            latest_screener_subquery = session.query(
+                ScreenerRaw.netuid,
+                func.max(ScreenerRaw.fetched_at).label('max_fetched_at')
+            ).filter(ScreenerRaw.netuid.in_(subnet_ids)).group_by(ScreenerRaw.netuid).subquery()
+            
+            latest_screeners = session.query(ScreenerRaw).join(
+                latest_screener_subquery,
+                (ScreenerRaw.netuid == latest_screener_subquery.c.netuid) &
+                (ScreenerRaw.fetched_at == latest_screener_subquery.c.max_fetched_at)
+            ).all()
+            
+            screener_lookup = {screener.netuid: screener for screener in latest_screeners}
+            logger.info(f"Pre-fetched screener data for {len(screener_lookup)} subnets")
+            
+            # OPTIMIZATION: Pre-fetch max_validators for all subnets in bulk
+            logger.info("Pre-fetching max_validators for all subnets...")
+            max_validators_lookup = {}
+            try:
+                import bittensor as bt
+                sub = bt.subtensor()
+                for netuid in subnet_ids:
+                    try:
+                        subnet_info = sub.get_subnet_info(netuid)
+                        max_validators_lookup[netuid] = subnet_info.max_allowed_validators
+                    except Exception as e:
+                        logger.warning(f"Failed to get max_validators for subnet {netuid}: {e}")
+                        max_validators_lookup[netuid] = None
+                logger.info(f"Pre-fetched max_validators for {len(max_validators_lookup)} subnets")
+            except Exception as e:
+                logger.warning(f"Failed to pre-fetch max_validators: {e}")
             
             if not subnet_ids:
                 logger.warning("No subnet data available for SDK snapshot")
@@ -375,33 +432,25 @@ class CronFetch:
                     netuid = metrics['netuid']
                     
                     # Get subnet metadata for reference
-                    subnet_meta = session.query(SubnetMeta).filter_by(netuid=netuid).first()
+                    subnet_meta = subnet_meta_lookup.get(netuid)
                     
                     # Get latest screener data for price/flow metrics
-                    latest_screener = session.query(ScreenerRaw).filter_by(netuid=netuid)\
-                        .order_by(ScreenerRaw.fetched_at.desc()).first()
+                    latest_screener = screener_lookup.get(netuid)
                     
-                    # Get previous screener data for reserve momentum calculation
-                    # Look for yesterday's data specifically (not just previous record)
-                    yesterday = snapshot_time - timedelta(days=1)
-                    previous_screener = session.query(ScreenerRaw).filter_by(netuid=netuid)\
-                        .filter(ScreenerRaw.fetched_at >= yesterday)\
-                        .order_by(ScreenerRaw.fetched_at.desc()).first()
+                    # OPTIMIZATION: Use pre-fetched yesterday's data instead of individual query
+                    yesterday_tao_in = yesterday_tao_in_lookup.get(netuid)
                     
                     # Skip emission ROI until SDK 9.8+ is available
                     daily_emission_tao = None
                     
-                    # Get yesterday's TAO-in for reserve momentum from metrics_snap time series
-                    yesterday_tao_in = None
-                    yesterday_metrics = session.query(MetricsSnap).filter_by(netuid=netuid)\
-                        .filter(MetricsSnap.timestamp < snapshot_time)\
-                        .order_by(MetricsSnap.timestamp.desc()).first()
+                    # Fetch max_validators from SDK for validator utilization calculation
+                    max_validators = max_validators_lookup.get(netuid)
                     
-                    if yesterday_metrics and yesterday_metrics.tao_in is not None:
-                        yesterday_tao_in = yesterday_metrics.tao_in
-                        logger.debug(f"Subnet {netuid}: Using yesterday's tao_in from metrics_snap: {yesterday_tao_in}")
-                    else:
-                        logger.debug(f"Subnet {netuid}: No yesterday's tao_in available in metrics_snap")
+                    # Calculate validator utilization percentage
+                    active_validators = metrics.get('active_validators')
+                    validator_util_pct = None
+                    if max_validators is not None and active_validators is not None:
+                        validator_util_pct = round((active_validators / max_validators) * 100, 1)
                     
                     # Extract screener data for time series - include all available fields
                     screener_metrics = {}
@@ -518,7 +567,9 @@ class CronFetch:
                         'stake_hhi': metrics.get('stake_hhi'),
                         'stake_quality': metrics.get('stake_quality'),
                         'consensus_alignment': metrics.get('consensus_alignment'),
-                        'trust_score': metrics.get('trust_score'),
+                        # Trust score only for trust-based subnets
+                        'trust_score': metrics.get('trust_score') if subnet_meta and subnet_meta.primary_category in ("AI-Verification & Trust", "Validator", "Root") else None,
+                        'active_stake_ratio': metrics.get('active_stake_ratio'),
                         'active_validators': metrics.get('active_validators'),
                         'validators_active': metrics.get('validators_active'),
                         'uid_count': metrics.get('uid_count'),
@@ -534,6 +585,10 @@ class CronFetch:
                         'total_emission_tao': metrics.get('total_emission_tao'),
                         'tao_in_emission': metrics.get('tao_in_emission'),
                         'alpha_out_emission': metrics.get('alpha_out_emission'),
+                        
+                        # Validator utilization metrics
+                        'validator_util_pct': validator_util_pct,
+                        'max_validators': max_validators,
                     }
                     
                     # Calculate reserve momentum using yesterday's data
@@ -558,6 +613,20 @@ class CronFetch:
                         )
                     else:
                         calculated_metrics['emission_roi'] = None
+                    
+                    # Calculate TAO-Score using all available metrics
+                    from services.calc_metrics import calculate_tao_score
+                    calculated_metrics['tao_score'] = calculate_tao_score(
+                        stake_quality=calculated_metrics.get('stake_quality'),
+                        consensus_alignment=calculated_metrics.get('consensus_alignment'),
+                        active_stake_ratio=calculated_metrics.get('active_stake_ratio'),
+                        emission_roi=calculated_metrics.get('emission_roi'),
+                        reserve_momentum=calculated_metrics.get('reserve_momentum'),
+                        validator_util_pct=calculated_metrics.get('validator_util_pct'),
+                        inflation_pct=calculated_metrics.get('emission_pct'),  # Use emission_pct as inflation proxy
+                        price_7d_change=screener_metrics.get('price_7d_change'),  # Use 7-day price change for momentum
+                        session=session
+                    )
                     
                     # Validate metrics before storing
                     is_valid, error_msg = validate_metrics(calculated_metrics)
@@ -600,6 +669,7 @@ class CronFetch:
                         p95_incentive=metrics.get('p95_incentive'),
                         consensus_alignment=calculated_metrics.get('consensus_alignment'),
                         trust_score=calculated_metrics.get('trust_score'),
+                        active_stake_ratio=calculated_metrics.get('active_stake_ratio'),
                         mean_consensus=metrics.get('mean_consensus'),
                         pct_aligned=metrics.get('pct_aligned'),
                         
@@ -613,12 +683,14 @@ class CronFetch:
                         
                         # Network activity metrics
                         active_validators=metrics.get('active_validators'),
+                        max_validators=calculated_metrics.get('max_validators'),
                         
                         # Calculated metrics using new formulas
                         stake_quality=calculated_metrics.get('stake_quality'),
                         reserve_momentum=calculated_metrics.get('reserve_momentum'),
                         emission_roi=calculated_metrics.get('emission_roi'),
                         validators_active=calculated_metrics.get('validators_active'),
+                        tao_score=calculated_metrics.get('tao_score'),
                         
                         # NEW: Investor-focused fields
                         fdv_tao=calculated_metrics.get('fdv_tao'),

@@ -87,6 +87,7 @@ class MetricsSnap(Base):
     # Network health metrics
     consensus_alignment = Column(Float)  # Percentage within ±0.10 of mean consensus
     trust_score = Column(Float)  # Average trust score
+    active_stake_ratio = Column(Float)  # % of total stake on active validators
     mean_consensus = Column(Float)  # Raw mean consensus value
     pct_aligned = Column(Float)  # Percentage within ±0.10 of mean consensus
     
@@ -105,6 +106,7 @@ class MetricsSnap(Base):
     
     # Network activity metrics
     active_validators = Column(Integer)  # Number of active validators (validator_permit.sum())
+    max_validators = Column(Integer)     # Maximum allowed validators for subnet
     
     # Sprint 5 computed metrics
     stake_quality = Column(Float)  # HHI-adjusted score (0-100)
@@ -117,6 +119,7 @@ class MetricsSnap(Base):
     momentum_rank_pct = Column(Integer)       # Top X% in category (0-100)
     validator_util_pct = Column(Integer)      # Validator utilization % (0-100)
     buy_sell_ratio = Column(Float)            # buy_vol / sell_vol ratio
+    tao_score = Column(Float)                 # TAO-Score (0-100)
     
     # NEW: Investor-focused fields
     fdv_tao = Column(Float)  # Fully diluted valuation in TAO
