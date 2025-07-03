@@ -277,6 +277,30 @@ def save_enrichment(netuid: int, enrichment: Dict[str, Any], context: SubnetCont
         print(f"Enrichment saved to database for subnet {netuid}")
         print(f"Context tokens: {enriched.context_tokens}")
         print(f"Provenance: {enriched.provenance}")
+        
+        # Sync category to MetricsSnap table for GPT insights
+        try:
+            from models import MetricsSnap
+            from sqlalchemy import func
+            
+            # Get the latest metrics snapshot for this subnet
+            latest_metrics = session.query(MetricsSnap).filter_by(netuid=netuid)\
+                .order_by(MetricsSnap.timestamp.desc()).first()
+            
+            if latest_metrics and enriched.primary_category:
+                if latest_metrics.category != enriched.primary_category:
+                    print(f"Syncing category: '{latest_metrics.category}' -> '{enriched.primary_category}'")
+                    latest_metrics.category = enriched.primary_category
+                    session.commit()
+                    print(f"✅ Category synced to MetricsSnap for subnet {netuid}")
+                else:
+                    print(f"Category already in sync for subnet {netuid}")
+            else:
+                print(f"No metrics data found for subnet {netuid}, category sync skipped")
+                
+        except Exception as e:
+            print(f"⚠️  Error syncing category for subnet {netuid}: {e}")
+            print("GPT insights may use outdated category data")
 
 def main():
     import argparse

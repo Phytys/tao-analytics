@@ -171,6 +171,7 @@ tao-analytics/
 - **Confidence Scoring**: Provenance tracking with confidence metrics
 - **Batch Processing**: Efficient bulk enrichment with progress tracking
 - **Context Hash Caching**: Intelligent caching to avoid redundant processing
+- **Automated Category Sync**: Automatic synchronization between enrichment and GPT insights
 
 ### 🔧 **Advanced Features**
 - **Admin System**: Secure admin login with system metrics dashboard
@@ -235,6 +236,7 @@ tao-analytics/
      - Confidence scoring with provenance tracking
      - Context-aware enrichment from websites/GitHub
      - Tag normalization and deduplication
+     - Real-time insights with comprehensive price momentum data (1d, 7d, 30d)
    - **Storage**: `subnet_meta` table with enriched fields
 
 ### **Database Schema**
@@ -252,6 +254,12 @@ tao-analytics/
 - `privacy_security_flag`: Boolean for privacy/security focus
 - `context_hash`: MD5 hash for change detection
 - `provenance`: JSON tracking of data sources (context vs model knowledge)
+
+#### **GPT Insights Integration**
+- **Real-time Analysis**: Live insights with current market data
+- **Price Momentum**: Comprehensive 1-day, 7-day, and 30-day price changes
+- **Category Synchronization**: Automatic sync between enrichment and insights
+- **Intelligent Caching**: Context-aware caching with automatic invalidation
 
 ### **Caching Strategy**
 - **API Cache**: 1-hour TTL for external API responses
@@ -314,7 +322,7 @@ python scripts/reset_db.py
 # Collect initial data
 python scripts/cron_fetch.py --once nightly
 
-# Run AI enrichment (optional)
+# Run AI enrichment (includes automatic category sync)
 python scripts/data_collection/batch_enrich.py --range 1 128
 ```
 
@@ -384,17 +392,17 @@ gunicorn -w 4 -b 0.0.0.0:5001 app:create_app()
 - **Purpose**: Subnet screening with AI insights
 - **Features**:
   - Buy Signal Analysis with GPT insights
-  - Interactive scatter plots
-  - Real-time data updates
-  - AI-powered investment recommendations
+  - Interactive scatter plots with click-to-save buy signals
+  - Real-time data updates with comprehensive price momentum (1d, 7d, 30d)
+  - AI-powered investment recommendations with category-aware analysis
 
 ### **3. Subnet Detail (`/dash/subnet-detail`)**
 - **Purpose**: Detailed subnet analysis
 - **Features**:
-  - Comprehensive subnet metrics
-  - Historical performance data
-  - Validator information
-  - AI-generated insights
+  - Comprehensive subnet metrics with real-time updates
+  - Historical performance data with price momentum analysis
+  - Validator information and network health metrics
+  - AI-generated insights with category-synchronized analysis
 
 ### **4. System Info (`/dash/system-info`)**
 - **Purpose**: Admin system monitoring
@@ -417,18 +425,19 @@ gunicorn -w 4 -b 0.0.0.0:5001 app:create_app()
 
 ### **Data Flow Overview**
 ```
-External APIs → Raw Storage → Context Enrichment → AI Analysis → Quality Validation → Production Database
-     ↓              ↓              ↓              ↓              ↓              ↓
-TAO.app API    screener_raw   prepare_context  OpenAI GPT-4   confidence     subnet_meta
-CoinGecko API  coingecko      web scraping     classification  validation     metrics_snap
-Bittensor SDK  real-time      GitHub README    confidence      provenance     gpt_insights
+External APIs → Raw Storage → Context Enrichment → AI Analysis → Quality Validation → Category Sync → Production Database
+     ↓              ↓              ↓              ↓              ↓              ↓              ↓
+TAO.app API    screener_raw   prepare_context  OpenAI GPT-4   confidence     auto-sync      subnet_meta
+CoinGecko API  coingecko      web scraping     classification  validation     categories     metrics_snap
+Bittensor SDK  real-time      GitHub README    confidence      provenance     GPT insights   gpt_insights
 ```
 
 ### **Key Database Operations**
 - **Data Collection**: Automated via `cron_fetch.py`
-- **Enrichment**: AI-powered via `batch_enrich.py`
+- **Enrichment**: AI-powered via `batch_enrich.py` with automatic category sync
 - **Migration**: Schema updates via migration scripts
 - **Export**: Data export via `export_db_table.py`
+- **Category Sync**: Automatic synchronization between enrichment and GPT insights
 
 ---
 
@@ -448,8 +457,8 @@ Bittensor SDK  real-time      GitHub README    confidence      provenance     gp
 - **`fetch_screener.py`**: TAO.app API data collection
 - **`fetch_coingecko_data.py`**: CoinGecko price data
 - **`prepare_context.py`**: Website and GitHub content scraping
-- **`enrich_with_openai.py`**: AI-powered subnet classification
-- **`batch_enrich.py`**: Bulk enrichment with smart caching
+- **`enrich_with_openai.py`**: AI-powered subnet classification with automatic category sync
+- **`batch_enrich.py`**: Bulk enrichment with smart caching and category synchronization
 
 ### **Utility Scripts**
 
@@ -474,7 +483,7 @@ Bittensor SDK  real-time      GitHub README    confidence      provenance     gp
 # Automated nightly collection
 python scripts/cron_fetch.py --once nightly
 
-# Followed by enrichment (if needed)
+# Followed by enrichment (includes automatic category sync)
 python scripts/data_collection/batch_enrich.py --range 1 128
 ```
 
@@ -506,7 +515,7 @@ python scripts/auto_fallback_enrich.py --max-subnets 10
 #### **API Services**
 - **`taoapp_cache.py`**: TAO.app API caching and management
 - **`quota_guard.py`**: API quota tracking and enforcement
-- **`gpt_insight.py`**: OpenAI GPT integration for insights
+- **`gpt_insight.py`**: OpenAI GPT integration for insights with comprehensive price momentum analysis
 
 #### **Utility Services**
 - **`auth.py`**: Authentication and authorization

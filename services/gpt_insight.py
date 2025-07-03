@@ -84,6 +84,7 @@ def get_subnet_metrics_for_insight(netuid: int) -> Dict[str, Any]:
                 'buy_sell_ratio_24h': round(buy_sell_ratio, 2),
                 'price_1d_pct': round(latest_metrics.price_1d_change, 1) if latest_metrics.price_1d_change else None,
                 'price_7d_pct': round(latest_metrics.price_7d_change, 1) if latest_metrics.price_7d_change else None,
+                'price_30d_pct': round(latest_metrics.price_30d_change, 1) if latest_metrics.price_30d_change else None,
                 'tao_score': round(latest_metrics.tao_score, 1) if latest_metrics.tao_score else None,
                 'tao_score_rank_pct': latest_metrics.tao_score_rank_pct if hasattr(latest_metrics, 'tao_score_rank_pct') else None,
                 'category_subnet_count': category_stats.subnet_count if category_stats else None
@@ -136,6 +137,7 @@ def format_metrics_for_gpt(metrics: Dict[str, Any]) -> str:
         "buy_sell_ratio_24h": metrics.get('buy_sell_ratio_24h'),
         "price_1d_pct": metrics.get('price_1d_pct'),
         "price_7d_pct": metrics.get('price_7d_pct'),
+        "price_30d_pct": metrics.get('price_30d_pct'),
         "tao_score": metrics.get('tao_score'),
         "tao_score_rank_pct": metrics.get('tao_score_rank_pct'),
         "category_subnet_count": metrics.get('category_subnet_count')
@@ -388,8 +390,11 @@ def get_subnet_metrics_for_insight_v5(netuid: int) -> Dict[str, Any]:
                 'annual_infl': round(latest_metrics.emission_pct, 1) if latest_metrics.emission_pct else None,
                 'reserve_momentum': round(latest_metrics.reserve_momentum, 2) if latest_metrics.reserve_momentum else None,
                 'emission_progress': round(latest_metrics.alpha_emitted_pct, 1) if latest_metrics.alpha_emitted_pct else None,
+                'price_1d_pct': round(latest_metrics.price_1d_change, 1) if latest_metrics.price_1d_change else None,
+                'price_7d_pct': round(latest_metrics.price_7d_change, 1) if latest_metrics.price_7d_change else None,
+                'price_30d_pct': round(latest_metrics.price_30d_change, 1) if latest_metrics.price_30d_change else None,
                 'tao_score': round(latest_metrics.tao_score, 1) if latest_metrics.tao_score else None,
-                'momentum_rank_pct': latest_metrics.tao_score_rank_pct if hasattr(latest_metrics, 'tao_score_rank_pct') else None,
+                'momentum_rank_pct': latest_metrics.momentum_rank_pct if hasattr(latest_metrics, 'momentum_rank_pct') else None,
                 'stake_rank_pct': latest_metrics.stake_quality_rank_pct if hasattr(latest_metrics, 'stake_quality_rank_pct') else None
             }
             
@@ -435,6 +440,9 @@ def generate_insight_v5(netuid: int) -> str:
             f"annual_infl={metrics.get('annual_infl', 'n/a')}",
             f"reserve_momentum={metrics.get('reserve_momentum', 'n/a')}",
             f"emission_progress={metrics.get('emission_progress', 'n/a')}",
+            f"price_1d_pct={metrics.get('price_1d_pct', 'n/a')}",
+            f"price_7d_pct={metrics.get('price_7d_pct', 'n/a')}",
+            f"price_30d_pct={metrics.get('price_30d_pct', 'n/a')}",
             f"tao_score={metrics.get('tao_score', 'n/a')}",
             f"momentum_rank_pct={metrics.get('momentum_rank_pct', 'n/a')}",
             f"stake_rank_pct={metrics.get('stake_rank_pct', 'n/a')}"

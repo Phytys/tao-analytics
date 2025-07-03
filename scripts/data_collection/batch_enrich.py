@@ -33,6 +33,7 @@ import argparse
 import sys
 import json
 import signal
+from pathlib import Path
 from typing import List
 from enrich_with_openai import enrich_with_openai, save_enrichment
 from prepare_context import prepare_context_with_fallback, format_context, SubnetContext, get_all_netuids, compute_context_hash
@@ -205,6 +206,8 @@ def main():
     print(f"Failed: {failed}")
     print(f"Success rate: {successful/len(netuids)*100:.1f}%")
     print(f"Total processed (including previous runs): {len(processed_netuids)}")
+    
+
 
 if __name__ == "__main__":
     main() 
