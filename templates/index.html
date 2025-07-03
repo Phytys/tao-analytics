@@ -53,13 +53,14 @@
                 
                 <div class="nav-links" id="nav-links">
                     <a href="/dash/explorer" class="nav-link">Explorer</a>
+                    <a href="/dash/screener" class="nav-link">Screener</a>
+                    <a href="/about" class="nav-link">About</a>
                     {% if session.admin_authenticated %}
                     <a href="/admin/system-info" class="nav-link">System Info</a>
                     <a href="/admin/logout" class="nav-link">Logout</a>
                     {% else %}
                     <a href="/admin/login" class="nav-link">Admin Login</a>
                     {% endif %}
-                    <a href="/about" class="nav-link">About</a>
                 </div>
             </div>
         </nav>
@@ -109,12 +110,20 @@
                 </div>
                 {% endif %}
             </div>
-            <a href="/dash/explorer" class="cta-button">
-                <span>Explore Subnets</span>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M5 12h14M12 5l7 7-7 7"/>
-                </svg>
-            </a>
+            <div class="cta-buttons">
+                <a href="/dash/explorer" class="cta-button primary">
+                    <span>Explore Subnets</span>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                </a>
+                <a href="/dash/screener" class="cta-button secondary">
+                    <span>Screen Opportunities</span>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                </a>
+            </div>
             
             <!-- Network Highlights -->
             {% if data_available %}

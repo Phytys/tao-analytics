@@ -32,6 +32,7 @@
                 
                 <div class="nav-links" id="nav-links">
                     <a href="/dash/explorer" class="nav-link">Explorer</a>
+                    <a href="/dash/screener" class="nav-link">Screener</a>
                     <a href="/about" class="nav-link">About</a>
                     {% if session.admin_authenticated %}
                     <a href="/admin/system-info" class="nav-link">System Info</a>
@@ -49,31 +50,153 @@
                 Understanding the decentralized AI network
             </p>
             
-            <!-- Placeholder content -->
-            <div class="container mt-5">
-                <div class="row justify-content-center">
-                    <div class="col-md-8">
-                        <div class="card">
-                            <div class="card-body text-center">
-                                <h3>🚧 Coming Soon</h3>
-                                <p class="lead">
-                                    This page will provide a comprehensive introduction to Bittensor, 
-                                    explaining how the decentralized AI network works and why it matters.
-                                </p>
+            <!-- Main Content -->
+            <div class="about-content">
+                
+                <!-- What is Bittensor Section -->
+                <div class="about-card">
+                    <div class="about-card-header">
+                        <div class="about-icon">🤖</div>
+                        <h2>What is Bittensor?</h2>
+                    </div>
+                    <div class="about-card-body">
+                        <p>
+                            Bittensor is a decentralized network that incentivizes the development and deployment of AI models. 
+                            It creates a marketplace where AI developers can monetize their models while users can access a diverse range of AI services. 
+                            The network is powered by the TAO token, which serves as both a reward mechanism and governance token.
+                        </p>
+                        <p>
+                            Unlike traditional AI services that are controlled by a few large corporations, 
+                            Bittensor distributes AI capabilities across a global network of participants, 
+                            making AI more accessible, transparent, and resistant to censorship.
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- How Subnets Work Section -->
+                <div class="about-card">
+                    <div class="about-card-header">
+                        <div class="about-icon">🔗</div>
+                        <h2>How Do Subnets Work?</h2>
+                    </div>
+                    <div class="about-card-body">
+                        <p>
+                            Subnets are specialized networks within Bittensor that focus on specific AI tasks or domains. 
+                            Each subnet has its own set of validators and miners who compete to provide the best AI services.
+                        </p>
+                        <h4>Key Components:</h4>
+                        <ul class="about-list">
+                            <li><strong>Validators:</strong> Evaluate and rank the quality of AI responses from miners</li>
+                            <li><strong>Miners:</strong> Provide AI services and compete for rewards based on quality</li>
+                            <li><strong>Stake:</strong> TAO tokens locked by validators to ensure honest evaluation</li>
+                            <li><strong>Rewards:</strong> TAO tokens distributed based on performance and stake weight</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <!-- Validators and Miners Section -->
+                <div class="about-card">
+                    <div class="about-card-header">
+                        <div class="about-icon">⚖️</div>
+                        <h2>Validators vs Miners</h2>
+                    </div>
+                    <div class="about-card-body">
+                        <div class="about-comparison">
+                            <div class="comparison-item">
+                                <h4>Validators</h4>
                                 <p>
-                                    <strong>Planned for Sprint 1.5</strong><br>
-                                    • What is Bittensor?<br>
-                                    • How do subnets work?<br>
-                                    • The role of validators and miners<br>
-                                    • Why decentralized AI matters
+                                    Validators are the quality control mechanism of the network. 
+                                    They stake TAO tokens and evaluate the responses from miners. 
+                                    The more stake a validator has, the more influence they have on rewards.
                                 </p>
-                                <a href="/dash/explorer" class="btn btn-primary">
-                                    Explore Subnets Now
-                                </a>
+                            </div>
+                            <div class="comparison-item">
+                                <h4>Miners</h4>
+                                <p>
+                                    Miners provide the actual AI services. 
+                                    They run AI models and respond to user requests. 
+                                    Miners compete to provide the best responses and earn rewards.
+                                </p>
                             </div>
                         </div>
                     </div>
                 </div>
+                
+                <!-- Why Decentralized AI Matters Section -->
+                <div class="about-card">
+                    <div class="about-card-header">
+                        <div class="about-icon">🌍</div>
+                        <h2>Why Decentralized AI Matters</h2>
+                    </div>
+                    <div class="about-card-body">
+                        <h4>Key Benefits:</h4>
+                        <ul class="about-list">
+                            <li><strong>Censorship Resistance:</strong> No single entity can control or shut down the network</li>
+                            <li><strong>Diversity:</strong> Multiple AI models and approaches compete, leading to better results</li>
+                            <li><strong>Accessibility:</strong> Anyone can participate as a validator or miner</li>
+                            <li><strong>Transparency:</strong> All transactions and evaluations are recorded on the blockchain</li>
+                            <li><strong>Innovation:</strong> Open competition drives continuous improvement in AI capabilities</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <!-- How to Use TAO Analytics Section -->
+                <div class="about-card">
+                    <div class="about-card-header">
+                        <div class="about-icon">📊</div>
+                        <h2>How to Use TAO Analytics</h2>
+                    </div>
+                    <div class="about-card-body">
+                        <div class="usage-grid">
+                            <div class="usage-item">
+                                <h4>Explore Subnets</h4>
+                                <p>
+                                    Use the Subnet Explorer to browse all active subnets, 
+                                    view their performance metrics, and understand their capabilities.
+                                </p>
+                            </div>
+                            <div class="usage-item">
+                                <h4>Screen for Opportunities</h4>
+                                <p>
+                                    Use the Screener to filter subnets by market cap, TAO-Score, 
+                                    and other metrics to find investment opportunities.
+                                </p>
+                            </div>
+                            <div class="usage-item">
+                                <h4>Deep Dive Analysis</h4>
+                                <p>
+                                    Click on any subnet to see detailed analytics, 
+                                    AI-powered insights, and comprehensive performance data.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Call to Action -->
+                <div class="about-card cta-card">
+                    <div class="about-card-body text-center">
+                        <h3>Ready to Explore?</h3>
+                        <p>
+                            Start exploring the Bittensor network and discover the future of decentralized AI.
+                        </p>
+                        <div class="cta-buttons">
+                            <a href="/dash/explorer" class="cta-button primary">
+                                <span>Explore Subnets</span>
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                                </svg>
+                            </a>
+                            <a href="/dash/screener" class="cta-button secondary">
+                                <span>Try Screener</span>
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                                </svg>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                
             </div>
         </div>
     </div>

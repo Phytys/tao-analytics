@@ -201,7 +201,7 @@ def create_gpt_insight_panel(netuid: int) -> dbc.Card:
     return dbc.Card([
         dbc.CardHeader([
             html.H5("AI Analysis", className="mb-0"),
-            html.Small("Powered by GPT-4o", className="text-muted")
+            html.Small("Powered by GPT-4o (v5)", className="text-muted")
         ]),
         dbc.CardBody([
             html.Div(id="gpt-insight", children=[
@@ -784,7 +784,7 @@ def update_gpt_insight(search):
         if netuid is None:
             return "Invalid subnet ID"
         
-        # Get insight from service
+        # Get insight from service (use cache-aware function)
         insight = gpt_insight_service['get_insight'](netuid)
         return html.P(insight, className="mb-0", style={"whiteSpace": "pre-wrap"})
         
