@@ -6,6 +6,9 @@ from .db_utils import json_field, get_database_type
 from models import SubnetMeta, ScreenerRaw
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///tao.sqlite")
+# Fix Heroku postgres:// URLs to postgresql://
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, future=True)
 
