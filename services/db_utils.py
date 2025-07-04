@@ -50,11 +50,15 @@ def _postgres_json_extract(column: Column, key: str) -> Any:
     keys = key.split('.')
     result = column
     
-    for k in keys:
+    # Use -> for all keys except the last one
+    for i, k in enumerate(keys[:-1]):
         result = result.op('->')(k)
     
     # Use ->> for the final extraction to get text
-    return result.op('->>')(keys[-1])
+    if keys:
+        result = result.op('->>')(keys[-1])
+    
+    return result
 
 
 def get_database_type() -> str:
