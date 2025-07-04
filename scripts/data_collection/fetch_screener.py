@@ -8,7 +8,8 @@ from datetime import datetime
 # Add the parent directory to Python path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from config import TAO_ENDPOINT, TAO_KEY
-from models import Session, ScreenerRaw, SubnetMeta
+from models import ScreenerRaw, SubnetMeta
+from services.db import get_db
 from services.cache import clear_all_caches
 
 def main():
@@ -17,7 +18,7 @@ def main():
     r.raise_for_status()
     screener = r.json()
 
-    sess = Session()
+    sess = get_db()
     current_time = datetime.utcnow()
     
     for row in screener:
