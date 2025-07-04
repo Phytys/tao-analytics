@@ -535,25 +535,101 @@ python scripts/auto_fallback_enrich.py --max-subnets 10
 ## Deployment
 
 ### **Heroku Deployment**
-The app is configured for Heroku deployment with:
-- **Procfile**: Gunicorn configuration
-- **runtime.txt**: Python version specification
-- **requirements.txt**: Dependencies
 
-### **Environment Variables**
-Set the following environment variables in production:
+The app is configured for Heroku deployment with automatic database switching between SQLite (development) and PostgreSQL (production).
+
+#### **Deployment Configuration**
+- **Procfile**: Gunicorn configuration for production server
+- **runtime.txt**: Python version specification (3.10.14)
+- **requirements.txt**: Production dependencies
+- **config.py**: Automatic database URL detection
+
+#### **Environment Variables**
+Set the following environment variables in Heroku:
 ```bash
+# Required API Keys
 TAO_APP_API_KEY=your_tao_app_api_key
 COINGECKO_API_KEY=your_coingecko_api_key
 OPENAI_API_KEY=your_openai_api_key
+
+# Production Settings
 SECRET_KEY=your_production_secret_key
 FLASK_ENV=production
+
+# Database (automatically set by Heroku)
+DATABASE_URL=postgresql://...  # Auto-provided by Heroku Postgres addon
+```
+
+#### **Database Architecture**
+- **Development**: SQLite database (`tao.sqlite`) for local development
+- **Production**: PostgreSQL database (auto-provided by Heroku Postgres addon)
+- **Automatic Switching**: The app automatically detects `DATABASE_URL` environment variable and switches between SQLite and PostgreSQL
+
+### **Data Collection & Automation on Heroku**
+
+#### **Key Insight: Local Scripts → Heroku Database**
+For optimal performance and cost management, run data collection scripts locally while targeting the Heroku database:
+
+```bash
+# Set Heroku database URL locally for data collection
+export HEROKU_DATABASE_URL="postgresql://username:password@host:port/database"
+
+# Run cron job locally targeting Heroku database
+DATABASE_URL=$HEROKU_DATABASE_URL python scripts/cron_fetch.py --once nightly
+
+# Run enrichment locally targeting Heroku database  
+DATABASE_URL=$HEROKU_DATABASE_URL python scripts/data_collection/batch_enrich.py --range 1 128
+```
+
+#### **Why This Approach?**
+- **Cost Effective**: Avoids Heroku dyno costs for heavy data collection
+- **Performance**: Local execution is faster than Heroku's limited resources
+- **Reliability**: Avoids Heroku's 30-minute timeout limits for long-running scripts
+- **Connection Limits**: Bypasses Heroku Postgres connection limits (20 on basic plan)
+
+#### **Heroku Scheduler Setup**
+For lightweight, automated tasks on Heroku:
+
+1. **Add Heroku Scheduler Addon**:
+   ```bash
+   heroku addons:create scheduler:standard
+   ```
+
+2. **Configure Scheduled Jobs**:
+   ```bash
+   # Open scheduler dashboard
+   heroku addons:open scheduler
+   ```
+
+3. **Recommended Schedule**:
+   - **Daily**: `python scripts/cron_fetch.py --once daily` (lightweight collection)
+   - **Hourly**: `python scripts/cron_fetch.py --once hourly` (market data updates)
+
+#### **Database Connection Management**
+- **Connection Pooling**: Scripts are optimized to reuse database connections
+- **Connection Limits**: Heroku Postgres has connection limits by plan tier:
+  - Basic: 20 connections
+  - Standard: 120 connections  
+  - Premium: 500+ connections
+- **Best Practice**: Use single engine/session per script to avoid connection exhaustion
+
+#### **Production Data Workflow**
+```bash
+# 1. Heavy Data Collection (Run Locally)
+DATABASE_URL=$HEROKU_DATABASE_URL python scripts/cron_fetch.py --once nightly
+
+# 2. AI Enrichment (Run Locally)  
+DATABASE_URL=$HEROKU_DATABASE_URL python scripts/data_collection/batch_enrich.py --range 1 128
+
+# 3. Lightweight Updates (Heroku Scheduler)
+# Configured via Heroku Scheduler addon for hourly/daily updates
 ```
 
 ### **Database Management**
 - **Development**: SQLite database (`tao.sqlite`)
-- **Production**: Consider PostgreSQL for scalability
+- **Production**: PostgreSQL database (Heroku Postgres addon)
 - **Backups**: Regular database exports via `export_db_table.py`
+- **Migrations**: Automated schema updates via migration scripts
 
 ---
 
