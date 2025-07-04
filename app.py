@@ -45,7 +45,7 @@ def create_app():
                  'img-src': ["'self'", "data:", "https:"],
                  'font-src': ["'self'", "https://cdn.jsdelivr.net"],
              },
-             force_https=False)  # Set to True in production
+             force_https=os.getenv('FORCE_HTTPS', 'false').lower() == 'true')
 
     # Rate limiting
     limiter = Limiter(
