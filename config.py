@@ -6,9 +6,39 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).parent
 load_dotenv(BASE_DIR / ".env")
 
+# Environment variable validation
+def validate_env_vars():
+    """Validate required environment variables."""
+    required_vars = {
+        'SECRET_KEY': 'Flask secret key for session security',
+        'TAO_APP_API_KEY': 'TAO.app API key for data fetching',
+        'OPENAI_API_KEY': 'OpenAI API key for enrichment'
+    }
+    
+    missing_vars = []
+    for var, description in required_vars.items():
+        if not os.getenv(var):
+            missing_vars.append(f"{var} ({description})")
+    
+    if missing_vars:
+        print("WARNING: Missing environment variables:")
+        for var in missing_vars:
+            print(f"  - {var}")
+        print("Some features may not work correctly.")
+    
+    return len(missing_vars) == 0
+
+# Validate environment on import
+validate_env_vars()
+
 TAO_KEY = os.getenv("TAO_APP_API_KEY")
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 COINGECKO_API_KEY = os.getenv('COINGECKO_API_KEY')
+
+# Security: Ensure secret key is strong
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY or len(SECRET_KEY) < 32:
+    print("WARNING: SECRET_KEY should be at least 32 characters long for security")
 
 TAO_ENDPOINT = "https://api.tao.app/api/beta/subnet_screener"
 TAO_APP_BASE_URL = "https://api.tao.app/api/beta"  # Base URL for TAO.app API endpoints

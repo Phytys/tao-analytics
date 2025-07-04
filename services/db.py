@@ -1,4 +1,5 @@
 import os, json, pandas as pd
+import re
 from sqlalchemy import create_engine, text, select, func, String
 from sqlalchemy.orm import sessionmaker
 from .db_utils import json_field, get_database_type
@@ -7,6 +8,16 @@ from models import SubnetMeta, ScreenerRaw
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///tao.sqlite")
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, future=True)
+
+def sanitize_search_input(search_text):
+    """Sanitize search input to prevent SQL injection."""
+    if not search_text:
+        return ""
+    
+    # Remove potentially dangerous characters
+    sanitized = re.sub(r'[;\'"\\]', '', search_text)
+    # Limit length
+    return sanitized[:100]
 
 def get_db():
     """Get database session."""
@@ -35,6 +46,10 @@ def get_base_query():
 def load_subnet_frame(category="All", search=""):
     """Return pandas DF filtered by category & search text."""
     query = get_base_query()
+    
+    # Sanitize inputs
+    category = sanitize_search_input(category) if category else "All"
+    search = sanitize_search_input(search) if search else ""
     
     # Add filters
     if category != "All":

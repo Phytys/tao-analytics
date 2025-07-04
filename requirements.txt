@@ -22,3 +22,7 @@ gunicorn
 psycopg2-binary>=2.9 
 coingecko
 schedule                   # for automated data collection
+
+# --- security ---
+Flask-Talisman>=1.1.0     # security headers
+Flask-Limiter>=3.5.0      # rate limiting

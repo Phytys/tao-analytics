@@ -6,6 +6,10 @@ import os
 import logging
 import socket
 from datetime import datetime
+from flask_talisman import Talisman
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +22,13 @@ def check_port_availability(host, port):
     except OSError:
         return False
 
+def validate_input(text, max_length=100):
+    """Basic input validation."""
+    if not text or len(text) > max_length:
+        return False
+    # Allow alphanumeric, spaces, and common punctuation
+    return bool(re.match(r'^[a-zA-Z0-9\s\-_.,!?@#$%&*()]+$', text))
+
 def create_app():
     logger.info("Initializing Flask application")
     
@@ -25,8 +36,28 @@ def create_app():
     server.secret_key = os.getenv('SECRET_KEY', 'tao-analytics-secret-key-2024')
     server.config["JSONIFY_PRETTYPRINT_REGULAR"] = False
 
+    # Security headers
+    Talisman(server, 
+             content_security_policy={
+                 'default-src': ["'self'"],
+                 'script-src': ["'self'", "'unsafe-inline'", "https://cdn.plot.ly"],
+                 'style-src': ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+                 'img-src': ["'self'", "data:", "https:"],
+                 'font-src': ["'self'", "https://cdn.jsdelivr.net"],
+             },
+             force_https=False)  # Set to True in production
+
+    # Rate limiting
+    limiter = Limiter(
+        get_remote_address,
+        app=server,
+        default_limits=["1000 per day", "200 per hour"],
+        storage_uri="memory://"
+    )
+
     # Tesla-inspired landing page
     @server.route("/")
+    @limiter.limit("100 per hour")
     def index():
         """Landing page."""
         logger.info(f"Landing page accessed by {request.remote_addr}")
@@ -44,17 +75,26 @@ def create_app():
         return render_template("index.html", network_data=network_data, data_available=data_available)
 
     @server.route("/about")
+    @limiter.limit("100 per hour")
     def about():
         """About page."""
         logger.info(f"About page accessed by {request.remote_addr}")
         return render_template("about.html")
 
     @server.route('/admin/login', methods=['GET', 'POST'])
+    @limiter.limit("5 per minute")
     def admin_login():
         """Admin login page."""
         if request.method == 'POST':
-            username = request.form.get('username')
-            password = request.form.get('password')
+            username = request.form.get('username', '').strip()
+            password = request.form.get('password', '')
+            
+            # Input validation
+            if not validate_input(username, 50) or not password:
+                logger.warning(f"Invalid input in admin login from {request.remote_addr}")
+                flash('Invalid input', 'error')
+                return render_template('admin_login.html', error='Invalid input')
+            
             logger.info(f"Admin login attempt from {request.remote_addr} for user: {username}")
             
             if verify_admin_credentials(username, password):
@@ -70,6 +110,7 @@ def create_app():
         return render_template('admin_login.html')
 
     @server.route('/admin/logout')
+    @limiter.limit("10 per minute")
     def admin_logout():
         """Admin logout."""
         logger.info(f"Admin logout from {request.remote_addr}")
@@ -77,6 +118,7 @@ def create_app():
         return redirect('/')
 
     @server.route('/admin/check-auth')
+    @limiter.limit("30 per minute")
     def admin_check_auth():
         """Check if user is authenticated as admin."""
         is_authenticated = session.get('admin_authenticated', False)
@@ -85,6 +127,7 @@ def create_app():
 
     @server.route('/admin/system-info')
     @require_admin
+    @limiter.limit("30 per minute")
     def admin_system_info():
         """Admin system info page (redirects to Dash)."""
         logger.info(f"Admin system info accessed by {request.remote_addr}")
@@ -97,6 +140,32 @@ def create_app():
             logger.warning(f"Unauthorized access attempt to system info from {request.remote_addr}")
             return redirect('/admin/login')
 
+    @server.before_request
+    def log_suspicious_activity():
+        """Log potentially suspicious requests for security monitoring."""
+        # Log requests with suspicious patterns
+        suspicious_patterns = [
+            '/admin', '/api', '/config', '/.env', '/wp-admin', '/phpmyadmin',
+            'union', 'select', 'insert', 'update', 'delete', 'drop', 'exec'
+        ]
+        
+        user_agent = request.headers.get('User-Agent', '').lower()
+        path = request.path.lower()
+        query = request.query_string.decode('utf-8').lower()
+        
+        # Check for suspicious patterns
+        for pattern in suspicious_patterns:
+            if pattern in path or pattern in query or pattern in user_agent:
+                logger.warning(f"Suspicious request detected from {request.remote_addr}: "
+                             f"path={request.path}, query={query}, user_agent={user_agent[:100]}")
+                break
+        
+        # Log admin access attempts
+        if '/admin' in path:
+            logger.info(f"Admin access attempt from {request.remote_addr}: {request.path}")
+
+
+
     @server.errorhandler(404)
     def not_found_error(error):
         logger.warning(f"404 error for {request.path} from {request.remote_addr}")
@@ -106,6 +175,11 @@ def create_app():
     def internal_error(error):
         logger.error(f"500 error for {request.path} from {request.remote_addr}: {error}")
         return "Internal server error", 500
+
+    @server.errorhandler(429)
+    def ratelimit_handler(error):
+        logger.warning(f"Rate limit exceeded from {request.remote_addr}")
+        return "Too many requests. Please try again later.", 429
 
     logger.info("Creating Dash application")
     create_dash(server)      # mounts at /dash/
