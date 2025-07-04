@@ -31,11 +31,15 @@ import numpy as np
 from services.bittensor.async_utils import run_blocking
 
 # Configure logging
+import os
+# Ensure logs directory exists
+Path('logs').mkdir(exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('logs/cron_fetch.log'),
+        logging.FileHandler('logs/cron_fetch.log') if os.path.exists('logs') else logging.NullHandler(),
         logging.StreamHandler()
     ]
 )
@@ -75,8 +79,11 @@ class CronFetch:
         self.quota_guard = QuotaGuard()
         self.session = get_db()
         
-        # Ensure logs directory exists
-        Path('logs').mkdir(exist_ok=True)
+        # Ensure logs directory exists (only if we can write to it)
+        try:
+            Path('logs').mkdir(exist_ok=True)
+        except Exception:
+            pass  # Ignore if we can't create logs directory
     
     def fetch_subnet_data(self):
         """Fetch subnet screener data with quota enforcement."""
