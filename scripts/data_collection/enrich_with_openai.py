@@ -186,9 +186,9 @@ CONTEXT:
 def enrich_with_openai(context: SubnetContext, force_model_only: bool = False) -> Optional[Dict[str, Any]]:
     """Call OpenAI API to analyze the subnet."""
     
-    # Pre-flight guard: skip if context is too thin, unless forced
-    if not force_model_only and context.token_count < MIN_CONTEXT_TOKENS:
-        print(f"⚠️  WARNING: Subnet {context.netuid} has insufficient context ({context.token_count} tokens < {MIN_CONTEXT_TOKENS})")
+    # Pre-flight guard: skip if context is too thin AND no subnet name, unless forced
+    if not force_model_only and context.token_count < MIN_CONTEXT_TOKENS and not context.subnet_name:
+        print(f"⚠️  WARNING: Subnet {context.netuid} has insufficient context ({context.token_count} tokens < {MIN_CONTEXT_TOKENS}) and no name")
         print("Skipping LLM call to avoid wasting money on poor results")
         return None
     
@@ -259,8 +259,28 @@ def save_enrichment(netuid: int, enrichment: Dict[str, Any], context: SubnetCont
         enriched.what_it_does = enrichment.get('what_it_does')
         enriched.primary_use_case = enrichment.get('primary_use_case')
         enriched.key_technical_features = enrichment.get('key_technical_features')
-        enriched.primary_category = enrichment.get('primary_category')
-        enriched.category_suggestion = enrichment.get('category_suggestion')
+        # Handle category assignment - assign "Unknown" if LLM returned empty category
+        primary_category = enrichment.get('primary_category')
+        if not primary_category or (isinstance(primary_category, str) and primary_category.strip() == ""):
+            primary_category = "Unknown"
+            print("LLM did not assign a category, assigning 'Unknown'")
+        enriched.primary_category = primary_category
+        
+        # Handle category suggestion and add to description if LLM couldn't categorize
+        category_suggestion = enrichment.get('category_suggestion')
+        if category_suggestion and isinstance(category_suggestion, str) and category_suggestion.strip():
+            enriched.category_suggestion = category_suggestion.strip()
+            
+            # If LLM couldn't categorize but provided a suggestion, add it to "What it does"
+            if primary_category == "Unknown" and enrichment.get('what_it_does'):
+                what_it_does = enrichment.get('what_it_does')
+                if what_it_does and isinstance(what_it_does, str):
+                    suggestion_text = f" [AI SUGGESTED CATEGORY: {category_suggestion.strip()}]"
+                    if not what_it_does.endswith(suggestion_text):
+                        enriched.what_it_does = what_it_does + suggestion_text
+                        print(f"Added category suggestion to description: '{category_suggestion.strip()}'")
+        else:
+            enriched.category_suggestion = enrichment.get('category_suggestion')
         enriched.secondary_tags = ','.join(enrichment.get('secondary_tags', []))
         enriched.confidence = enrichment.get('confidence')
         enriched.privacy_security_flag = enrichment.get('privacy_security_flag')
@@ -291,6 +311,50 @@ def save_enrichment(netuid: int, enrichment: Dict[str, Any], context: SubnetCont
                 if latest_metrics.category != enriched.primary_category:
                     print(f"Syncing category: '{latest_metrics.category}' -> '{enriched.primary_category}'")
                     latest_metrics.category = enriched.primary_category
+                    session.commit()
+                    print(f"✅ Category synced to MetricsSnap for subnet {netuid}")
+                else:
+                    print(f"Category already in sync for subnet {netuid}")
+            else:
+                print(f"No metrics data found for subnet {netuid}, category sync skipped")
+                
+        except Exception as e:
+            print(f"⚠️  Error syncing category for subnet {netuid}: {e}")
+            print("GPT insights may use outdated category data")
+
+def save_unknown_category(netuid: int, context: SubnetContext) -> None:
+    """Save 'Unknown' category when LLM is not called due to insufficient context."""
+    engine = create_engine(DB_URL)
+    with Session(engine) as session:
+        # Get or create enriched record
+        enriched = session.get(SubnetMeta, netuid)
+        if not enriched:
+            enriched = SubnetMeta(netuid=netuid)
+            session.add(enriched)
+        
+        # Assign "Unknown" category since LLM could not be called
+        enriched.primary_category = "Unknown"
+        enriched.last_enriched_at = datetime.now()
+        
+        # Save context hash
+        enriched.context_hash = compute_context_hash(context)
+        enriched.context_tokens = context.token_count
+        
+        session.commit()
+        print(f"✅ 'Unknown' category saved for subnet {netuid} (LLM not called due to insufficient context)")
+        
+        # Sync category to MetricsSnap table for GPT insights
+        try:
+            from models import MetricsSnap
+            
+            # Get the latest metrics snapshot for this subnet
+            latest_metrics = session.query(MetricsSnap).filter_by(netuid=netuid)\
+                .order_by(MetricsSnap.timestamp.desc()).first()
+            
+            if latest_metrics:
+                if latest_metrics.category != "Unknown":
+                    print(f"Syncing category: '{latest_metrics.category}' -> 'Unknown'")
+                    latest_metrics.category = "Unknown"
                     session.commit()
                     print(f"✅ Category synced to MetricsSnap for subnet {netuid}")
                 else:
@@ -364,6 +428,11 @@ def main():
             
             if not args.no_save:
                 save_enrichment(netuid, enrichment, context)
+        else:
+            # LLM was not called due to insufficient context - assign "Unknown" category
+            print("\nLLM not called due to insufficient context - assigning 'Unknown' category")
+            if not args.no_save:
+                save_unknown_category(netuid, context)
 
 if __name__ == "__main__":
     main() 

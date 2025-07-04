@@ -70,11 +70,6 @@ layout = dbc.Container(
         # --- Tesla-inspired header ---
         html.Div([
             html.H1("Bittensor Explorer", className="dashboard-title"),
-            html.A(
-                "Test Subnet Detail Page", 
-                href="/dash/subnet-detail", 
-                className="btn btn-outline-secondary btn-sm mt-2"
-            )
         ], className="dashboard-header"),
         
         # --- Quick Start section (collapsible) ---
