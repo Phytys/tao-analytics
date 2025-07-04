@@ -43,12 +43,13 @@ if not SECRET_KEY or len(SECRET_KEY) < 32:
 TAO_ENDPOINT = "https://api.tao.app/api/beta/subnet_screener"
 TAO_APP_BASE_URL = "https://api.tao.app/api/beta"  # Base URL for TAO.app API endpoints
 
-# Database configuration - use DATABASE_URL from environment or default to SQLite
+# Database configuration - use HEROKU_DATABASE_URL if set, else DATABASE_URL, else fallback to SQLite
+HEROKU_DATABASE_URL = os.getenv("HEROKU_DATABASE_URL")
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'tao.sqlite'}")
-# Fix Heroku postgres:// URLs to postgresql://
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-DB_URL = DATABASE_URL
+ACTIVE_DATABASE_URL = HEROKU_DATABASE_URL or DATABASE_URL
+if ACTIVE_DATABASE_URL.startswith("postgres://"):
+    ACTIVE_DATABASE_URL = ACTIVE_DATABASE_URL.replace("postgres://", "postgresql://", 1)
+DB_URL = ACTIVE_DATABASE_URL
 OPENAI_MODEL = "gpt-4o"  # Optimal balance of quality and cost for enrichment
 
 # Granular primary categories for power-user analytics
