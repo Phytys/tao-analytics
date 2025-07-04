@@ -4,7 +4,7 @@ Database utility functions for TAO Analytics.
 This module provides database-agnostic utilities that work with both SQLite and Postgres.
 """
 
-from sqlalchemy import func, text, Column
+from sqlalchemy import func, text, Column, Float
 from typing import Any
 
 
@@ -57,6 +57,9 @@ def _postgres_json_extract(column: Column, key: str) -> Any:
     # Use ->> for the final extraction to get text
     if keys:
         result = result.op('->>')(keys[-1])
+        # Cast to numeric for numeric fields to avoid COALESCE type mismatch
+        if key in ['market_cap_tao', 'net_volume_tao_24h', 'price_tao', 'fdv_tao', 'total_stake_tao', 'tao_in', 'buy_volume_tao_1d']:
+            result = func.cast(result, Float)
     
     return result
 
