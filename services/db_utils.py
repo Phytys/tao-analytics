@@ -26,8 +26,8 @@ def json_field(column: Column, key: str) -> Any:
         # Extract nested key
         json_field(SubnetMeta.raw_json, 'user.profile.name')
     """
-    # Get database type from services.db engine (same as the app uses)
-    from services.db import engine
+    # Get database type from models engine
+    from models import engine
     dialect = engine.dialect.name
     
     if dialect == 'sqlite':
@@ -68,7 +68,7 @@ def get_database_type() -> str:
     Returns:
         Database type as string
     """
-    from services.db import engine
+    from models import engine
     return engine.dialect.name
 
 

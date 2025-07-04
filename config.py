@@ -43,8 +43,9 @@ if not SECRET_KEY or len(SECRET_KEY) < 32:
 TAO_ENDPOINT = "https://api.tao.app/api/beta/subnet_screener"
 TAO_APP_BASE_URL = "https://api.tao.app/api/beta"  # Base URL for TAO.app API endpoints
 
-DB_PATH = BASE_DIR / "tao.sqlite"
-DB_URL = f"sqlite:///{DB_PATH}"
+# Database configuration - use DATABASE_URL from environment or default to SQLite
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'tao.sqlite'}")
+DB_URL = DATABASE_URL
 OPENAI_MODEL = "gpt-4o"  # Optimal balance of quality and cost for enrichment
 
 # Granular primary categories for power-user analytics
