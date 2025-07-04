@@ -5,11 +5,22 @@ from sqlalchemy.orm import sessionmaker
 from .db_utils import json_field, get_database_type
 from models import SubnetMeta, ScreenerRaw
 
+# Use HEROKU_DATABASE_URL for scripts that need to write to Heroku
+# Use DATABASE_URL for the main app (defaults to SQLite for development)
+HEROKU_DATABASE_URL = os.getenv("HEROKU_DATABASE_URL")
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///tao.sqlite")
+
+# For data collection scripts, prefer Heroku database if available
+if HEROKU_DATABASE_URL:
+    ACTIVE_DATABASE_URL = HEROKU_DATABASE_URL
+else:
+    ACTIVE_DATABASE_URL = DATABASE_URL
+
 # Fix Heroku postgres:// URLs to postgresql://
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
+if ACTIVE_DATABASE_URL.startswith("postgres://"):
+    ACTIVE_DATABASE_URL = ACTIVE_DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+engine = create_engine(ACTIVE_DATABASE_URL, pool_pre_ping=True, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, future=True)
 
 def sanitize_search_input(search_text):

@@ -305,10 +305,9 @@ class CronFetch:
                     subnet_ids = all_subnet_ids[:limit]
                     logger.info(f"Limited to {len(subnet_ids)} subnets for testing: {subnet_ids}")
                 else:
-                    # Process in batches to avoid memory issues on Heroku
-                    batch_size = 32  # Process 32 subnets at a time
-                    subnet_ids = all_subnet_ids[:batch_size]
-                    logger.info(f"Processing {len(subnet_ids)} subnets in batch (total available: {len(all_subnet_ids)})")
+                    # Process all subnets for maximum data collection
+                    subnet_ids = all_subnet_ids
+                    logger.info(f"Processing all {len(subnet_ids)} subnets")
                 
                 logger.info(f"Total subnets available: {len(all_subnet_ids)}")
                 
@@ -384,7 +383,7 @@ class CronFetch:
                 max_workers = 4
                 logger.info("FAST_METRICS_TEST mode: Using 4 workers with lite metagraphs")
             else:
-                max_workers = 4  # Reduced from 16 to avoid memory issues on Heroku
+                max_workers = 16  # Back to full speed for local execution
                 logger.info(f"Production mode: Using {max_workers} workers with full metagraphs")
             
             try:
