@@ -45,6 +45,9 @@ TAO_APP_BASE_URL = "https://api.tao.app/api/beta"  # Base URL for TAO.app API en
 
 # Database configuration - use DATABASE_URL from environment or default to SQLite
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'tao.sqlite'}")
+# Fix Heroku postgres:// URLs to postgresql://
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 DB_URL = DATABASE_URL
 OPENAI_MODEL = "gpt-4o"  # Optimal balance of quality and cost for enrichment
 
