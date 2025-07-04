@@ -3,10 +3,9 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
 from datetime import datetime
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 from models import CoinGeckoPrice
-from config import DB_URL, COINGECKO_API_KEY
+from config import COINGECKO_API_KEY
+from services.db import get_db
 from services.cache import clear_all_caches
 import coingecko
 
@@ -38,9 +37,7 @@ def fetch_tao_data():
     return float(price_usd), float(market_cap_usd)
 
 def save_data_to_db(price_usd, market_cap_usd):
-    engine = create_engine(DB_URL)
-    Session = sessionmaker(bind=engine)
-    session = Session()
+    session = get_db()
     try:
         price_entry = CoinGeckoPrice(
             price_usd=price_usd, 
