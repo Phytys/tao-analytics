@@ -62,6 +62,9 @@ from parameter_settings import (
 # Initialize OpenAI client
 client = OpenAI(api_key=OPENAI_KEY)
 
+# Create the engine once at the top
+engine = create_engine(DB_URL)
+
 def build_prompt(context: SubnetContext, mode: str) -> str:
     """Build the prompt based on context availability and mode."""
     
@@ -246,7 +249,6 @@ def enrich_with_openai(context: SubnetContext, force_model_only: bool = False) -
 
 def save_enrichment(netuid: int, enrichment: Dict[str, Any], context: SubnetContext) -> None:
     """Save enrichment results to database."""
-    engine = create_engine(DB_URL)
     with Session(engine) as session:
         # Get or create enriched record
         enriched = session.get(SubnetMeta, netuid)
@@ -324,7 +326,6 @@ def save_enrichment(netuid: int, enrichment: Dict[str, Any], context: SubnetCont
 
 def save_unknown_category(netuid: int, context: SubnetContext) -> None:
     """Save 'Unknown' category when LLM is not called due to insufficient context."""
-    engine = create_engine(DB_URL)
     with Session(engine) as session:
         # Get or create enriched record
         enriched = session.get(SubnetMeta, netuid)
@@ -400,7 +401,6 @@ def main():
                 continue
         
         # Check if context has changed
-        engine = create_engine(DB_URL)
         with Session(engine) as session:
             meta = session.get(SubnetMeta, netuid)
             current_hash = compute_context_hash(context)

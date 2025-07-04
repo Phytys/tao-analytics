@@ -49,6 +49,9 @@ from parameter_settings import DEFAULT_API_DELAY, PROGRESS_SAVE_FREQUENCY, MIN_C
 processed_netuids = set()
 interrupted = False
 
+# Create the engine once at the top
+engine = create_engine(DB_URL)
+
 def signal_handler(signum, frame):
     """Handle SIGINT gracefully."""
     global interrupted
@@ -87,12 +90,11 @@ def process_subnet(netuid: int, force: bool = False) -> bool:
             return False
         
         # Check if context has changed (hash-based caching)
-        engine = create_engine(DB_URL)
         with Session(engine) as session:
             meta = session.get(SubnetMeta, netuid)
             current_hash = compute_context_hash(context)
             print(f"Computed context hash: {current_hash}")
-            if meta and meta.context_hash:
+            if isinstance(meta, SubnetMeta) and meta.context_hash is not None:
                 print(f"Stored context hash:   {meta.context_hash}")
                 if current_hash == meta.context_hash and not force:
                     print(f"Context unchanged for subnet {netuid}, skipping enrichment")
