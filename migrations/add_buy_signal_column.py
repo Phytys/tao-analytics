@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Migration to add buy_signal column to metrics_snap table.
 """
@@ -6,25 +7,40 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy import create_engine, text
-from config import DB_URL
+from services.db import get_db
+from sqlalchemy import text
 
 def migrate():
     """Add buy_signal column to metrics_snap table."""
-    engine = create_engine(DB_URL)
+    print("Adding buy_signal column to metrics_snap table...")
     
-    with engine.connect() as conn:
-        # Check if column already exists
-        result = conn.execute(text("PRAGMA table_info(metrics_snap)"))
-        columns = [row[1] for row in result.fetchall()]
-        
-        if 'buy_signal' not in columns:
-            # Add buy_signal column
-            conn.execute(text("ALTER TABLE metrics_snap ADD COLUMN buy_signal INTEGER"))
-            conn.commit()
-            print("Added buy_signal column to metrics_snap table")
-        else:
-            print("buy_signal column already exists in metrics_snap table")
+    try:
+        with get_db() as session:
+            # Check if column already exists (PostgreSQL syntax)
+            result = session.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'metrics_snap' 
+                AND column_name = 'buy_signal'
+            """))
+            
+            if result.fetchone():
+                print("✓ buy_signal column already exists")
+                return True
+            
+            # Add the column
+            session.execute(text("""
+                ALTER TABLE metrics_snap 
+                ADD COLUMN buy_signal INTEGER
+            """))
+            
+            session.commit()
+            print("✓ Successfully added buy_signal column to metrics_snap table")
+            return True
+            
+    except Exception as e:
+        print(f"❌ Error adding buy_signal column: {e}")
+        return False
 
 if __name__ == "__main__":
     migrate() 

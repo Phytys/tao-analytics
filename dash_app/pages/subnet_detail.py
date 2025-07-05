@@ -793,6 +793,18 @@ def update_gpt_insight(search):
         
         # Get insight from service (use cache-aware function)
         insight = gpt_insight_service['get_insight'](netuid)
+        
+        # Extract and save buy signal to database
+        from services.gpt_insight import extract_buy_signal_from_insight
+        buy_signal = extract_buy_signal_from_insight(insight)
+        if buy_signal is not None:
+            with get_db() as session:
+                snap = session.query(MetricsSnap).filter_by(netuid=netuid).order_by(MetricsSnap.timestamp.desc()).first()
+                if snap:
+                    snap.buy_signal = buy_signal
+                    session.commit()
+                    logger.info(f"Saved buy signal {buy_signal}/5 for subnet {netuid}")
+        
         return html.P(insight, className="mb-0", style={"whiteSpace": "pre-wrap"})
         
     except Exception as e:

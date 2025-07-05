@@ -29,6 +29,22 @@ latest_ts = df['metrics_timestamp'].max() if 'metrics_timestamp' in df.columns e
 from services.gpt_insight import get_buy_signal_for_subnet
 df['buy_signal'] = df['netuid'].apply(get_buy_signal_for_subnet)
 
+# Function to reload data with latest buy signals
+def reload_data_with_buy_signals():
+    """Reload screener data with latest buy signals from database."""
+    fresh_df = load_screener_frame()
+    fresh_df['buy_signal'] = fresh_df['netuid'].apply(get_buy_signal_for_subnet)
+    
+    # Calculate market_cap_musd if market_cap_tao exists
+    if 'market_cap_tao' in fresh_df.columns:
+        fresh_df['market_cap_usd'] = fresh_df['market_cap_tao'] * tao_price_usd
+        fresh_df['market_cap_usd'] = fresh_df['market_cap_usd'].fillna(0)
+        fresh_df.loc[fresh_df['market_cap_usd'] < 0, 'market_cap_usd'] = 0
+        # Convert to millions USD for display
+        fresh_df['market_cap_musd'] = fresh_df['market_cap_usd'] / 1_000_000
+    
+    return fresh_df
+
 # Add market_cap_usd column (in millions)
 if 'market_cap_tao' in df.columns:
     df['market_cap_usd'] = df['market_cap_tao'] * tao_price_usd
@@ -267,7 +283,7 @@ def create_buy_signal_analysis():
             ticktext=['No Signal', '1 (Avoid)', '2 (Weak)', '3 (Neutral)', '4 (Good)', '5 (Strong)']
         )
     )
-    
+
     return fig
 
 # Create the additional charts
@@ -343,6 +359,17 @@ layout = html.Div([
             ], className="mt-2")
         ]),
         dbc.CardBody([
+            # Controls row
+            dbc.Row([
+                dbc.Col([
+                    dbc.Switch(
+                        id="show-netuid-labels",
+                        label="Show NetUID Labels",
+                        value=False,
+                        className="mb-3"
+                    )
+                ], width=12)
+            ]),
             # Buy Signal Chart
             dcc.Graph(
                 id="buy-signal-analysis",
@@ -702,10 +729,14 @@ def update_stake_quality_analysis(category, score_all, score_high, score_medium,
     Input("score-high", "n_clicks"),
     Input("score-medium", "n_clicks"),
     Input("mcap-slider", "value"),
-    Input("buy-signal-refresh", "data")
+    Input("buy-signal-refresh", "data"),
+    Input("show-netuid-labels", "value")
 )
-def update_buy_signal_analysis(category, score_all, score_high, score_medium, mcap_range, _):
+def update_buy_signal_analysis(category, score_all, score_high, score_medium, mcap_range, _, show_labels):
     """Update buy signal analysis chart based on filters."""
+    # Always reload fresh data from database to get latest buy signals
+    fresh_df = reload_data_with_buy_signals()
+    
     # Apply same filtering logic
     ctx = dash.callback_context
     score_filter = "All"
@@ -717,9 +748,9 @@ def update_buy_signal_analysis(category, score_all, score_high, score_medium, mc
             score_filter = "≥40"
     
     if category == "All" or category is None:
-        filtered_df = df
+        filtered_df = fresh_df
     else:
-        filtered_df = df[df['primary_category'] == category]
+        filtered_df = fresh_df[fresh_df['primary_category'] == category]
     
     if score_filter == "≥70":
         filtered_df = filtered_df[filtered_df['tao_score'] >= 70]
@@ -823,7 +854,22 @@ def update_buy_signal_analysis(category, score_all, score_high, score_medium, mc
             ticktext=['No Signal', '1 (Avoid)', '2 (Weak)', '3 (Neutral)', '4 (Good)', '5 (Strong)']
         )
     )
-    
+
+    # Add netuid labels if toggle is enabled
+    if show_labels:
+        annotations = []
+        for idx, row in viz_df.iterrows():
+            annotations.append(
+                dict(
+                    x=row['tao_score'],
+                    y=row['flow_24h'],
+                    text=str(row['netuid']),
+                    showarrow=False,
+                    font=dict(size=10, color='black')
+                )
+            )
+        fig.update_layout(annotations=annotations)
+
     return fig
 
 @callback(

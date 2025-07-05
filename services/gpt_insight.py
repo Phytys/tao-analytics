@@ -20,8 +20,8 @@ client = OpenAI(api_key=OPENAI_KEY) if OPENAI_KEY else None
 
 # GPT Insight Configuration
 MODEL_NAME = "gpt-4o-2024-05-13"
-MAX_WORDS = 200
-MAX_TOKENS = 850  # ~700 prompt + 150 answer
+MAX_WORDS = 300  # Increased from 200 to allow for complete insights
+MAX_TOKENS = 1600  # Increased to prevent truncation
 
 
 
@@ -264,34 +264,21 @@ def generate_insight(netuid: int) -> str:
         
         context = "\n".join(context_lines)
         
-        # Enhanced GPT Prompt Template
-        system_prompt = """You are a professional Bittensor subnet analyst writing for crypto investors.
-Write ≤200 words. Start with the subnet name. End with: "Buy-Signal: X/5".
+        # Streamlined GPT Prompt Template
+        system_prompt = """You are a professional Bittensor subnet analyst. Write ≤150 words. Start with subnet name. End with: "Buy-Signal: X/5".
 
-Your analysis should be:
-- Technical and data-driven
-- Include specific numbers and percentages
-- Mention the subnet's mission/purpose
-- Compare metrics to category peers
-- Assess both current state and potential
-- Use professional financial analysis language
-
-Category Context: Consider the subnet's category when assessing its mission, competitive positioning, and growth potential.
-
-Buy-Signal Philosophy: TAO-Score is a supporting metric, not the primary driver. Use holistic judgment based on the full metric set."""
+Analysis should be data-driven, include specific numbers, mention mission, compare to peers, and assess current state vs potential."""
 
         user_prompt = f"""Context:
 {context}
 
 Analysis Structure:
-1. **Mission & Purpose**: One sentence describing what the subnet does and its real-world application
-2. **Network Health**: Assess stake weight, consensus alignment, validator utilization, and active stake ratio. Include specific numbers and explicitly compare to category peers (e.g., "ranks in top X%")
-3. **Token Economics**: Analyze inflation rate, emission progress, and reserve momentum. Explain what these mean for investors
-4. **Market Performance**: Review price trends, momentum ranking, and market positioning. Include both short-term and long-term perspectives
-5. **Investment Thesis**: Combine TAO-Score, stake quality ranking, and category positioning to assess current value vs potential
-6. **Buy-Signal**: Rate 1-5 based on holistic assessment of network health, token economics, market performance, and mission value. Do not use TAO-Score alone. Weight validator utilization, momentum rank, and inflation/emissions equally. Favor subnets with strong engagement, sustainability, and unique real-world use cases. Round down in borderline cases.
-
-Style: Use specific numbers, mention the subnet's mission, explicitly compare to category peers, and assess both current state and future potential. Token budget: 850 max."""
+1. **Mission**: One sentence on what the subnet does
+2. **Network Health**: Stake quality, validator utilization, consensus alignment with numbers and peer comparison
+3. **Token Economics**: Inflation rate, emission progress, reserve momentum impact
+4. **Market Performance**: Price trends, momentum ranking, market positioning
+5. **Investment Thesis**: Combine metrics to assess value vs potential
+6. **Buy-Signal**: Rate 1-5 based on network health, economics, performance, and mission. Weight validator utilization, momentum, and inflation equally. Round down in borderline cases."""
 
         def make_api_call(max_tokens=MAX_TOKENS):
             """Make API call with retry logic."""
@@ -311,14 +298,19 @@ Style: Use specific numbers, mention the subnet's mission, explicitly compare to
                 logger.error(f"OpenAI API error: {e}")
                 return f"Analysis error: {str(e)}"
         
-        # Generate insight with retry logic
+        # Generate insight with improved retry logic
         insight = make_api_call()
         
-        # Check word count and retry if needed
+        # Check if response is complete (contains Buy-Signal)
+        if "Buy-Signal:" not in insight:
+            logger.warning(f"Incomplete insight detected (no Buy-Signal), retrying with more tokens")
+            insight = make_api_call(max_tokens=MAX_TOKENS + 200)
+        
+        # Check word count and retry if needed (less aggressive)
         word_count = len(insight.split())
         if word_count > MAX_WORDS:
-            logger.warning(f"Insight too long ({word_count} words), retrying with reduced tokens")
-            insight = make_api_call(max_tokens=MAX_TOKENS // 2)
+            logger.warning(f"Insight too long ({word_count} words), retrying with slightly reduced tokens")
+            insight = make_api_call(max_tokens=int(MAX_TOKENS * 0.8))  # 80% instead of 50%
         
         return insight
         
@@ -444,9 +436,9 @@ def extract_buy_signal_from_insight(insight_text: str) -> Optional[int]:
         return None
     
     try:
-        # Look for "Buy-Signal: X/5" pattern
+        # Look for "Buy-Signal: X/5" pattern (with optional bold formatting)
         import re
-        pattern = r'Buy-Signal:\s*(\d+)/5'
+        pattern = r'\*{0,2}Buy-Signal\*{0,2}:\s*(\d+)/5'
         match = re.search(pattern, insight_text, re.IGNORECASE)
         
         if match:
