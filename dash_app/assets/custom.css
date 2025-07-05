@@ -1,5 +1,28 @@
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap');
 
+/* Tesla-inspired Design System Variables */
+:root {
+    --primary-color: #171a20;
+    --secondary-color: #393c41;
+    --accent-color: #3e6ae1;
+    --accent-hover: #2d5bb8;
+    --text-primary: #171a20;
+    --text-secondary: #5c5e62;
+    --text-light: #ffffff;
+    --background-primary: #ffffff;
+    --background-secondary: #f8f9fa;
+    --background-tertiary: #e9ecef;
+    --border-color: #d0d1d2;
+    --border-light: #e9ecef;
+    --shadow-light: 0 2px 8px rgba(0, 0, 0, 0.08);
+    --shadow-medium: 0 4px 16px rgba(0, 0, 0, 0.12);
+    --shadow-heavy: 0 8px 32px rgba(0, 0, 0, 0.16);
+    --border-radius: 12px;
+    --border-radius-sm: 8px;
+    --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 body {
     font-family: 'Inter', Arial, sans-serif;
 }
@@ -21,10 +44,10 @@ body {
     position: fixed;
     top: 0;
     width: 100%;
-    background: var(--accent-color);
+    background: #ffffff;
     border-bottom: 1px solid var(--border-light);
     z-index: 1000;
-    box-shadow: var(--shadow-light);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -45,13 +68,17 @@ body {
 }
 
 .nav-brand {
-    font-size: 1.7rem;
+    font-size: 1.8rem;
     font-weight: 700;
-    color: var(--text-light);
+    color: var(--primary-color);
     text-decoration: none;
     margin-right: 2rem;
     flex-shrink: 0;
-    letter-spacing: 0.04em;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
 }
 
 .nav-links {
@@ -62,7 +89,7 @@ body {
 
 .nav-link {
     text-decoration: none;
-    color: var(--text-light);
+    color: var(--text-primary);
     font-weight: 500;
     transition: var(--transition);
     position: relative;
@@ -70,7 +97,7 @@ body {
 }
 
 .nav-link:hover {
-    color: var(--text-light);
+    color: var(--accent-color);
     opacity: 1;
     text-decoration: none;
 }
@@ -82,7 +109,7 @@ body {
     left: 0;
     width: 0;
     height: 2px;
-    background: var(--text-light);
+    background: var(--accent-color);
     transition: var(--transition);
 }
 
@@ -108,13 +135,13 @@ body {
 }
 
 .mobile-menu-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.05);
 }
 
 .hamburger-line {
     width: 100%;
     height: 2px;
-    background: #111;
+    background: var(--primary-color);
     border-radius: 1px;
     transition: var(--transition);
     transform-origin: center;

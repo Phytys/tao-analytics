@@ -260,8 +260,15 @@ def create_holders_validators_section(netuid: int) -> dbc.Card:
         ])
     ], className="mb-4")
 
-def create_subnet_detail_layout(netuid: int) -> html.Div:
+def create_subnet_detail_layout(netuid: int | None = None) -> html.Div:
     """Create the complete subnet detail layout."""
+    if netuid is None:
+        return html.Div([
+            html.H1("Subnet Detail", className="text-center mt-5"),
+            html.P("Select a subnet to view detailed analytics.", className="text-center text-muted"),
+            html.Div(id="subnet-detail-content")
+        ])
+    
     return html.Div([
         # Header bar
         create_header_bar(netuid),

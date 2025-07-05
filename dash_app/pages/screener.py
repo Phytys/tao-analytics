@@ -168,12 +168,12 @@ def create_stake_quality_analysis():
             'tao_score': 'TAO-Score',
             'primary_category': 'Category'
         },
-        size_max=30
+        size_max=15
     )
     fig.update_traces(
         marker=dict(
             line=dict(width=1, color='rgba(0,0,0,0.3)'),
-            sizemin=5
+            sizemin=3
         ),
         hovertemplate="<b>%{customdata[0]}</b><br>" +
                      "NetUID: %{customdata[1]}<br>" +
@@ -679,12 +679,12 @@ def update_stake_quality_analysis(category, score_all, score_high, score_medium,
             'tao_score': 'TAO-Score',
             'primary_category': 'Category'
         },
-        size_max=30
+        size_max=15
     )
     fig.update_traces(
         marker=dict(
             line=dict(width=1, color='rgba(0,0,0,0.3)'),
-            sizemin=5
+            sizemin=3
         ),
         hovertemplate="<b>%{customdata[0]}</b><br>" +
                      "NetUID: %{customdata[1]}<br>" +

@@ -48,11 +48,11 @@ body {
     position: fixed;
     top: 0;
     width: 100%;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(20px);
+    background: #ffffff;
     border-bottom: 1px solid var(--border-light);
     z-index: 1000;
     transition: var(--transition);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .nav-container {
@@ -72,13 +72,17 @@ body {
 
 .nav-brand {
     font-family: 'Orbitron', 'Inter', Arial, sans-serif;
-    font-size: 1.7rem;
+    font-size: 1.8rem;
     font-weight: 700;
     color: var(--primary-color);
     text-decoration: none;
     margin-right: 2rem;
     flex-shrink: 0;
-    letter-spacing: 0.04em;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
 }
 
 .logo-text {
