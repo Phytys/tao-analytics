@@ -703,6 +703,72 @@ body {
     margin: 0;
 }
 
+/* Glossary Styles */
+.glossary-intro {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    margin-bottom: 2rem;
+    text-align: center;
+    font-style: italic;
+}
+
+.glossary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.glossary-item {
+    background: var(--background-secondary);
+    border: 1px solid var(--border-light);
+    border-radius: var(--border-radius-sm);
+    padding: 1.5rem;
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+}
+
+.glossary-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--accent-color);
+    transition: var(--transition);
+}
+
+.glossary-item:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-medium);
+    border-color: var(--accent-color);
+}
+
+.glossary-item:hover::before {
+    width: 6px;
+}
+
+.glossary-item h4 {
+    color: var(--primary-color);
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Removed automatic emoji since we're adding them manually in HTML */
+
+.glossary-item p {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin: 0;
+}
+
 .cta-card {
     text-align: center;
     background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-hover) 100%);
@@ -831,6 +897,15 @@ body {
     .usage-grid {
         grid-template-columns: 1fr;
         gap: 1rem;
+    }
+    
+    .glossary-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .glossary-item {
+        padding: 1.25rem;
     }
 
     .section-title {
