@@ -13,11 +13,11 @@ import time
 
 # Fetch latest TAO/USD price from CoinGeckoPrice
 try:
-    engine = create_engine('sqlite:///tao.sqlite', future=True)
-    Session = sessionmaker(bind=engine, autoflush=False, future=True)
-    with Session() as session:
-        price_row = session.query(CoinGeckoPrice).order_by(CoinGeckoPrice.fetched_at.desc()).first()
-        tao_price_usd = float(price_row.price_usd) if price_row and price_row.price_usd else 0.0
+    from services.db import get_db
+    session = get_db()
+    price_row = session.query(CoinGeckoPrice).order_by(CoinGeckoPrice.fetched_at.desc()).first()
+    tao_price_usd = float(price_row.price_usd) if price_row and price_row.price_usd else 0.0
+    session.close()
 except Exception:
     tao_price_usd = 0.0
 

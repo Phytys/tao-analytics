@@ -14,27 +14,11 @@ import sys
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from models import engine, Base
-from sqlalchemy import Column, Integer, String, DateTime, func, text
-from sqlalchemy.orm import declarative_base
+from models import engine
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-# Create a separate base for quota tracking
-QuotaBase = declarative_base()
-
-class ApiQuota(QuotaBase):
-    """Track API calls per endpoint per month."""
-    __tablename__ = "api_quota"
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    endpoint = Column(String(100), nullable=False)  # e.g., '/subnet_screener', '/analytics/macro/aggregated'
-    month = Column(String(7), nullable=False)  # YYYY-MM format
-    count = Column(Integer, default=0, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-# Create the quota table
-QuotaBase.metadata.create_all(engine)
+# Use the ApiQuota model from models.py instead of creating a duplicate
 
 class QuotaExceededError(Exception):
     """Raised when API quota is exceeded."""
@@ -72,7 +56,7 @@ class QuotaGuard:
         try:
             with self.engine.connect() as conn:
                 result = conn.execute(
-                    text("SELECT count FROM api_quota WHERE endpoint = :endpoint AND month = :month"),
+                    text("SELECT calls_made FROM api_quota WHERE source = :endpoint AND month = :month"),
                     {"endpoint": endpoint, "month": month}
                 ).fetchone()
                 
@@ -101,8 +85,8 @@ class QuotaGuard:
                 result = conn.execute(
                     text("""
                         UPDATE api_quota 
-                        SET count = count + 1, updated_at = :updated_at
-                        WHERE endpoint = :endpoint AND month = :month
+                        SET calls_made = calls_made + 1, updated_at = :updated_at
+                        WHERE source = :endpoint AND month = :month
                     """),
                     {
                         "endpoint": endpoint, 
@@ -115,7 +99,7 @@ class QuotaGuard:
                     # No existing record, create new one
                     conn.execute(
                         text("""
-                            INSERT INTO api_quota (endpoint, month, count, created_at, updated_at)
+                            INSERT INTO api_quota (source, month, calls_made, created_at, updated_at)
                             VALUES (:endpoint, :month, 1, :created_at, :updated_at)
                         """),
                         {
@@ -189,7 +173,7 @@ class QuotaGuard:
         try:
             with self.engine.connect() as conn:
                 result = conn.execute(
-                    text("SELECT endpoint, count FROM api_quota WHERE month = :month ORDER BY count DESC"),
+                    text("SELECT source, calls_made FROM api_quota WHERE month = :month ORDER BY calls_made DESC"),
                     {"month": month}
                 ).fetchall()
                 

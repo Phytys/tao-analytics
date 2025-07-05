@@ -16,6 +16,7 @@
 - [Dash App Pages](#dash-app-pages)
 - [Database & Data Flow](#database--data-flow)
 - [Scripts & Automation](#scripts--automation)
+- [Data Collection & Database Storage](#data-collection--database-storage)
 - [Services](#services)
 - [Deployment](#deployment)
 - [Development Notes](#development-notes)
@@ -495,6 +496,192 @@ python scripts/analyze_enrichment_stats.py
 # Re-enrich low-confidence subnets
 python scripts/auto_fallback_enrich.py --max-subnets 10
 ```
+
+---
+
+## Data Collection & Database Storage
+
+### **📊 Data Collection Overview**
+
+TAO Analytics uses a modular data collection system with three main components that can be run independently or together:
+
+| Component | Data Source | Duration | Purpose | Database Table |
+|-----------|-------------|----------|---------|----------------|
+| **Subnet Screener** | TAO.app API | ~30 seconds | Price, volume, market data | `screener_raw` |
+| **CoinGecko** | CoinGecko API | ~5 seconds | TAO/USD price & market cap | `coingecko` |
+| **SDK Snapshot** | Bittensor SDK | ~7 minutes | Network metrics, stake quality | `metrics_snap` |
+
+### **🚀 Running Data Collection**
+
+#### **Complete Daily Collection (Recommended)**
+```bash
+# Run all components together
+python scripts/cron_fetch.py --once nightly
+```
+
+#### **Individual Components**
+```bash
+# Update only subnet screener data (price/volume)
+python scripts/cron_fetch.py --once subnet
+
+# Update only TAO/USD price
+python scripts/cron_fetch.py --once coingecko
+
+# Update only network metrics (stake quality, consensus, etc.)
+python scripts/cron_fetch.py --once sdk_snapshot
+```
+
+#### **Testing & Development**
+```bash
+# Test with limited subnets
+python scripts/cron_fetch.py --once sdk_snapshot --limit 10
+
+# Test without quota enforcement
+python scripts/cron_fetch.py --test
+```
+
+### **💾 Database Storage Architecture**
+
+#### **Data Tables & Storage Pattern**
+
+| Table | Component | Storage Pattern | Data Type | Example |
+|-------|-----------|----------------|-----------|---------|
+| `screener_raw` | Subnet Screener | **Upsert** (update existing) | Raw JSON from TAO.app | Price, volume, market cap |
+| `coingecko` | CoinGecko | **New row** each time | TAO price & market cap | $324.68 USD, $2.9B market cap |
+| `metrics_snap` | SDK Snapshot | **New row** each time | Calculated metrics | Stake quality, TAO score |
+
+#### **Time Series Data Behavior**
+
+**✅ NEW RECORDS ARE CREATED EACH TIME YOU RUN THE SCRIPT**
+
+- **Each run creates a new timestamp** for all components
+- **No data overwriting** - each run adds fresh records
+- **True time series data** - track changes throughout the day
+- **Database growth**: ~122 records per run (one per subnet)
+
+#### **Example Timeline**
+```bash
+# Run 1: 09:00 AM
+python scripts/cron_fetch.py --once nightly
+# Result: 122 new metrics_snap records + 1 coingecko record + 128 screener_raw updates
+
+# Run 2: 02:00 PM  
+python scripts/cron_fetch.py --once nightly
+# Result: 122 new metrics_snap records + 1 coingecko record + 128 screener_raw updates
+# Total: 244 metrics_snap records for the day
+```
+
+### **🔗 Data Dependencies & Usage**
+
+#### **How Dash Pages Use Data**
+
+The dashboards use a **JOIN** between multiple tables:
+
+```python
+# From services/db.py - load_screener_frame()
+query = select(
+    # From ScreenerRaw (price/volume data)
+    func.coalesce(json_field(ScreenerRaw.raw_json, 'price_tao'), 0).label('price_tao'),
+    func.coalesce(json_field(ScreenerRaw.raw_json, 'market_cap_tao'), 0).label('market_cap_tao'),
+    
+    # From MetricsSnap (calculated metrics)
+    MetricsSnap.stake_quality,
+    MetricsSnap.tao_score,
+    MetricsSnap.validator_util_pct,
+    
+    # From CoinGecko (USD conversion rate)
+    # Used to convert TAO values to USD in dashboards
+)
+```
+
+#### **Data Completeness by Component**
+
+| Component | Price Data | Network Metrics | USD Conversion | Dash Impact |
+|-----------|------------|-----------------|----------------|-------------|
+| `subnet` only | ✅ Fresh | ❌ Stale | ❌ Stale | Partial updates |
+| `coingecko` only | ❌ Stale | ❌ Stale | ✅ Fresh | USD updates only |
+| `sdk_snapshot` only | ❌ Stale | ✅ Fresh | ❌ Stale | Metrics updates only |
+| `nightly` | ✅ Fresh | ✅ Fresh | ✅ Fresh | Complete updates |
+
+### **🌐 Heroku Database Integration**
+
+#### **Local Scripts → Heroku Database**
+
+For production deployment, run scripts locally while targeting the Heroku PostgreSQL database:
+
+```bash
+# Set Heroku database URL
+export HEROKU_DATABASE_URL="postgresql://username:password@host:port/database"
+
+# Run collection targeting Heroku database
+python scripts/cron_fetch.py --once nightly
+```
+
+#### **Database Logging**
+
+The cron script includes database logging to show which database is being targeted:
+
+```bash
+🚀 Starting cron_fetch.py - Database target: POSTGRESQL
+☁️  Heroku PostgreSQL database: postgresql://...
+🏁 Nightly Collection complete - ✅ SUCCESS - Database: POSTGRESQL - 3/3 successful
+```
+
+### **📈 Recommended Workflows**
+
+#### **Daily Production Workflow**
+```bash
+# 1. Complete daily collection (recommended)
+python scripts/cron_fetch.py --once nightly
+
+# 2. Verify data collection
+python scripts/analyze_enrichment_stats.py
+```
+
+#### **Development & Testing**
+```bash
+# Test individual components
+python scripts/cron_fetch.py --once subnet
+python scripts/cron_fetch.py --once coingecko
+python scripts/cron_fetch.py --once sdk_snapshot --limit 5
+
+# Check database stats
+python -c "from services.db import get_db; from models import MetricsSnap; session = get_db(); print(f'Total records: {session.query(MetricsSnap).count()}')"
+```
+
+#### **Troubleshooting**
+```bash
+# Check database connection
+python -c "from services.db import get_db; session = get_db(); print('Database connected successfully')"
+
+# View recent data
+python -c "from services.db import get_db; from models import MetricsSnap; session = get_db(); latest = session.query(MetricsSnap).order_by(MetricsSnap.timestamp.desc()).first(); print(f'Latest: {latest.timestamp}')"
+```
+
+### **🔧 Advanced Configuration**
+
+#### **Environment Variables**
+```bash
+# Required for data collection
+export TAO_APP_API_KEY="your_tao_app_api_key"
+export COINGECKO_API_KEY="your_coingecko_api_key"
+export OPENAI_API_KEY="your_openai_api_key"
+
+# Database configuration
+export HEROKU_DATABASE_URL="postgresql://..."  # For Heroku targeting
+export DATABASE_URL="sqlite:///tao.sqlite"     # For local development
+```
+
+#### **Quota Management**
+- **TAO.app API**: 1000 calls/month (tracked automatically)
+- **CoinGecko API**: 10,000 calls/month (tracked automatically)
+- **OpenAI API**: Pay-per-use (tracked in database)
+
+#### **Performance Optimization**
+- **Connection Pooling**: Scripts reuse database connections
+- **Async Processing**: SDK metrics use async collection for speed
+- **Caching**: Multi-layer caching reduces API calls
+- **Batch Processing**: Efficient bulk operations
 
 ---
 

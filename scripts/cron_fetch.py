@@ -775,6 +775,9 @@ class CronFetch:
                 details=f"Processed {successful_snapshots}/{len(subnet_ids)} subnets ({final_success_rate:.1f}% success)"
             )
             
+            # Log collection end with database info
+            self._log_collection_end("SDK Snapshot", successful_snapshots > 0, f"{successful_snapshots}/{len(subnet_ids)} subnets ({final_success_rate:.1f}% success)")
+            
             return successful_snapshots > 0
             
         except Exception as e:
@@ -786,6 +789,8 @@ class CronFetch:
                 success=False,
                 details=f"Error: {str(e)}"
             )
+            # Log collection end with database info even on error
+            self._log_collection_end("SDK Snapshot", False, f"Error: {str(e)}")
             return False
     
     def compute_category_stats(self, session):
@@ -916,7 +921,17 @@ class CronFetch:
             details=f"Results: {results}"
         )
         
+        # Log collection end with database info
+        self._log_collection_end("Nightly Collection", success_count > 0, f"{success_count}/{total_count} successful")
+        
         return results
+    
+    def _log_collection_end(self, collection_name: str, success: bool, details: str = ""):
+        """Log collection end with database info."""
+        from services.db_utils import get_database_type
+        db_type = get_database_type()
+        status = "✅ SUCCESS" if success else "❌ FAILED"
+        logger.info(f"🏁 {collection_name} complete - {status} - Database: {db_type.upper()} - {details}")
     
     def hourly_collection(self):
         """Hourly data collection (subnet screener only)."""
@@ -934,6 +949,9 @@ class CronFetch:
             success=success,
             details="Subnet screener only"
         )
+        
+        # Log collection end with database info
+        self._log_collection_end("Hourly Collection", success, "Subnet screener only")
         
         return success
     
@@ -986,6 +1004,16 @@ def main():
     parser.add_argument("--limit", type=int, help="Limit number of subnets for SDK snapshot (for testing)")
     
     args = parser.parse_args()
+    
+    # Log database target at script start
+    from services.db_utils import get_database_type
+    from config import DATABASE_URL
+    db_type = get_database_type()
+    logger.info(f"🚀 Starting cron_fetch.py - Database target: {db_type.upper()}")
+    if db_type == 'sqlite':
+        logger.info(f"📁 Local SQLite database: {DATABASE_URL}")
+    else:
+        logger.info(f"☁️  Heroku PostgreSQL database: {DATABASE_URL[:50]}...")
     
     cron = CronFetch()
     
