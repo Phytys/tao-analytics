@@ -307,21 +307,7 @@ def create_correlation_matrix(df):
     
     return fig
 
-# Get initial data
-stats, latest_df = get_network_summary_stats()
-df_30d = get_time_series_data(30)
-
-# Create initial charts
-tao_score_trend = create_metric_trend_chart(df_30d, 'tao_score', 'Average TAO-Score Over Time')
-stake_quality_trend = create_metric_trend_chart(df_30d, 'stake_quality', 'Average Stake Quality Over Time', '#28a745')
-market_cap_trend = create_metric_trend_chart(df_30d, 'market_cap_tao', 'Total Market Cap (TAO) Over Time', '#ffc107', 'sum')
-flow_trend = create_metric_trend_chart(df_30d, 'flow_24h', 'Total 24h Flow (TAO) Over Time', '#dc3545', 'sum')
-category_tao_score = create_category_comparison(df_30d, 'tao_score', 'TAO-Score')
-top_performers = create_subnet_performance_chart(df_30d, 'tao_score', 'TAO-Score')
-improvement_tracker = create_improvement_tracker(df_30d, 30)
-correlation_matrix = create_correlation_matrix(df_30d)
-
-# Available metrics for dynamic selection
+# Available metrics for dynamic selection (static - no DB calls)
 AVAILABLE_METRICS = {
     'tao_score': 'TAO-Score',
     'stake_quality': 'Stake Quality',
@@ -337,369 +323,429 @@ AVAILABLE_METRICS = {
     'stake_hhi': 'Stake HHI'
 }
 
-# Layout
-layout = html.Div([
-    # Header
-    dbc.Card([
-        dbc.CardBody([
-            html.H1("📊 Dynamic Network Insights", className="dashboard-title mb-3"),
-            html.P([
-                "Comprehensive time series analytics leveraging our rich metrics database. ",
-                "Track network trends, subnet performance, and discover investment opportunities ",
-                "with interactive charts and dynamic filtering."
-            ], className="text-muted mb-0")
-        ])
-    ], className="mb-4"),
-    
-    # Network Overview Cards
-    dbc.Card([
-        dbc.CardHeader([
-            html.H4("Network Overview", className="mb-0"),
-            html.I(className="bi bi-info-circle ms-2", id="overview-tooltip")
-        ]),
-        dbc.CardBody([
-            dbc.Row([
-                dbc.Col([
-                    dbc.Card([
-                        dbc.CardBody([
-                            html.H3(f"{stats['total_subnets']}", className="text-primary"),
-                            html.P("Active Subnets", className="text-muted mb-0")
-                        ])
-                    ], className="text-center")
-                ], width=2),
-                dbc.Col([
-                    dbc.Card([
-                        dbc.CardBody([
-                            html.H3(f"{stats['total_market_cap_tao']:,.0f}", className="text-success"),
-                            html.P("Total Market Cap (TAO)", className="text-muted mb-0")
-                        ])
-                    ], className="text-center")
-                ], width=2),
-                dbc.Col([
-                    dbc.Card([
-                        dbc.CardBody([
-                            html.H3(f"{stats['avg_tao_score']:.1f}", className="text-warning"),
-                            html.P("Avg TAO-Score", className="text-muted mb-0")
-                        ])
-                    ], className="text-center")
-                ], width=2),
-                dbc.Col([
-                    dbc.Card([
-                        dbc.CardBody([
-                            html.H3(f"{stats['high_performers']}", className="text-info"),
-                            html.P("High Performers (≥70)", className="text-muted mb-0")
-                        ])
-                    ], className="text-center")
-                ], width=2),
-                dbc.Col([
-                    dbc.Card([
-                        dbc.CardBody([
-                            html.H3(f"{stats['strong_buy_signals']}", className="text-danger"),
-                            html.P("Strong Buy Signals (≥4)", className="text-muted mb-0")
-                        ])
-                    ], className="text-center")
-                ], width=2),
-                dbc.Col([
-                    dbc.Card([
-                        dbc.CardBody([
-                            html.H3(f"{stats['categories']}", className="text-secondary"),
-                            html.P("Categories", className="text-muted mb-0")
-                        ])
-                    ], className="text-center")
-                ], width=2),
-            ], className="mb-3"),
-            html.Small(f"Data: {stats['data_points']:,} points | Range: {stats['date_range']}", className="text-muted")
-        ])
-    ], className="mb-4"),
-    
-    # SECTION 1: Custom Trend Analysis
-    dbc.Card([
-        dbc.CardHeader([
-            html.H4("📈 Custom Trend Analysis", className="mb-0"),
-            html.I(className="bi bi-graph-up ms-2", id="trend-tooltip")
-        ]),
-        dbc.CardBody([
-            # Controls for this section
-            dbc.Row([
-                dbc.Col([
-                    html.Label("Time Range", className="form-label fw-bold"),
-                    dcc.Dropdown(
-                        id="trend-time-range",
-                        options=[
-                            {"label": "Last 7 Days", "value": 7},
-                            {"label": "Last 14 Days", "value": 14},
-                            {"label": "Last 30 Days", "value": 30},
-                            {"label": "Last 60 Days", "value": 60},
-                            {"label": "All Available", "value": 365}
-                        ],
-                        value=30,
-                        clearable=False
-                    )
-                ], width=3),
-                dbc.Col([
-                    html.Label("Metric to Track", className="form-label fw-bold"),
-                    dcc.Dropdown(
-                        id="trend-metric",
-                        options=[{"label": v, "value": k} for k, v in AVAILABLE_METRICS.items()],
-                        value="tao_score",
-                        clearable=False
-                    )
-                ], width=3),
-                dbc.Col([
-                    html.Label("Aggregation Method", className="form-label fw-bold"),
-                    dcc.Dropdown(
-                        id="trend-aggregation",
-                        options=[
-                            {"label": "Average", "value": "mean"},
-                            {"label": "Sum", "value": "sum"},
-                            {"label": "Median", "value": "median"}
-                        ],
-                        value="mean",
-                        clearable=False
-                    )
-                ], width=3),
-                dbc.Col([
-                    html.Label("Filter by Category", className="form-label fw-bold"),
-                    dcc.Dropdown(
-                        id="trend-category-filter",
-                        options=[{"label": "All Categories", "value": "All"}] + 
-                                [{"label": cat, "value": cat} for cat in sorted(latest_df['category'].unique()) if cat],
-                        value="All",
-                        clearable=False
-                    )
-                ], width=3),
-            ], className="mb-4"),
-            # Chart for this section
-            dcc.Graph(id="custom-trend-chart", config={'displayModeBar': False})
-        ])
-    ], className="mb-4"),
-    
-    # SECTION 2: Category Performance Analysis
-    dbc.Card([
-        dbc.CardHeader([
-            html.H4("🏷️ Category Performance Analysis", className="mb-0"),
-            html.I(className="bi bi-pie-chart ms-2", id="category-tooltip")
-        ]),
-        dbc.CardBody([
-            # Controls for this section
-            dbc.Row([
-                dbc.Col([
-                    html.Label("Time Range", className="form-label fw-bold"),
-                    dcc.Dropdown(
-                        id="category-time-range",
-                        options=[
-                            {"label": "Last 7 Days", "value": 7},
-                            {"label": "Last 14 Days", "value": 14},
-                            {"label": "Last 30 Days", "value": 30},
-                            {"label": "Last 60 Days", "value": 60},
-                            {"label": "All Available", "value": 365}
-                        ],
-                        value=30,
-                        clearable=False
-                    )
-                ], width=4),
-                dbc.Col([
-                    html.Label("Metric to Compare", className="form-label fw-bold"),
-                    dcc.Dropdown(
-                        id="category-metric",
-                        options=[{"label": v, "value": k} for k, v in AVAILABLE_METRICS.items()],
-                        value="tao_score",
-                        clearable=False
-                    )
-                ], width=4),
-                dbc.Col([
-                    html.Label("Filter by Category", className="form-label fw-bold"),
-                    dcc.Dropdown(
-                        id="category-filter",
-                        options=[{"label": "All Categories", "value": "All"}] + 
-                                [{"label": cat, "value": cat} for cat in sorted(latest_df['category'].unique()) if cat],
-                        value="All",
-                        clearable=False
-                    )
-                ], width=4),
-            ], className="mb-4"),
-            # Chart for this section
-            dcc.Graph(id="category-performance-chart", config={'displayModeBar': False})
-        ])
-    ], className="mb-4"),
-    
-    # SECTION 3: Top Performers Analysis
-    dbc.Card([
-        dbc.CardHeader([
-            html.H4("🏆 Top Performers Analysis", className="mb-0"),
-            html.I(className="bi bi-trophy ms-2", id="performers-tooltip")
-        ]),
-        dbc.CardBody([
-            # Controls for this section
-            dbc.Row([
-                dbc.Col([
-                    html.Label("Time Range", className="form-label fw-bold"),
-                    dcc.Dropdown(
-                        id="performers-time-range",
-                        options=[
-                            {"label": "Last 7 Days", "value": 7},
-                            {"label": "Last 14 Days", "value": 14},
-                            {"label": "Last 30 Days", "value": 30},
-                            {"label": "Last 60 Days", "value": 60},
-                            {"label": "All Available", "value": 365}
-                        ],
-                        value=30,
-                        clearable=False
-                    )
-                ], width=4),
-                dbc.Col([
-                    html.Label("Performance Metric", className="form-label fw-bold"),
-                    dcc.Dropdown(
-                        id="performers-metric",
-                        options=[{"label": v, "value": k} for k, v in AVAILABLE_METRICS.items()],
-                        value="tao_score",
-                        clearable=False
-                    )
-                ], width=4),
-                dbc.Col([
-                    html.Label("Filter by Category", className="form-label fw-bold"),
-                    dcc.Dropdown(
-                        id="performers-category-filter",
-                        options=[{"label": "All Categories", "value": "All"}] + 
-                                [{"label": cat, "value": cat} for cat in sorted(latest_df['category'].unique()) if cat],
-                        value="All",
-                        clearable=False
-                    )
-                ], width=4),
-            ], className="mb-4"),
-            # Chart for this section
-            dcc.Graph(id="top-performers-chart", config={'displayModeBar': False})
-        ])
-    ], className="mb-4"),
-    
-    # SECTION 4: Improvement Tracking
-    dbc.Card([
-        dbc.CardHeader([
-            html.H4("📈 Improvement Tracking", className="mb-0"),
-            html.I(className="bi bi-arrow-up-circle ms-2", id="improvement-tooltip")
-        ]),
-        dbc.CardBody([
-            # Controls for this section
-            dbc.Row([
-                dbc.Col([
-                    html.Label("Time Range for Improvement Analysis", className="form-label fw-bold"),
-                    dcc.Dropdown(
-                        id="improvement-time-range",
-                        options=[
-                            {"label": "Last 7 Days", "value": 7},
-                            {"label": "Last 14 Days", "value": 14},
-                            {"label": "Last 30 Days", "value": 30},
-                            {"label": "Last 60 Days", "value": 60},
-                            {"label": "All Available", "value": 365}
-                        ],
-                        value=30,
-                        clearable=False
-                    )
-                ], width=6),
-                dbc.Col([
-                    html.Label("Minimum Improvement Threshold", className="form-label fw-bold"),
-                    dcc.Slider(
-                        id="improvement-threshold",
-                        min=0.1,
-                        max=5.0,
-                        step=0.1,
-                        value=0.1,
-                        marks={0.1: '0.1', 1.0: '1.0', 2.0: '2.0', 3.0: '3.0', 4.0: '4.0', 5.0: '5.0'},
-                        tooltip={"placement": "bottom", "always_visible": False}
-                    )
-                ], width=6),
-            ], className="mb-4"),
-            # Chart for this section
-            dcc.Graph(id="improvement-tracking-chart", config={'displayModeBar': False})
-        ])
-    ], className="mb-4"),
-    
-    # SECTION 5: Fixed Network Trends (Static)
-    dbc.Card([
-        dbc.CardHeader([
-            html.H4("📊 Fixed Network Trends", className="mb-0"),
-            html.I(className="bi bi-graph-up ms-2", id="fixed-trends-tooltip")
-        ]),
-        dbc.CardBody([
-            html.P("These charts show key network metrics over time (last 30 days):", className="text-muted mb-3"),
-            dbc.Row([
-                dbc.Col([
-                    dcc.Graph(figure=stake_quality_trend, config={'displayModeBar': False})
-                ], width=6),
-                dbc.Col([
-                    dcc.Graph(figure=market_cap_trend, config={'displayModeBar': False})
-                ], width=6),
-            ], className="mb-3"),
-            dbc.Row([
-                dbc.Col([
-                    dcc.Graph(figure=flow_trend, config={'displayModeBar': False})
-                ], width=12),
+def layout():
+    """Create the insights page layout with lazy data loading."""
+    return html.Div([
+        # Header
+        dbc.Card([
+            dbc.CardBody([
+                html.H1("📊 Dynamic Network Insights", className="dashboard-title mb-3"),
+                html.P([
+                    "Comprehensive time series analytics leveraging our rich metrics database. ",
+                    "Track network trends, subnet performance, and discover investment opportunities ",
+                    "with interactive charts and dynamic filtering."
+                ], className="text-muted mb-0")
             ])
-        ])
-    ], className="mb-4"),
+        ], className="mb-4"),
+        
+        # Network Overview Cards (will be populated by callback)
+        dbc.Card([
+            dbc.CardHeader([
+                html.H4("Network Overview", className="mb-0"),
+                html.I(className="bi bi-info-circle ms-2", id="overview-tooltip")
+            ]),
+            dbc.CardBody([
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Card([
+                            dbc.CardBody([
+                                html.H3(id="total-subnets", className="text-primary"),
+                                html.P("Active Subnets", className="text-muted mb-0")
+                            ])
+                        ], className="text-center")
+                    ], width=2),
+                    dbc.Col([
+                        dbc.Card([
+                            dbc.CardBody([
+                                html.H3(id="total-market-cap", className="text-success"),
+                                html.P("Total Market Cap (TAO)", className="text-muted mb-0")
+                            ])
+                        ], className="text-center")
+                    ], width=2),
+                    dbc.Col([
+                        dbc.Card([
+                            dbc.CardBody([
+                                html.H3(id="avg-tao-score", className="text-warning"),
+                                html.P("Avg TAO-Score", className="text-muted mb-0")
+                            ])
+                        ], className="text-center")
+                    ], width=2),
+                    dbc.Col([
+                        dbc.Card([
+                            dbc.CardBody([
+                                html.H3(id="high-performers", className="text-info"),
+                                html.P("High Performers (≥70)", className="text-muted mb-0")
+                            ])
+                        ], className="text-center")
+                    ], width=2),
+                    dbc.Col([
+                        dbc.Card([
+                            dbc.CardBody([
+                                html.H3(id="strong-buy-signals", className="text-danger"),
+                                html.P("Strong Buy Signals (≥4)", className="text-muted mb-0")
+                            ])
+                        ], className="text-center")
+                    ], width=2),
+                    dbc.Col([
+                        dbc.Card([
+                            dbc.CardBody([
+                                html.H3(id="categories", className="text-secondary"),
+                                html.P("Categories", className="text-muted mb-0")
+                            ])
+                        ], className="text-center")
+                    ], width=2),
+                ], className="mb-3"),
+                html.Small(id="data-info", className="text-muted")
+            ])
+        ], className="mb-4"),
+        
+        # SECTION 1: Custom Trend Analysis
+        dbc.Card([
+            dbc.CardHeader([
+                html.H4("📈 Custom Trend Analysis", className="mb-0"),
+                html.I(className="bi bi-graph-up ms-2", id="trend-tooltip")
+            ]),
+            dbc.CardBody([
+                # Controls for this section
+                dbc.Row([
+                    dbc.Col([
+                        html.Label("Time Range", className="form-label fw-bold"),
+                        dcc.Dropdown(
+                            id="trend-time-range",
+                            options=[
+                                {"label": "Last 7 Days", "value": 7},
+                                {"label": "Last 14 Days", "value": 14},
+                                {"label": "Last 30 Days", "value": 30},
+                                {"label": "Last 60 Days", "value": 60},
+                                {"label": "All Available", "value": 365}
+                            ],
+                            value=30,
+                            clearable=False
+                        )
+                    ], width=3),
+                    dbc.Col([
+                        html.Label("Metric to Track", className="form-label fw-bold"),
+                        dcc.Dropdown(
+                            id="trend-metric",
+                            options=[{"label": v, "value": k} for k, v in AVAILABLE_METRICS.items()],
+                            value="tao_score",
+                            clearable=False
+                        )
+                    ], width=3),
+                    dbc.Col([
+                        html.Label("Aggregation Method", className="form-label fw-bold"),
+                        dcc.Dropdown(
+                            id="trend-aggregation",
+                            options=[
+                                {"label": "Average", "value": "mean"},
+                                {"label": "Sum", "value": "sum"},
+                                {"label": "Median", "value": "median"}
+                            ],
+                            value="mean",
+                            clearable=False
+                        )
+                    ], width=3),
+                    dbc.Col([
+                        html.Label("Filter by Category", className="form-label fw-bold"),
+                        dcc.Dropdown(
+                            id="trend-category-filter",
+                            options=[{"label": "All Categories", "value": "All"}],
+                            value="All",
+                            clearable=False
+                        )
+                    ], width=3),
+                ], className="mb-4"),
+                # Chart for this section
+                dcc.Graph(id="custom-trend-chart", config={'displayModeBar': False})
+            ])
+        ], className="mb-4"),
+        
+        # SECTION 2: Category Performance Analysis
+        dbc.Card([
+            dbc.CardHeader([
+                html.H4("🏷️ Category Performance Analysis", className="mb-0"),
+                html.I(className="bi bi-pie-chart ms-2", id="category-tooltip")
+            ]),
+            dbc.CardBody([
+                # Controls for this section
+                dbc.Row([
+                    dbc.Col([
+                        html.Label("Time Range", className="form-label fw-bold"),
+                        dcc.Dropdown(
+                            id="category-time-range",
+                            options=[
+                                {"label": "Last 7 Days", "value": 7},
+                                {"label": "Last 14 Days", "value": 14},
+                                {"label": "Last 30 Days", "value": 30},
+                                {"label": "Last 60 Days", "value": 60},
+                                {"label": "All Available", "value": 365}
+                            ],
+                            value=30,
+                            clearable=False
+                        )
+                    ], width=4),
+                    dbc.Col([
+                        html.Label("Metric to Compare", className="form-label fw-bold"),
+                        dcc.Dropdown(
+                            id="category-metric",
+                            options=[{"label": v, "value": k} for k, v in AVAILABLE_METRICS.items()],
+                            value="tao_score",
+                            clearable=False
+                        )
+                    ], width=4),
+                    dbc.Col([
+                        html.Label("Filter by Category", className="form-label fw-bold"),
+                        dcc.Dropdown(
+                            id="category-filter",
+                            options=[{"label": "All Categories", "value": "All"}],
+                            value="All",
+                            clearable=False
+                        )
+                    ], width=4),
+                ], className="mb-4"),
+                # Chart for this section
+                dcc.Graph(id="category-performance-chart", config={'displayModeBar': False})
+            ])
+        ], className="mb-4"),
+        
+        # SECTION 3: Top Performers Analysis
+        dbc.Card([
+            dbc.CardHeader([
+                html.H4("🏆 Top Performers Analysis", className="mb-0"),
+                html.I(className="bi bi-trophy ms-2", id="performers-tooltip")
+            ]),
+            dbc.CardBody([
+                # Controls for this section
+                dbc.Row([
+                    dbc.Col([
+                        html.Label("Time Range", className="form-label fw-bold"),
+                        dcc.Dropdown(
+                            id="performers-time-range",
+                            options=[
+                                {"label": "Last 7 Days", "value": 7},
+                                {"label": "Last 14 Days", "value": 14},
+                                {"label": "Last 30 Days", "value": 30},
+                                {"label": "Last 60 Days", "value": 60},
+                                {"label": "All Available", "value": 365}
+                            ],
+                            value=30,
+                            clearable=False
+                        )
+                    ], width=4),
+                    dbc.Col([
+                        html.Label("Performance Metric", className="form-label fw-bold"),
+                        dcc.Dropdown(
+                            id="performers-metric",
+                            options=[{"label": v, "value": k} for k, v in AVAILABLE_METRICS.items()],
+                            value="tao_score",
+                            clearable=False
+                        )
+                    ], width=4),
+                    dbc.Col([
+                        html.Label("Filter by Category", className="form-label fw-bold"),
+                        dcc.Dropdown(
+                            id="performers-category-filter",
+                            options=[{"label": "All Categories", "value": "All"}],
+                            value="All",
+                            clearable=False
+                        )
+                    ], width=4),
+                ], className="mb-4"),
+                # Chart for this section
+                dcc.Graph(id="top-performers-chart", config={'displayModeBar': False})
+            ])
+        ], className="mb-4"),
+        
+        # SECTION 4: Improvement Tracking
+        dbc.Card([
+            dbc.CardHeader([
+                html.H4("📈 Improvement Tracking", className="mb-0"),
+                html.I(className="bi bi-arrow-up-circle ms-2", id="improvement-tooltip")
+            ]),
+            dbc.CardBody([
+                # Controls for this section
+                dbc.Row([
+                    dbc.Col([
+                        html.Label("Time Range for Improvement Analysis", className="form-label fw-bold"),
+                        dcc.Dropdown(
+                            id="improvement-time-range",
+                            options=[
+                                {"label": "Last 7 Days", "value": 7},
+                                {"label": "Last 14 Days", "value": 14},
+                                {"label": "Last 30 Days", "value": 30},
+                                {"label": "Last 60 Days", "value": 60},
+                                {"label": "All Available", "value": 365}
+                            ],
+                            value=30,
+                            clearable=False
+                        )
+                    ], width=6),
+                    dbc.Col([
+                        html.Label("Minimum Improvement Threshold", className="form-label fw-bold"),
+                        dcc.Slider(
+                            id="improvement-threshold",
+                            min=0.1,
+                            max=5.0,
+                            step=0.1,
+                            value=0.1,
+                            marks={0.1: '0.1', 1.0: '1.0', 2.0: '2.0', 3.0: '3.0', 4.0: '4.0', 5.0: '5.0'},
+                            tooltip={"placement": "bottom", "always_visible": False}
+                        )
+                    ], width=6),
+                ], className="mb-4"),
+                # Chart for this section
+                dcc.Graph(id="improvement-tracking-chart", config={'displayModeBar': False})
+            ])
+        ], className="mb-4"),
+        
+        # SECTION 5: Fixed Network Trends (Static)
+        dbc.Card([
+            dbc.CardHeader([
+                html.H4("📊 Fixed Network Trends", className="mb-0"),
+                html.I(className="bi bi-graph-up ms-2", id="fixed-trends-tooltip")
+            ]),
+            dbc.CardBody([
+                html.P("These charts show key network metrics over time (last 30 days):", className="text-muted mb-3"),
+                dbc.Row([
+                    dbc.Col([
+                        dcc.Graph(id="stake-quality-trend", config={'displayModeBar': False})
+                    ], width=6),
+                    dbc.Col([
+                        dcc.Graph(id="market-cap-trend", config={'displayModeBar': False})
+                    ], width=6),
+                ], className="mb-3"),
+                dbc.Row([
+                    dbc.Col([
+                        dcc.Graph(id="flow-trend", config={'displayModeBar': False})
+                    ], width=12),
+                ])
+            ])
+        ], className="mb-4"),
+        
+        # SECTION 6: Correlation Analysis (Static)
+        dbc.Card([
+            dbc.CardHeader([
+                html.H4("🔗 Metric Correlations", className="mb-0"),
+                html.I(className="bi bi-diagram-3 ms-2", id="correlation-tooltip")
+            ]),
+            dbc.CardBody([
+                html.P("Correlation matrix showing relationships between different metrics:", className="text-muted mb-3"),
+                dcc.Graph(id="correlation-matrix", config={'displayModeBar': False})
+            ])
+        ], className="mb-4"),
+        
+        # Tooltips
+        dbc.Tooltip(
+            "Overview of key network metrics including total subnets, market cap, average TAO-Score, "
+            "high performers, strong buy signals, and category diversity.",
+            target="overview-tooltip",
+            placement="top"
+        ),
+        dbc.Tooltip(
+            "Create custom trend charts by selecting any metric, time range, aggregation method, and category filter. "
+            "Perfect for tracking specific metrics over time.",
+            target="trend-tooltip",
+            placement="top"
+        ),
+        dbc.Tooltip(
+            "Compare subnet categories by any metric. Helps identify which types of AI services are performing best "
+            "and which categories might be undervalued.",
+            target="category-tooltip",
+            placement="top"
+        ),
+        dbc.Tooltip(
+            "View top-performing subnets by any selected metric. These represent the best-performing subnets "
+            "in the network for your chosen criteria.",
+            target="performers-tooltip",
+            placement="top"
+        ),
+        dbc.Tooltip(
+            "Track subnets showing the most improvement in TAO-Score over the selected time period. "
+            "These represent emerging opportunities and subnets that are actively improving.",
+            target="improvement-tooltip",
+            placement="top"
+        ),
+        dbc.Tooltip(
+            "Fixed network trends showing key metrics over time. These provide a consistent baseline "
+            "for understanding network health and growth.",
+            target="fixed-trends-tooltip",
+            placement="top"
+        ),
+        dbc.Tooltip(
+            "Correlation matrix showing relationships between different metrics. "
+            "Helps understand which factors influence each other.",
+            target="correlation-tooltip",
+            placement="top"
+        ),
+        
+        # Store for dynamic data
+        dcc.Store(id="trend-data-store"),
+        dcc.Store(id="category-data-store"),
+        dcc.Store(id="performers-data-store"),
+        dcc.Store(id="improvement-data-store"),
+        dcc.Store(id="overview-data-store"),
+        dcc.Store(id="fixed-trends-data-store"),
+        dcc.Store(id="correlation-data-store"),
+    ])
+
+# Callbacks for network overview
+@callback(
+    Output("overview-data-store", "data"),
+    Input("url", "pathname")
+)
+def load_overview_data(pathname):
+    """Load network overview data when page loads."""
+    if pathname == "/dash/insights":
+        try:
+            stats, latest_df = get_network_summary_stats()
+            return {
+                'stats': stats,
+                'categories': sorted(latest_df['category'].unique().tolist()) if not latest_df.empty else []
+            }
+        except Exception as e:
+            return {'stats': {}, 'categories': []}
+    return {'stats': {}, 'categories': []}
+
+@callback(
+    Output("total-subnets", "children"),
+    Output("total-market-cap", "children"),
+    Output("avg-tao-score", "children"),
+    Output("high-performers", "children"),
+    Output("strong-buy-signals", "children"),
+    Output("categories", "children"),
+    Output("data-info", "children"),
+    Input("overview-data-store", "data")
+)
+def update_overview_cards(data):
+    """Update overview cards with loaded data."""
+    if not data or 'stats' not in data:
+        return "0", "0", "0.0", "0", "0", "0", "No data available"
     
-    # SECTION 6: Correlation Analysis (Static)
-    dbc.Card([
-        dbc.CardHeader([
-            html.H4("🔗 Metric Correlations", className="mb-0"),
-            html.I(className="bi bi-diagram-3 ms-2", id="correlation-tooltip")
-        ]),
-        dbc.CardBody([
-            html.P("Correlation matrix showing relationships between different metrics:", className="text-muted mb-3"),
-            dcc.Graph(figure=correlation_matrix, config={'displayModeBar': False})
-        ])
-    ], className="mb-4"),
+    stats = data['stats']
+    return (
+        f"{stats.get('total_subnets', 0)}",
+        f"{stats.get('total_market_cap_tao', 0):,.0f}",
+        f"{stats.get('avg_tao_score', 0):.1f}",
+        f"{stats.get('high_performers', 0)}",
+        f"{stats.get('strong_buy_signals', 0)}",
+        f"{stats.get('categories', 0)}",
+        f"Data: {stats.get('data_points', 0):,} points | Range: {stats.get('date_range', 'N/A')}"
+    )
+
+@callback(
+    Output("trend-category-filter", "options"),
+    Output("category-filter", "options"),
+    Output("performers-category-filter", "options"),
+    Input("overview-data-store", "data")
+)
+def update_category_filters(data):
+    """Update category filter options."""
+    if not data or 'categories' not in data:
+        return [{"label": "All Categories", "value": "All"}], [{"label": "All Categories", "value": "All"}], [{"label": "All Categories", "value": "All"}]
     
-    # Tooltips
-    dbc.Tooltip(
-        "Overview of key network metrics including total subnets, market cap, average TAO-Score, "
-        "high performers, strong buy signals, and category diversity.",
-        target="overview-tooltip",
-        placement="top"
-    ),
-    dbc.Tooltip(
-        "Create custom trend charts by selecting any metric, time range, aggregation method, and category filter. "
-        "Perfect for tracking specific metrics over time.",
-        target="trend-tooltip",
-        placement="top"
-    ),
-    dbc.Tooltip(
-        "Compare subnet categories by any metric. Helps identify which types of AI services are performing best "
-        "and which categories might be undervalued.",
-        target="category-tooltip",
-        placement="top"
-    ),
-    dbc.Tooltip(
-        "View top-performing subnets by any selected metric. These represent the best-performing subnets "
-        "in the network for your chosen criteria.",
-        target="performers-tooltip",
-        placement="top"
-    ),
-    dbc.Tooltip(
-        "Track subnets showing the most improvement in TAO-Score over the selected time period. "
-        "These represent emerging opportunities and subnets that are actively improving.",
-        target="improvement-tooltip",
-        placement="top"
-    ),
-    dbc.Tooltip(
-        "Fixed network trends showing key metrics over time. These provide a consistent baseline "
-        "for understanding network health and growth.",
-        target="fixed-trends-tooltip",
-        placement="top"
-    ),
-    dbc.Tooltip(
-        "Correlation matrix showing relationships between different metrics. "
-        "Helps understand which factors influence each other.",
-        target="correlation-tooltip",
-        placement="top"
-    ),
-    
-    # Store for dynamic data
-    dcc.Store(id="trend-data-store"),
-    dcc.Store(id="category-data-store"),
-    dcc.Store(id="performers-data-store"),
-    dcc.Store(id="improvement-data-store"),
-])
+    categories = data['categories']
+    category_options = [{"label": "All Categories", "value": "All"}] + [{"label": cat, "value": cat} for cat in categories if cat]
+    return category_options, category_options, category_options
 
 # Callbacks for SECTION 1: Custom Trend Analysis
 @callback(
@@ -838,6 +884,77 @@ def update_improvement_tracking_chart(data, time_range, threshold):
         df['timestamp'] = pd.to_datetime(df['timestamp'])
     
     return create_improvement_tracker(df, time_range)
+
+# Callbacks for SECTION 5: Fixed Network Trends
+@callback(
+    Output("fixed-trends-data-store", "data"),
+    Input("url", "pathname")
+)
+def load_fixed_trends_data(pathname):
+    """Load fixed trends data when page loads."""
+    if pathname == "/dash/insights":
+        try:
+            df_30d = get_time_series_data(30)
+            return df_30d.to_dict('records')
+        except Exception as e:
+            return []
+    return []
+
+@callback(
+    Output("stake-quality-trend", "figure"),
+    Output("market-cap-trend", "figure"),
+    Output("flow-trend", "figure"),
+    Input("fixed-trends-data-store", "data")
+)
+def update_fixed_trends(data):
+    """Update fixed trend charts."""
+    if not data:
+        empty_fig = go.Figure().add_annotation(text="No data available", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+        return empty_fig, empty_fig, empty_fig
+    
+    df = pd.DataFrame(data)
+    
+    # Ensure timestamp is properly converted to datetime
+    if 'timestamp' in df.columns:
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+    
+    stake_quality_trend = create_metric_trend_chart(df, 'stake_quality', 'Average Stake Quality Over Time', '#28a745')
+    market_cap_trend = create_metric_trend_chart(df, 'market_cap_tao', 'Total Market Cap (TAO) Over Time', '#ffc107', 'sum')
+    flow_trend = create_metric_trend_chart(df, 'flow_24h', 'Total 24h Flow (TAO) Over Time', '#dc3545', 'sum')
+    
+    return stake_quality_trend, market_cap_trend, flow_trend
+
+# Callbacks for SECTION 6: Correlation Analysis
+@callback(
+    Output("correlation-data-store", "data"),
+    Input("url", "pathname")
+)
+def load_correlation_data(pathname):
+    """Load correlation data when page loads."""
+    if pathname == "/dash/insights":
+        try:
+            df_30d = get_time_series_data(30)
+            return df_30d.to_dict('records')
+        except Exception as e:
+            return []
+    return []
+
+@callback(
+    Output("correlation-matrix", "figure"),
+    Input("correlation-data-store", "data")
+)
+def update_correlation_matrix(data):
+    """Update correlation matrix."""
+    if not data:
+        return go.Figure().add_annotation(text="No data available", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+    
+    df = pd.DataFrame(data)
+    
+    # Ensure timestamp is properly converted to datetime
+    if 'timestamp' in df.columns:
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+    
+    return create_correlation_matrix(df)
 
 def register_callbacks(dash_app):
     """Register callbacks for the insights page."""
