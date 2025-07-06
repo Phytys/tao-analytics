@@ -59,7 +59,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1rem 2rem;
+    padding: 0.5rem 2rem;
     max-width: 1200px;
     margin: 0 auto;
 }
@@ -72,7 +72,7 @@ body {
 
 .nav-brand {
     font-family: 'Orbitron', 'Inter', Arial, sans-serif;
-    font-size: 1.8rem;
+    font-size: 1.5rem;
     font-weight: 700;
     color: var(--primary-color);
     text-decoration: none;
@@ -106,7 +106,7 @@ body {
 
 .nav-links {
     display: flex;
-    gap: 2.5rem;
+    gap: 1.5rem;
 }
 
 .nav-link {
@@ -189,7 +189,7 @@ body {
     align-items: center;
     text-align: center;
     background: linear-gradient(135deg, var(--background-secondary) 0%, var(--background-tertiary) 100%);
-    padding: 80px 2rem 0 2rem;
+    padding: 60px 2rem 0 2rem;
     position: relative;
     overflow: hidden;
 }
@@ -1009,11 +1009,11 @@ body {
     }
 
     .nav-container {
-        padding: 1rem 1.5rem;
+        padding: 0.5rem 1.5rem;
     }
 
     .hero-section {
-        padding: 70px 1rem 0 1rem;
+        padding: 50px 1rem 0 1rem;
         min-height: 90vh;
     }
 
@@ -1163,7 +1163,7 @@ body {
     }
 
     .hero-section {
-        padding: 60px 0.5rem 0 0.5rem;
+        padding: 50px 0.5rem 0 0.5rem;
         min-height: 85vh;
     }
 
@@ -1197,7 +1197,7 @@ body {
 /* Screen size notice */
 .screen-size-notice {
     position: fixed;
-    top: 80px;
+    top: 60px;
     left: 50%;
     transform: translateX(-50%);
     background: rgba(255, 193, 7, 0.95);

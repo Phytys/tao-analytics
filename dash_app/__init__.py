@@ -25,7 +25,8 @@ def create_dash(server):
         external_stylesheets=[
             dbc.themes.BOOTSTRAP,
             "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap",
-            "https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap"
+            "https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap",
+            "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
         ],
         suppress_callback_exceptions=True,
         title="Bittensor Subnet Explorer - TAO Analytics",
@@ -117,6 +118,22 @@ def create_dash(server):
         html.Nav([
             html.Div([
                 html.A("TAO Analytics", href="/", className="nav-brand"),
+                
+                # Global Search Bar
+                html.Div([
+                    html.Div([
+                        html.I(className="fas fa-search search-icon"),
+                        dcc.Input(
+                            id="global-search-input",
+                            type="text",
+                            placeholder="Search subnets...",
+                            className="search-input",
+                            n_submit=0
+                        ),
+                        html.Div(id="search-results", className="search-results")
+                    ], className="search-container")
+                ], className="search-wrapper"),
+                
                 html.Button([
                     html.Span(className="hamburger-line"),
                     html.Span(className="hamburger-line"),
@@ -227,5 +244,117 @@ def create_dash(server):
             return {"display": "block"}
         else:
             return {"display": "none"}
+    
+    # Global search callback
+    @app.callback(
+        dash.Output("search-results", "children"),
+        dash.Output("global-search-input", "value"),
+        dash.Input("global-search-input", "value"),
+        dash.Input("global-search-input", "n_submit"),
+        dash.State("global-search-input", "value"),
+        prevent_initial_call=True
+    )
+    def handle_global_search(search_value, n_submit, current_value):
+        ctx = dash.callback_context
+        if not ctx.triggered:
+            return [], ""
+        
+        trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        
+        # Clear results if search is empty
+        if not search_value or len(search_value.strip()) < 2:
+            return [], search_value
+        
+        # If Enter was pressed, navigate to first result
+        if trigger_id == "global-search-input" and n_submit > 0:
+            if search_value:
+                # Find the first matching subnet
+                from services.db import get_db
+                from models import SubnetMeta, MetricsSnap
+                
+                session = get_db()
+                try:
+                    # Search by netuid (if numeric) or subnet name
+                    if search_value.isdigit():
+                        netuid = int(search_value)
+                        subnet = session.query(SubnetMeta).filter(SubnetMeta.netuid == netuid).first()
+                    else:
+                        # Search by name (case-insensitive, partial match)
+                        subnet = session.query(SubnetMeta).filter(
+                            SubnetMeta.subnet_name.ilike(f"%{search_value}%")
+                        ).first()
+                    
+                    if subnet:
+                        return [], f"/dash/subnet-detail?netuid={subnet.netuid}"
+                    else:
+                        return [], search_value
+                finally:
+                    session.close()
+        
+        # Show search results
+        from services.db import get_db
+        from models import SubnetMeta, MetricsSnap
+        from sqlalchemy import desc
+        
+        session = get_db()
+        try:
+            results = []
+            
+            # Search by netuid (if numeric)
+            if search_value.isdigit():
+                netuid = int(search_value)
+                subnet = session.query(SubnetMeta).filter(SubnetMeta.netuid == netuid).first()
+                if subnet:
+                    results.append({
+                        'netuid': subnet.netuid,
+                        'name': subnet.subnet_name or f"Subnet {subnet.netuid}",
+                        'category': getattr(subnet, 'primary_category', None)
+                    })
+            
+            # Search by name (case-insensitive, partial match)
+            name_results = session.query(SubnetMeta).filter(
+                SubnetMeta.subnet_name.ilike(f"%{search_value}%")
+            ).limit(5).all()
+            
+            for subnet in name_results:
+                if not any(r['netuid'] == subnet.netuid for r in results):
+                    results.append({
+                        'netuid': subnet.netuid,
+                        'name': subnet.subnet_name or f"Subnet {subnet.netuid}",
+                        'category': getattr(subnet, 'primary_category', None)
+                    })
+            
+            # Create result items
+            if results:
+                result_items = []
+                for result in results[:5]:  # Limit to 5 results
+                    category_badge = ""
+                    if result['category']:
+                        category_badge = html.Span(
+                            result['category'], 
+                            className="search-result-category"
+                        )
+                    
+                    result_items.append(
+                        html.A([
+                            html.Div([
+                                html.Strong(f"Subnet {result['netuid']}"),
+                                html.Br(),
+                                html.Span(result['name'], className="search-result-name"),
+                                category_badge
+                            ], className="search-result-content")
+                        ], 
+                        href=f"/dash/subnet-detail?netuid={result['netuid']}", 
+                        className="search-result-item")
+                    )
+                
+                return result_items, search_value
+            else:
+                return [
+                    html.Div("No subnets found", className="search-no-results")
+                ], search_value
+                
+        finally:
+            session.close()
     
     return app 

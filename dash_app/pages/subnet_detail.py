@@ -52,21 +52,57 @@ def create_overview_card(netuid: int) -> dbc.Card:
     """Create the overview card with price, FDV, market cap, and TAO stake."""
     return dbc.Card([
         dbc.CardHeader([
-            html.H5("Overview", className="mb-0")
-        ]),
-        dbc.CardBody([
-            html.Div(id="overview-content", children=[
-                dbc.Spinner(html.Div("Loading overview data..."), size="sm")
+            html.Div([
+                html.Span(id="overview-chevron", children="▼", className="me-2", style={"fontSize": "1.2rem", "color": "#007bff", "cursor": "pointer", "fontWeight": "bold"}),
+                html.H5("Overview", className="mb-0", style={"cursor": "pointer"})
+            ], id="overview-toggle", style={"cursor": "pointer"}),
+            html.Div([
+                html.Small(id="overview-timestamp", children="Loading...", className="text-muted")
+            ], className="text-end")
+        ], className="d-flex justify-content-between align-items-start", style={"backgroundColor": "#f8f9fa"}),
+        dbc.Collapse([
+            dbc.CardBody([
+                html.Div(id="overview-content", children=[
+                    dbc.Spinner(html.Div("Loading overview data..."), size="sm")
+                ])
+            ], className="overview-card")
+        ], id="overview-collapse", is_open=True)
+    ], className="mb-3")
+
+def create_volume_flow_card(netuid: int) -> dbc.Card:
+    """Create the volume and flow card with trading activity metrics."""
+    return dbc.Card([
+        dbc.CardHeader([
+            html.Div([
+                html.Span(id="volume-flow-chevron", children="▼", className="me-2", style={"fontSize": "1.2rem", "color": "#007bff", "cursor": "pointer", "fontWeight": "bold"}),
+                html.H5("Volume & Flow", className="mb-0", style={"cursor": "pointer"})
+            ], id="volume-flow-toggle", style={"cursor": "pointer"}),
+            html.Div([
+                html.Small(id="volume-flow-timestamp", children="Loading...", className="text-muted")
+            ], className="text-end")
+        ], className="d-flex justify-content-between align-items-start", style={"backgroundColor": "#f8f9fa"}),
+        dbc.Collapse([
+            dbc.CardBody([
+                html.Div(id="volume-flow-content", children=[
+                    dbc.Spinner(html.Div("Loading volume data..."), size="sm")
+                ])
             ])
-        ], className="overview-card")
+        ], id="volume-flow-collapse", is_open=True)
     ], className="mb-3")
 
 def create_metrics_grid(netuid: int) -> dbc.Card:
     """Create the key metrics grid with 5 tiles for investor metrics."""
     return dbc.Card([
         dbc.CardHeader([
-            html.H5("Key Metrics", className="mb-0")
-        ]),
+            html.Div([
+                html.Span(id="metrics-chevron", children="▼", className="me-2", style={"fontSize": "1.2rem", "color": "#007bff", "cursor": "pointer", "fontWeight": "bold"}),
+                html.H5("Key Metrics", className="mb-0", style={"cursor": "pointer"})
+            ], id="metrics-toggle", style={"cursor": "pointer"}),
+            html.Div([
+                html.Small(id="metrics-timestamp", children="Loading...", className="text-muted")
+            ], className="text-end")
+        ], className="d-flex justify-content-between align-items-start", style={"backgroundColor": "#f8f9fa"}),
+        dbc.Collapse([
         dbc.CardBody([
             # First row: TAO-Score, Stake Quality, Reserve Momentum
             dbc.Row([
@@ -194,21 +230,30 @@ def create_metrics_grid(netuid: int) -> dbc.Card:
             target="emission-progress-label",
             placement="top"
         )
+        ], id="metrics-collapse", is_open=True)
     ], className="mb-3")
 
 def create_gpt_insight_panel(netuid: int) -> dbc.Card:
     """Create the GPT insight panel with peer comparisons."""
     return dbc.Card([
         dbc.CardHeader([
-            html.H5("AI Analysis", className="mb-0"),
-            html.Small("Powered by GPT-4o (v5)", className="text-muted")
-        ]),
-        dbc.CardBody([
-            html.Div(id="gpt-insight", children=[
-                dbc.Spinner(html.Div("Generating AI insight..."), size="sm"),
-                html.Small("This may take a few seconds", className="text-muted d-block mt-2")
+            html.Div([
+                html.Span(id="gpt-insight-chevron", children="▲", className="me-2", style={"fontSize": "1.2rem", "color": "#007bff", "cursor": "pointer", "fontWeight": "bold"}),
+                html.H5("AI Analysis", className="mb-0", style={"cursor": "pointer"}),
+                html.Small("Powered by GPT-4o (v5)", className="text-muted")
+            ], id="gpt-insight-toggle", style={"cursor": "pointer"}),
+            html.Div([
+                html.Small(id="gpt-insight-timestamp", children="Loading...", className="text-muted")
+            ], className="text-end")
+        ], className="d-flex justify-content-between align-items-start", style={"backgroundColor": "#f8f9fa"}),
+        dbc.Collapse([
+            dbc.CardBody([
+                html.Div(id="gpt-insight", children=[
+                    dbc.Spinner(html.Div("Generating AI insight..."), size="sm"),
+                    html.Small("This may take a few seconds", className="text-muted d-block mt-2")
+                ])
             ])
-        ])
+        ], id="gpt-insight-collapse", is_open=False)
     ], className="mb-3")
 
 def create_enriched_description(netuid: int) -> dbc.Card:
@@ -264,8 +309,7 @@ def create_subnet_detail_layout(netuid: int | None = None) -> html.Div:
     """Create the complete subnet detail layout."""
     if netuid is None:
         return html.Div([
-            html.H1("Subnet Detail", className="text-center mt-5"),
-            html.P("Select a subnet to view detailed analytics.", className="text-center text-muted"),
+            html.P("Select a subnet to view detailed analytics.", className="text-center text-muted mt-5"),
             html.Div(id="subnet-detail-content")
         ])
     
@@ -278,6 +322,9 @@ def create_subnet_detail_layout(netuid: int | None = None) -> html.Div:
         
         # Overview card
         create_overview_card(netuid),
+        
+        # Volume & Flow card
+        create_volume_flow_card(netuid),
         
         # Metrics grid
         create_metrics_grid(netuid),
@@ -377,13 +424,14 @@ def update_subnet_category(search):
         return "Error loading category"
 
 @callback(
-    Output("overview-content", "children"),
+    [Output("overview-content", "children"),
+     Output("overview-timestamp", "children")],
     Input("url", "search")
 )
 def update_overview(search):
     """Update the overview card with price action and flow data."""
     if not search:
-        return "No subnet selected"
+        return "No subnet selected", "No subnet selected"
     
     try:
         import urllib.parse
@@ -391,7 +439,7 @@ def update_overview(search):
         netuid = int(params.get('netuid', [None])[0])
         
         if netuid is None:
-            return "Invalid subnet ID"
+            return "Invalid subnet ID", "Invalid subnet ID"
         
         # Get latest metrics from database
         with get_db() as session:
@@ -460,6 +508,9 @@ def update_overview(search):
             price_7d_color = "text-success" if price_7d is not None and float(price_7d) > 0 else "text-danger" if price_7d is not None and float(price_7d) < 0 else ""
             price_30d_color = "text-success" if price_30d is not None and float(price_30d) > 0 else "text-danger" if price_30d is not None and float(price_30d) < 0 else ""
             
+            # Get timestamp for overview data
+            timestamp_str = f"Updated: {latest_metrics.timestamp.strftime('%Y-%m-%d %H:%M UTC')}" if latest_metrics and latest_metrics.timestamp else "No data available"
+            
             return html.Div([
                 # First row: Price, Market Cap, FDV, Total Stake Weight
                 dbc.Row([
@@ -493,23 +544,19 @@ def update_overview(search):
                     ], width=3)
                 ], className="mb-3"),
                 
-                # Second row: Price changes and flow data
+                # Second row: Price changes and reserves
                 dbc.Row([
                     dbc.Col([
                         html.H6("24 h Δ", className="text-muted", id="price-1d-label"),
                         html.H5(price_1d_formatted, className=price_1d_color)
-                    ], width=2),
+                    ], width=3),
                     dbc.Col([
                         html.H6("7 d Δ", className="text-muted", id="price-7d-label"),
                         html.H5(price_7d_formatted, className=price_7d_color)
-                    ], width=2),
+                    ], width=3),
                     dbc.Col([
                         html.H6("30 d Δ", className="text-muted", id="price-30d-label"),
                         html.H5(price_30d_formatted, className=price_30d_color)
-                    ], width=2),
-                    dbc.Col([
-                        html.H6("Buy Vol (24 h)", className="text-muted", id="buy-volume-label"),
-                        html.H5(f"{buy_volume_formatted} TAO" if buy_volume_formatted != "--" else "--")
                     ], width=3),
                     dbc.Col([
                         html.H6("TAO Reserves", className="text-muted", id="tao-reserves-label"),
@@ -553,21 +600,17 @@ def update_overview(search):
                     target="price-30d-label",
                     placement="top"
                 ),
-                dbc.Tooltip(
-                    "TAO value of α bought in last 24h.",
-                    target="buy-volume-label",
-                    placement="top"
-                ),
+
                 dbc.Tooltip(
                     "TAO locked in the subnet's reserve pool.",
                     target="tao-reserves-label",
                     placement="top"
                 )
-            ])
+            ]), timestamp_str
         
     except Exception as e:
         logger.error(f"Error updating overview: {e}")
-        return "Error loading overview data"
+        return "Error loading overview data", "Error loading timestamp"
 
 @callback(
     [Output("tao-score", "children"),
@@ -577,13 +620,14 @@ def update_overview(search):
      Output("consensus-alignment", "children"),
      Output("active-stake", "children"),
      Output("annual-inflation", "children"),
-     Output("emission-progress-gauge", "children")],
+     Output("emission-progress-gauge", "children"),
+     Output("metrics-timestamp", "children")],
     Input("url", "search")
 )
 def update_metrics_grid(search):
     """Update the metrics grid with peer comparisons and ranking badges."""
     if not search:
-        return "--", "--", "--"
+        return "--", "--", "--", "--", "--", "--", "--", "--", "No subnet selected"
     
     try:
         import urllib.parse
@@ -768,20 +812,24 @@ def update_metrics_grid(search):
             else:
                 util_formatted = "--"
             
-            return tao_score_formatted, stake_quality_formatted, momentum_formatted, util_formatted, consensus_formatted, active_stake_formatted, inflation_formatted, progress_formatted
+            # Get timestamp for metrics data
+            timestamp_str = f"Updated: {latest_metrics.timestamp.strftime('%Y-%m-%d %H:%M UTC')}" if latest_metrics and latest_metrics.timestamp else "No data available"
+            
+            return tao_score_formatted, stake_quality_formatted, momentum_formatted, util_formatted, consensus_formatted, active_stake_formatted, inflation_formatted, progress_formatted, timestamp_str
         
     except Exception as e:
         logger.error(f"Error updating metrics grid: {e}")
-        return "--", "--", "--", "--", "--", "--", "--", "--"
+        return "--", "--", "--", "--", "--", "--", "--", "--", "Error loading timestamp"
 
 @callback(
-    Output("gpt-insight", "children"),
+    [Output("volume-flow-content", "children"),
+     Output("volume-flow-timestamp", "children")],
     Input("url", "search")
 )
-def update_gpt_insight(search):
-    """Update the GPT insight panel with peer comparisons."""
+def update_volume_flow(search):
+    """Update the volume and flow card with trading activity metrics."""
     if not search:
-        return "No subnet selected"
+        return "No subnet selected", "No subnet selected"
     
     try:
         import urllib.parse
@@ -789,10 +837,101 @@ def update_gpt_insight(search):
         netuid = int(params.get('netuid', [None])[0])
         
         if netuid is None:
-            return "Invalid subnet ID"
+            return "Invalid subnet ID", "Invalid subnet ID"
+        
+        # Get latest metrics from database
+        with get_db() as session:
+            latest_metrics = session.query(MetricsSnap).filter_by(netuid=netuid)\
+                .order_by(MetricsSnap.timestamp.desc()).first()
+            
+            if not latest_metrics:
+                return "No data available", "No data available"
+            
+            # Format volume and flow data
+            buy_volume = latest_metrics.buy_volume_tao_1d
+            flow_24h = latest_metrics.flow_24h
+            flow_7d = latest_metrics.net_volume_tao_7d
+            
+            buy_volume_formatted = f"{buy_volume:,.0f}" if buy_volume is not None else "--"
+            flow_24h_formatted = f"{flow_24h:,.0f}" if flow_24h is not None else "--"
+            flow_7d_formatted = f"{flow_7d:,.0f}" if flow_7d is not None else "--"
+            
+            # Determine colors for netflow (green for positive, red for negative)
+            flow_24h_color = "text-success" if flow_24h is not None and flow_24h > 0 else "text-danger" if flow_24h is not None and flow_24h < 0 else ""
+            flow_7d_color = "text-success" if flow_7d is not None and flow_7d > 0 else "text-danger" if flow_7d is not None and flow_7d < 0 else ""
+            
+            # Get timestamp
+            timestamp_str = f"Updated: {latest_metrics.timestamp.strftime('%Y-%m-%d %H:%M UTC')}" if latest_metrics and latest_metrics.timestamp else "No data available"
+            
+            return html.Div([
+                # Volume and flow metrics
+                dbc.Row([
+                    dbc.Col([
+                        html.H6("Buy Volume (24h)", className="text-muted", id="buy-volume-label"),
+                        html.H5(f"{buy_volume_formatted} TAO" if buy_volume_formatted != "--" else "--")
+                    ], width=4),
+                    dbc.Col([
+                        html.H6("Netflow (24h)", className="text-muted", id="netflow-24h-label"),
+                        html.H5(f"{flow_24h_formatted} TAO" if flow_24h_formatted != "--" else "--", className=flow_24h_color)
+                    ], width=4),
+                    dbc.Col([
+                        html.H6("Netflow (7d)", className="text-muted", id="netflow-7d-label"),
+                        html.H5(f"{flow_7d_formatted} TAO" if flow_7d_formatted != "--" else "--", className=flow_7d_color)
+                    ], width=4)
+                ]),
+                
+                # Tooltips
+                dbc.Tooltip(
+                    "TAO value of α bought in last 24h.",
+                    target="buy-volume-label",
+                    placement="top"
+                ),
+                dbc.Tooltip(
+                    "Net TAO flow over 24h (inflow - outflow). Positive = net inflow, negative = net outflow.",
+                    target="netflow-24h-label",
+                    placement="top"
+                ),
+                dbc.Tooltip(
+                    "Net TAO flow over 7 days (inflow - outflow). Positive = net inflow, negative = net outflow.",
+                    target="netflow-7d-label",
+                    placement="top"
+                )
+            ]), timestamp_str
+        
+    except Exception as e:
+        logger.error(f"Error updating volume flow: {e}")
+        return "Error loading volume data", "Error loading timestamp"
+
+@callback(
+    [Output("gpt-insight", "children"),
+     Output("gpt-insight-timestamp", "children")],
+    Input("url", "search")
+)
+def update_gpt_insight(search):
+    """Update the GPT insight panel with peer comparisons."""
+    if not search:
+        return "No subnet selected", "No subnet selected"
+    
+    try:
+        import urllib.parse
+        params = urllib.parse.parse_qs(search.lstrip('?'))
+        netuid = int(params.get('netuid', [None])[0])
+        
+        if netuid is None:
+            return "Invalid subnet ID", "Invalid subnet ID"
         
         # Get insight from service (use cache-aware function)
         insight = gpt_insight_service['get_insight'](netuid)
+        
+        # Get insight timestamp from cache
+        from services.gpt_insight import get_insight_cache_info
+        cache_info = get_insight_cache_info(netuid)
+        insight_timestamp = cache_info.get('cached_insight_timestamp')
+        
+        if insight_timestamp:
+            timestamp_str = f"Generated: {insight_timestamp.strftime('%Y-%m-%d %H:%M UTC')}"
+        else:
+            timestamp_str = "Generated: Just now"
         
         # Extract and save buy signal to database
         from services.gpt_insight import extract_buy_signal_from_insight
@@ -805,11 +944,11 @@ def update_gpt_insight(search):
                     session.commit()
                     logger.info(f"Saved buy signal {buy_signal}/5 for subnet {netuid}")
         
-        return html.P(insight, className="mb-0", style={"whiteSpace": "pre-wrap"})
+        return html.P(insight, className="mb-0", style={"whiteSpace": "pre-wrap"}), timestamp_str
         
     except Exception as e:
         logger.error(f"Error getting GPT insight: {e}")
-        return "Error loading AI insight"
+        return "Error loading AI insight", "Error loading timestamp"
 
 @callback(
     Output("description", "children"),
@@ -944,12 +1083,79 @@ def update_external_links(search):
 
 # Main layout
 layout = html.Div([
-    html.H2("Subnet Detail", className="mb-4"),
     html.Div(id="subnet-detail-content", children=[
         html.Div("Select a subnet to view details", className="text-center py-5")
     ])
 ])
 
+@callback(
+    [Output("gpt-insight-collapse", "is_open"),
+     Output("gpt-insight-chevron", "children")],
+    Input("gpt-insight-toggle", "n_clicks"),
+    State("gpt-insight-collapse", "is_open"),
+    prevent_initial_call=True
+)
+def toggle_gpt_insight_collapse(n_clicks, is_open):
+    """Toggle the GPT insight collapse."""
+    logger.info(f"Collapse callback triggered: n_clicks={n_clicks}, is_open={is_open}")
+    if n_clicks:
+        new_state = not is_open
+        chevron_text = "▲" if new_state else "▼"
+        logger.info(f"Toggling collapse: new_state={new_state}, chevron_text={chevron_text}")
+        return new_state, chevron_text
+    chevron_text = "▲" if is_open else "▼"
+    return is_open, chevron_text
+
+@callback(
+    [Output("overview-collapse", "is_open"),
+     Output("overview-chevron", "children")],
+    Input("overview-toggle", "n_clicks"),
+    State("overview-collapse", "is_open"),
+    prevent_initial_call=True
+)
+def toggle_overview_collapse(n_clicks, is_open):
+    """Toggle the overview collapse."""
+    if n_clicks:
+        new_state = not is_open
+        chevron_text = "▲" if new_state else "▼"
+        return new_state, chevron_text
+    chevron_text = "▲" if is_open else "▼"
+    return is_open, chevron_text
+
+@callback(
+    [Output("volume-flow-collapse", "is_open"),
+     Output("volume-flow-chevron", "children")],
+    Input("volume-flow-toggle", "n_clicks"),
+    State("volume-flow-collapse", "is_open"),
+    prevent_initial_call=True
+)
+def toggle_volume_flow_collapse(n_clicks, is_open):
+    """Toggle the volume & flow collapse."""
+    if n_clicks:
+        new_state = not is_open
+        chevron_text = "▲" if new_state else "▼"
+        return new_state, chevron_text
+    chevron_text = "▲" if is_open else "▼"
+    return is_open, chevron_text
+
+@callback(
+    [Output("metrics-collapse", "is_open"),
+     Output("metrics-chevron", "children")],
+    Input("metrics-toggle", "n_clicks"),
+    State("metrics-collapse", "is_open"),
+    prevent_initial_call=True
+)
+def toggle_metrics_collapse(n_clicks, is_open):
+    """Toggle the metrics collapse."""
+    if n_clicks:
+        new_state = not is_open
+        chevron_text = "▲" if new_state else "▼"
+        return new_state, chevron_text
+    chevron_text = "▲" if is_open else "▼"
+    return is_open, chevron_text
+
 def register_callbacks(dash_app):
     """Register callbacks for subnet detail page."""
-    pass  # Callbacks are already registered via decorators 
+    # The callbacks are already registered via decorators, but we need to ensure
+    # the collapsible callback is properly registered
+    pass 
