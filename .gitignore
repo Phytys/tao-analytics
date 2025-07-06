@@ -66,6 +66,7 @@ htmlcov/
 *.bak
 *.backup
 *~
+notes.md
 
 # Node modules (if any frontend tools are used)
 node_modules/

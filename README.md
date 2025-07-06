@@ -454,6 +454,16 @@ Bittensor SDK  real-time      GitHub README    confidence      provenance     GP
   - Error handling and logging
   - Multiple data sources integration
 
+#### **`run_heroku_cron.py`** (Convenience Script)
+- **Purpose**: Run cron_fetch.py locally while targeting Heroku database
+- **Usage**: `python scripts/run_heroku_cron.py --once nightly`
+- **Requires**: `HEROKU_DB_URL_FOR_SCRIPT` in `.env` file
+- **Scenario**: Local development → Heroku database
+- **Benefits**: 
+  - No manual environment variable setting
+  - Clear separation between local and production targets
+  - Automatic database URL loading from `.env`
+
 #### **`scripts/data_collection/`**
 - **`fetch_screener.py`**: TAO.app API data collection
 - **`fetch_coingecko_data.py`**: CoinGecko price data
@@ -757,6 +767,27 @@ DATABASE_URL=postgresql://...  # Auto-provided by Heroku Postgres addon
 #### **Key Insight: Local Scripts → Heroku Database**
 For optimal performance and cost management, run data collection scripts locally while targeting the Heroku database:
 
+#### **Option 1: Convenience Script (Local → Heroku)**
+For running scripts locally while targeting the Heroku database:
+
+Add your Heroku database URL to `.env`:
+```bash
+# In your .env file
+HEROKU_DB_URL_FOR_SCRIPT="postgresql://username:password@host:port/database"
+```
+
+Then use the convenience script:
+```bash
+# Normal development (uses local SQLite)
+python scripts/cron_fetch.py --once nightly
+
+# Local → Heroku database (uses PostgreSQL)
+python scripts/run_heroku_cron.py --once nightly
+```
+
+#### **Option 2: Manual Environment Override (Local → Heroku)**
+Alternative way to run scripts locally while targeting the Heroku database:
+
 ```bash
 # Set Heroku database URL locally for data collection
 export HEROKU_DATABASE_URL="postgresql://username:password@host:port/database"
@@ -766,6 +797,14 @@ DATABASE_URL=$HEROKU_DATABASE_URL python scripts/cron_fetch.py --once nightly
 
 # Run enrichment locally targeting Heroku database  
 DATABASE_URL=$HEROKU_DATABASE_URL python scripts/data_collection/batch_enrich.py --range 1 128
+```
+
+#### **Option 3: Heroku Platform (Heroku → Heroku)**
+For running scripts directly on Heroku (via Heroku Scheduler):
+
+```bash
+# On Heroku platform - uses DATABASE_URL automatically provided by Heroku
+python scripts/cron_fetch.py --once nightly
 ```
 
 #### **Why This Approach?**
@@ -802,14 +841,15 @@ For lightweight, automated tasks on Heroku:
 
 #### **Production Data Workflow**
 ```bash
-# 1. Heavy Data Collection (Run Locally)
-DATABASE_URL=$HEROKU_DATABASE_URL python scripts/cron_fetch.py --once nightly
+# 1. Heavy Data Collection (Local → Heroku)
+python scripts/run_heroku_cron.py --once nightly
 
-# 2. AI Enrichment (Run Locally)  
+# 2. AI Enrichment (Local → Heroku)  
 DATABASE_URL=$HEROKU_DATABASE_URL python scripts/data_collection/batch_enrich.py --range 1 128
 
-# 3. Lightweight Updates (Heroku Scheduler)
+# 3. Lightweight Updates (Heroku → Heroku)
 # Configured via Heroku Scheduler addon for hourly/daily updates
+# Uses: python scripts/cron_fetch.py --once nightly
 ```
 
 ### **Database Management**

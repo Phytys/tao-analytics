@@ -1008,12 +1008,17 @@ def main():
     # Log database target at script start
     from services.db_utils import get_database_type
     from config import DATABASE_URL
+    from models import engine
+    
+    # Get the actual engine URL being used
+    actual_engine_url = str(engine.url)
     db_type = get_database_type()
+    
     logger.info(f"🚀 Starting cron_fetch.py - Database target: {db_type.upper()}")
     if db_type == 'sqlite':
-        logger.info(f"📁 Local SQLite database: {DATABASE_URL}")
+        logger.info(f"📁 Local SQLite database: {actual_engine_url}")
     else:
-        logger.info(f"☁️  Heroku PostgreSQL database: {DATABASE_URL[:50]}...")
+        logger.info(f"☁️  Heroku PostgreSQL database: {actual_engine_url[:50]}...")
     
     cron = CronFetch()
     
