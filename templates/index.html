@@ -35,6 +35,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <div class="hero-section">
@@ -42,6 +43,15 @@
             <div class="nav-container">
                 <div class="nav-logo">
                     <a href="/" class="nav-brand">TAO Analytics</a>
+                </div>
+                
+                <!-- Global Search Bar -->
+                <div class="search-wrapper">
+                    <div class="search-container">
+                        <i class="fas fa-search search-icon"></i>
+                        <input type="text" id="global-search-input" placeholder="Search subnets..." class="search-input">
+                        <div id="search-results" class="search-results"></div>
+                    </div>
                 </div>
                 
                 <!-- Mobile menu button -->
@@ -261,6 +271,89 @@
                 if (!mobileMenuBtn.contains(event.target) && !navLinks.contains(event.target)) {
                     navLinks.classList.remove('nav-open');
                     mobileMenuBtn.classList.remove('active');
+                }
+            });
+            
+            // Global search functionality
+            const searchInput = document.getElementById('global-search-input');
+            const searchResults = document.getElementById('search-results');
+            let searchTimeout;
+            
+            searchInput.addEventListener('input', function() {
+                const query = this.value.trim();
+                
+                // Clear previous timeout
+                clearTimeout(searchTimeout);
+                
+                // Clear results if query is too short
+                if (query.length < 2) {
+                    searchResults.innerHTML = '';
+                    searchResults.style.display = 'none';
+                    return;
+                }
+                
+                // Debounce search requests
+                searchTimeout = setTimeout(() => {
+                    fetch(`/api/search?q=${encodeURIComponent(query)}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.results && data.results.length > 0) {
+                                const resultsHtml = data.results.map(result => {
+                                    const categoryBadge = result.category ? 
+                                        `<span class="search-result-category">${result.category}</span>` : '';
+                                    
+                                    return `
+                                        <a href="/dash/subnet-detail?netuid=${result.netuid}" class="search-result-item">
+                                            <div class="search-result-content">
+                                                <strong>Subnet ${result.netuid}</strong><br>
+                                                <span class="search-result-name">${result.name}</span>
+                                                ${categoryBadge}
+                                            </div>
+                                        </a>
+                                    `;
+                                }).join('');
+                                
+                                searchResults.innerHTML = resultsHtml;
+                                searchResults.style.display = 'block';
+                            } else {
+                                searchResults.innerHTML = '<div class="search-no-results">No subnets found</div>';
+                                searchResults.style.display = 'block';
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Search error:', error);
+                            searchResults.innerHTML = '<div class="search-no-results">Search failed</div>';
+                            searchResults.style.display = 'block';
+                        });
+                }, 300); // 300ms debounce
+            });
+            
+            // Handle Enter key
+            searchInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    const query = this.value.trim();
+                    if (query.length >= 2) {
+                        // Navigate to first result or search page
+                        const firstResult = searchResults.querySelector('.search-result-item');
+                        if (firstResult) {
+                            window.location.href = firstResult.href;
+                        }
+                    }
+                }
+            });
+            
+            // Close search results when clicking outside
+            document.addEventListener('click', function(event) {
+                if (!searchInput.contains(event.target) && !searchResults.contains(event.target)) {
+                    searchResults.style.display = 'none';
+                }
+            });
+            
+            // Close search results when pressing Escape
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    searchResults.style.display = 'none';
+                    searchInput.blur();
                 }
             });
         });

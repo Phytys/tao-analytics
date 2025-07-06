@@ -953,6 +953,26 @@ details .btn-outline-secondary:hover {
         padding: 0.75rem 1rem !important;
     }
     
+    /* Search styles for small mobile */
+    .search-wrapper {
+        max-width: 150px;
+        margin: 0 0.5rem;
+    }
+    
+    .search-input {
+        font-size: 12px;
+        padding: 5px 8px 5px 26px;
+    }
+    
+    .search-icon {
+        font-size: 11px;
+        left: 8px;
+    }
+    
+    .search-results {
+        max-height: 200px;
+    }
+    
     /* Further optimize for very small screens */
     .chart-container {
         padding: 0.25rem;

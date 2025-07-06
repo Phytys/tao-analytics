@@ -125,6 +125,53 @@ def create_app():
         logger.debug(f"Auth check from {request.remote_addr}: {is_authenticated}")
         return jsonify({'authenticated': is_authenticated})
 
+    @server.route('/api/search')
+    @limiter.limit("100 per hour")
+    def search_subnets():
+        """Search subnets API endpoint."""
+        query = request.args.get('q', '').strip()
+        
+        if not query or len(query) < 2:
+            return jsonify({'results': []})
+        
+        try:
+            from services.db import get_db
+            from models import SubnetMeta
+            
+            session = get_db()
+            results = []
+            
+            # Search by netuid (if numeric)
+            if query.isdigit():
+                netuid = int(query)
+                subnet = session.query(SubnetMeta).filter(SubnetMeta.netuid == netuid).first()
+                if subnet:
+                    results.append({
+                        'netuid': subnet.netuid,
+                        'name': subnet.subnet_name or f"Subnet {subnet.netuid}",
+                        'category': getattr(subnet, 'primary_category', None)
+                    })
+            
+            # Search by name (case-insensitive, partial match)
+            name_results = session.query(SubnetMeta).filter(
+                SubnetMeta.subnet_name.ilike(f"%{query}%")
+            ).limit(5).all()
+            
+            for subnet in name_results:
+                if not any(r['netuid'] == subnet.netuid for r in results):
+                    results.append({
+                        'netuid': subnet.netuid,
+                        'name': subnet.subnet_name or f"Subnet {subnet.netuid}",
+                        'category': getattr(subnet, 'primary_category', None)
+                    })
+            
+            session.close()
+            return jsonify({'results': results[:5]})
+            
+        except Exception as e:
+            logger.error(f"Search error: {e}")
+            return jsonify({'results': [], 'error': 'Search failed'})
+
     @server.route('/admin/system-info')
     @require_admin
     @limiter.limit("30 per minute")

@@ -285,7 +285,8 @@ def create_dash(server):
                         ).first()
                     
                     if subnet:
-                        return [], f"/dash/subnet-detail?netuid={subnet.netuid}"
+                        # Clear search and let the link handle navigation
+                        return [], ""
                     else:
                         return [], search_value
                 finally:
