@@ -399,19 +399,18 @@ def layout():
             ])
         ], className="mb-4"),
         
-        # SECTION 1: Custom Trend Analysis
+        # Global Time Range Control
         dbc.Card([
             dbc.CardHeader([
-                html.H4("📈 Custom Trend Analysis", className="mb-0"),
-                html.I(className="bi bi-graph-up ms-2", id="trend-tooltip")
+                html.H4("⏰ Global Time Range Control", className="mb-0"),
+                html.I(className="bi bi-clock ms-2", id="time-range-tooltip")
             ]),
             dbc.CardBody([
-                # Controls for this section
+                html.P("Set the time range for all charts below. Changing this will update all sections simultaneously:", className="text-muted mb-3"),
                 dbc.Row([
                     dbc.Col([
-                        html.Label("Time Range", className="form-label fw-bold"),
                         dcc.Dropdown(
-                            id="trend-time-range",
+                            id="shared-time-range",
                             options=[
                                 {"label": "Last 7 Days", "value": 7},
                                 {"label": "Last 14 Days", "value": 14},
@@ -422,7 +421,20 @@ def layout():
                             value=30,
                             clearable=False
                         )
-                    ], width=3),
+                    ], width=4),
+                ])
+            ])
+        ], className="mb-4"),
+        
+        # SECTION 1: Custom Trend Analysis
+        dbc.Card([
+            dbc.CardHeader([
+                html.H4("📈 Custom Trend Analysis", className="mb-0"),
+                html.I(className="bi bi-graph-up ms-2", id="trend-tooltip")
+            ]),
+            dbc.CardBody([
+                # Controls for this section
+                dbc.Row([
                     dbc.Col([
                         html.Label("Metric to Track", className="form-label fw-bold"),
                         dcc.Dropdown(
@@ -431,7 +443,7 @@ def layout():
                             value="tao_score",
                             clearable=False
                         )
-                    ], width=3),
+                    ], width=4),
                     dbc.Col([
                         html.Label("Aggregation Method", className="form-label fw-bold"),
                         dcc.Dropdown(
@@ -444,7 +456,7 @@ def layout():
                             value="mean",
                             clearable=False
                         )
-                    ], width=3),
+                    ], width=4),
                     dbc.Col([
                         html.Label("Filter by Category", className="form-label fw-bold"),
                         dcc.Dropdown(
@@ -453,7 +465,7 @@ def layout():
                             value="All",
                             clearable=False
                         )
-                    ], width=3),
+                    ], width=4),
                 ], className="mb-4"),
                 # Chart for this section
                 dcc.Graph(id="custom-trend-chart", config={'displayModeBar': False})
@@ -470,21 +482,6 @@ def layout():
                 # Controls for this section
                 dbc.Row([
                     dbc.Col([
-                        html.Label("Time Range", className="form-label fw-bold"),
-                        dcc.Dropdown(
-                            id="category-time-range",
-                            options=[
-                                {"label": "Last 7 Days", "value": 7},
-                                {"label": "Last 14 Days", "value": 14},
-                                {"label": "Last 30 Days", "value": 30},
-                                {"label": "Last 60 Days", "value": 60},
-                                {"label": "All Available", "value": 365}
-                            ],
-                            value=30,
-                            clearable=False
-                        )
-                    ], width=4),
-                    dbc.Col([
                         html.Label("Metric to Compare", className="form-label fw-bold"),
                         dcc.Dropdown(
                             id="category-metric",
@@ -492,7 +489,7 @@ def layout():
                             value="tao_score",
                             clearable=False
                         )
-                    ], width=4),
+                    ], width=6),
                     dbc.Col([
                         html.Label("Filter by Category", className="form-label fw-bold"),
                         dcc.Dropdown(
@@ -501,7 +498,7 @@ def layout():
                             value="All",
                             clearable=False
                         )
-                    ], width=4),
+                    ], width=6),
                 ], className="mb-4"),
                 # Chart for this section
                 dcc.Graph(id="category-performance-chart", config={'displayModeBar': False})
@@ -518,21 +515,6 @@ def layout():
                 # Controls for this section
                 dbc.Row([
                     dbc.Col([
-                        html.Label("Time Range", className="form-label fw-bold"),
-                        dcc.Dropdown(
-                            id="performers-time-range",
-                            options=[
-                                {"label": "Last 7 Days", "value": 7},
-                                {"label": "Last 14 Days", "value": 14},
-                                {"label": "Last 30 Days", "value": 30},
-                                {"label": "Last 60 Days", "value": 60},
-                                {"label": "All Available", "value": 365}
-                            ],
-                            value=30,
-                            clearable=False
-                        )
-                    ], width=4),
-                    dbc.Col([
                         html.Label("Performance Metric", className="form-label fw-bold"),
                         dcc.Dropdown(
                             id="performers-metric",
@@ -540,7 +522,7 @@ def layout():
                             value="tao_score",
                             clearable=False
                         )
-                    ], width=4),
+                    ], width=6),
                     dbc.Col([
                         html.Label("Filter by Category", className="form-label fw-bold"),
                         dcc.Dropdown(
@@ -549,7 +531,7 @@ def layout():
                             value="All",
                             clearable=False
                         )
-                    ], width=4),
+                    ], width=6),
                 ], className="mb-4"),
                 # Chart for this section
                 dcc.Graph(id="top-performers-chart", config={'displayModeBar': False})
@@ -559,27 +541,13 @@ def layout():
         # SECTION 4: Improvement Tracking
         dbc.Card([
             dbc.CardHeader([
-                html.H4("📈 Improvement Tracking", className="mb-0"),
+                html.H4("📈 Improvement Tracking (7-Day)", className="mb-0"),
                 html.I(className="bi bi-arrow-up-circle ms-2", id="improvement-tooltip")
             ]),
             dbc.CardBody([
+                html.P("Track subnets showing the most improvement in TAO-Score over the last 7 days:", className="text-muted mb-3"),
                 # Controls for this section
                 dbc.Row([
-                    dbc.Col([
-                        html.Label("Time Range for Improvement Analysis", className="form-label fw-bold"),
-                        dcc.Dropdown(
-                            id="improvement-time-range",
-                            options=[
-                                {"label": "Last 7 Days", "value": 7},
-                                {"label": "Last 14 Days", "value": 14},
-                                {"label": "Last 30 Days", "value": 30},
-                                {"label": "Last 60 Days", "value": 60},
-                                {"label": "All Available", "value": 365}
-                            ],
-                            value=30,
-                            clearable=False
-                        )
-                    ], width=6),
                     dbc.Col([
                         html.Label("Minimum Improvement Threshold", className="form-label fw-bold"),
                         dcc.Slider(
@@ -591,7 +559,7 @@ def layout():
                             marks={0.1: '0.1', 1.0: '1.0', 2.0: '2.0', 3.0: '3.0', 4.0: '4.0', 5.0: '5.0'},
                             tooltip={"placement": "bottom", "always_visible": False}
                         )
-                    ], width=6),
+                    ], width=12),
                 ], className="mb-4"),
                 # Chart for this section
                 dcc.Graph(id="improvement-tracking-chart", config={'displayModeBar': False})
@@ -642,6 +610,12 @@ def layout():
             placement="top"
         ),
         dbc.Tooltip(
+            "Set the time range for all charts on this page. Changing this will update all sections "
+            "simultaneously for consistent analysis across all metrics.",
+            target="time-range-tooltip",
+            placement="top"
+        ),
+        dbc.Tooltip(
             "Create custom trend charts by selecting any metric, time range, aggregation method, and category filter. "
             "Perfect for tracking specific metrics over time.",
             target="trend-tooltip",
@@ -660,8 +634,8 @@ def layout():
             placement="top"
         ),
         dbc.Tooltip(
-            "Track subnets showing the most improvement in TAO-Score over the selected time period. "
-            "These represent emerging opportunities and subnets that are actively improving.",
+            "Track subnets showing the most improvement in TAO-Score over the last 7 days. "
+            "These represent emerging opportunities and subnets that are actively improving in the short term.",
             target="improvement-tooltip",
             placement="top"
         ),
@@ -679,13 +653,8 @@ def layout():
         ),
         
         # Store for dynamic data
-        dcc.Store(id="trend-data-store"),
-        dcc.Store(id="category-data-store"),
-        dcc.Store(id="performers-data-store"),
-        dcc.Store(id="improvement-data-store"),
         dcc.Store(id="overview-data-store"),
-        dcc.Store(id="fixed-trends-data-store"),
-        dcc.Store(id="correlation-data-store"),
+        dcc.Store(id="shared-data-store"),
     ])
 
 # Callbacks for network overview
@@ -747,29 +716,42 @@ def update_category_filters(data):
     category_options = [{"label": "All Categories", "value": "All"}] + [{"label": cat, "value": cat} for cat in categories if cat]
     return category_options, category_options, category_options
 
+# SHARED DATA STORE - Single source of truth for all sections
+@callback(
+    Output("shared-data-store", "data"),
+    Input("url", "pathname"),
+    Input("shared-time-range", "value")
+)
+def load_shared_data(pathname, time_range):
+    """Load shared time series data for all sections."""
+    if pathname == "/dash/insights":
+        try:
+            # Use default 30 days if no time range specified
+            days_back = time_range if time_range else 30
+            df = get_time_series_data(days_back)
+            return {
+                'data': df.to_dict('records'),
+                'time_range': days_back,
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            return {'data': [], 'time_range': 30, 'timestamp': datetime.now().isoformat()}
+    return {'data': [], 'time_range': 30, 'timestamp': datetime.now().isoformat()}
+
 # Callbacks for SECTION 1: Custom Trend Analysis
 @callback(
-    Output("trend-data-store", "data"),
-    Input("trend-time-range", "value")
-)
-def update_trend_data(time_range):
-    """Update data for trend analysis."""
-    df = get_time_series_data(time_range)
-    return df.to_dict('records')
-
-@callback(
     Output("custom-trend-chart", "figure"),
-    Input("trend-data-store", "data"),
+    Input("shared-data-store", "data"),
     Input("trend-metric", "value"),
     Input("trend-aggregation", "value"),
     Input("trend-category-filter", "value")
 )
-def update_custom_trend_chart(data, metric, aggregation, category):
-    """Update custom trend chart."""
-    if not data:
+def update_custom_trend_chart(shared_data, metric, aggregation, category):
+    """Update custom trend chart using shared data."""
+    if not shared_data or 'data' not in shared_data or not shared_data['data']:
         return go.Figure().add_annotation(text="No data available", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
     
-    df = pd.DataFrame(data)
+    df = pd.DataFrame(shared_data['data'])
     
     # Ensure timestamp is properly converted to datetime
     if 'timestamp' in df.columns:
@@ -786,26 +768,17 @@ def update_custom_trend_chart(data, metric, aggregation, category):
 
 # Callbacks for SECTION 2: Category Performance Analysis
 @callback(
-    Output("category-data-store", "data"),
-    Input("category-time-range", "value")
-)
-def update_category_data(time_range):
-    """Update data for category analysis."""
-    df = get_time_series_data(time_range)
-    return df.to_dict('records')
-
-@callback(
     Output("category-performance-chart", "figure"),
-    Input("category-data-store", "data"),
+    Input("shared-data-store", "data"),
     Input("category-metric", "value"),
     Input("category-filter", "value")
 )
-def update_category_performance_chart(data, metric, category):
-    """Update category performance chart."""
-    if not data:
+def update_category_performance_chart(shared_data, metric, category):
+    """Update category performance chart using shared data."""
+    if not shared_data or 'data' not in shared_data or not shared_data['data']:
         return go.Figure().add_annotation(text="No data available", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
     
-    df = pd.DataFrame(data)
+    df = pd.DataFrame(shared_data['data'])
     
     # Ensure timestamp is properly converted to datetime
     if 'timestamp' in df.columns:
@@ -822,26 +795,17 @@ def update_category_performance_chart(data, metric, category):
 
 # Callbacks for SECTION 3: Top Performers Analysis
 @callback(
-    Output("performers-data-store", "data"),
-    Input("performers-time-range", "value")
-)
-def update_performers_data(time_range):
-    """Update data for performers analysis."""
-    df = get_time_series_data(time_range)
-    return df.to_dict('records')
-
-@callback(
     Output("top-performers-chart", "figure"),
-    Input("performers-data-store", "data"),
+    Input("shared-data-store", "data"),
     Input("performers-metric", "value"),
     Input("performers-category-filter", "value")
 )
-def update_top_performers_chart(data, metric, category):
-    """Update top performers chart."""
-    if not data:
+def update_top_performers_chart(shared_data, metric, category):
+    """Update top performers chart using shared data."""
+    if not shared_data or 'data' not in shared_data or not shared_data['data']:
         return go.Figure().add_annotation(text="No data available", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
     
-    df = pd.DataFrame(data)
+    df = pd.DataFrame(shared_data['data'])
     
     # Ensure timestamp is properly converted to datetime
     if 'timestamp' in df.columns:
@@ -858,61 +822,41 @@ def update_top_performers_chart(data, metric, category):
 
 # Callbacks for SECTION 4: Improvement Tracking
 @callback(
-    Output("improvement-data-store", "data"),
-    Input("improvement-time-range", "value")
-)
-def update_improvement_data(time_range):
-    """Update data for improvement analysis."""
-    df = get_time_series_data(time_range)
-    return df.to_dict('records')
-
-@callback(
     Output("improvement-tracking-chart", "figure"),
-    Input("improvement-data-store", "data"),
-    Input("improvement-time-range", "value"),
+    Input("url", "pathname"),
     Input("improvement-threshold", "value")
 )
-def update_improvement_tracking_chart(data, time_range, threshold):
-    """Update improvement tracking chart."""
-    if not data:
+def update_improvement_tracking_chart(pathname, threshold):
+    """Update improvement tracking chart using fixed 7-day data."""
+    if pathname != "/dash/insights":
         return go.Figure().add_annotation(text="No data available", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
     
-    df = pd.DataFrame(data)
-    
-    # Ensure timestamp is properly converted to datetime
-    if 'timestamp' in df.columns:
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
-    
-    return create_improvement_tracker(df, time_range)
+    try:
+        # Always use 7 days for improvement tracking
+        df = get_time_series_data(7)
+        
+        # Ensure timestamp is properly converted to datetime
+        if 'timestamp' in df.columns:
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+        
+        return create_improvement_tracker(df, 7)
+    except Exception as e:
+        return go.Figure().add_annotation(text="Error loading improvement data", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
 
 # Callbacks for SECTION 5: Fixed Network Trends
-@callback(
-    Output("fixed-trends-data-store", "data"),
-    Input("url", "pathname")
-)
-def load_fixed_trends_data(pathname):
-    """Load fixed trends data when page loads."""
-    if pathname == "/dash/insights":
-        try:
-            df_30d = get_time_series_data(30)
-            return df_30d.to_dict('records')
-        except Exception as e:
-            return []
-    return []
-
 @callback(
     Output("stake-quality-trend", "figure"),
     Output("market-cap-trend", "figure"),
     Output("flow-trend", "figure"),
-    Input("fixed-trends-data-store", "data")
+    Input("shared-data-store", "data")
 )
-def update_fixed_trends(data):
-    """Update fixed trend charts."""
-    if not data:
+def update_fixed_trends(shared_data):
+    """Update fixed trend charts using shared data."""
+    if not shared_data or 'data' not in shared_data or not shared_data['data']:
         empty_fig = go.Figure().add_annotation(text="No data available", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
         return empty_fig, empty_fig, empty_fig
     
-    df = pd.DataFrame(data)
+    df = pd.DataFrame(shared_data['data'])
     
     # Ensure timestamp is properly converted to datetime
     if 'timestamp' in df.columns:
@@ -926,29 +870,15 @@ def update_fixed_trends(data):
 
 # Callbacks for SECTION 6: Correlation Analysis
 @callback(
-    Output("correlation-data-store", "data"),
-    Input("url", "pathname")
-)
-def load_correlation_data(pathname):
-    """Load correlation data when page loads."""
-    if pathname == "/dash/insights":
-        try:
-            df_30d = get_time_series_data(30)
-            return df_30d.to_dict('records')
-        except Exception as e:
-            return []
-    return []
-
-@callback(
     Output("correlation-matrix", "figure"),
-    Input("correlation-data-store", "data")
+    Input("shared-data-store", "data")
 )
-def update_correlation_matrix(data):
-    """Update correlation matrix."""
-    if not data:
+def update_correlation_matrix(shared_data):
+    """Update correlation matrix using shared data."""
+    if not shared_data or 'data' not in shared_data or not shared_data['data']:
         return go.Figure().add_annotation(text="No data available", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
     
-    df = pd.DataFrame(data)
+    df = pd.DataFrame(shared_data['data'])
     
     # Ensure timestamp is properly converted to datetime
     if 'timestamp' in df.columns:
