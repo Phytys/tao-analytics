@@ -40,10 +40,12 @@ def create_app():
     Talisman(server, 
              content_security_policy={
                  'default-src': ["'self'"],
-                 'script-src': ["'self'", "'unsafe-inline'", "https://cdn.plot.ly"],
-                 'style-src': ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+                 'script-src': ["'self'", "'unsafe-inline'", "https://cdn.plot.ly", "https://s3.tradingview.com"],
+                 'style-src': ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://fonts.googleapis.com", "https://cdnjs.cloudflare.com"],
                  'img-src': ["'self'", "data:", "https:"],
-                 'font-src': ["'self'", "https://cdn.jsdelivr.net"],
+                 'font-src': ["'self'", "https://cdn.jsdelivr.net", "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com"],
+                 'frame-src': ["'self'", "https://s3.tradingview.com", "https://s.tradingview.com", "https://www.tradingview.com", "https://www.tradingview-widget.com", "https://tradingview-widget.com", "https://www.geckoterminal.com"],
+                 'connect-src': ["'self'", "https://s3.tradingview.com", "https://www.tradingview.com", "https://www.geckoterminal.com"],
              },
              force_https=os.getenv('FORCE_HTTPS', 'false').lower() == 'true')
 

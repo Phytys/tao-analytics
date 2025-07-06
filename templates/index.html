@@ -154,6 +154,17 @@
                 </a>
             </div>
             
+            <!-- TAO/USDT TradingView Chart -->
+            <div class="tradingview-chart-container">
+                <div class="chart-header">
+                    <h3>TAO/USDT Live Chart</h3>
+                    <p>Real-time Bittensor (TAO) price from Binance via TradingView</p>
+                </div>
+                <div class="tradingview-widget-container">
+                    <div id="tradingview_chart"></div>
+                </div>
+            </div>
+            
             <!-- Network Highlights -->
             {% if data_available %}
             <div class="network-highlights">
@@ -247,8 +258,60 @@
     </footer>
 
     <script>
-        // Mobile menu toggle
+        // Mobile menu toggle and TradingView initialization
         document.addEventListener('DOMContentLoaded', function() {
+            // Initialize TradingView Chart with widget
+            const chartContainer = document.getElementById('tradingview_chart');
+            console.log('Initializing TradingView chart...');
+            
+            // Create widget container
+            const widgetDiv = document.createElement('div');
+            widgetDiv.className = 'tradingview-widget-container__widget';
+            chartContainer.appendChild(widgetDiv);
+            
+            // Create and add script
+            const script = document.createElement('script');
+            script.type = 'text/javascript';
+            script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js';
+            script.async = true;
+            
+            // Use TAO/USDT from Binance
+            const widgetConfig = {
+                "symbols": [["BINANCE:TAOUSDT", "TAOUSDT|1D"]],
+                "chartOnly": false,
+                "width": "100%",
+                "height": "400",
+                "locale": "en",
+                "colorTheme": "light",
+                "autosize": true,
+                "showVolume": false,
+                "showMA": false,
+                "hideDateRanges": false,
+                "hideMarketStatus": false,
+                "hideSymbolLogo": false,
+                "scalePosition": "right",
+                "scaleMode": "Normal",
+                "fontFamily": "-apple-system, BlinkMacSystemFont, Trebuchet MS, Roboto, Ubuntu, sans-serif",
+                "fontSize": "10",
+                "noTimeScale": false,
+                "valuesTracking": "1",
+                "changeMode": "price-and-percent",
+                "chartType": "area",
+                "maLineColor": "#2962FF",
+                "maLineWidth": 1,
+                "maLength": 9
+            };
+            
+            script.textContent = JSON.stringify(widgetConfig);
+            chartContainer.appendChild(script);
+            console.log('TradingView widget script added to DOM');
+            
+            // Add error handling for widget loading
+            script.onerror = function() {
+                console.error('TradingView widget failed to load');
+                chartContainer.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 400px; background: #f8f9fa; border-radius: 8px; color: #6c757d;"><div style="text-align: center;"><div style="font-size: 2rem; margin-bottom: 1rem;">⚠️</div><div style="font-size: 1.1rem; margin-bottom: 0.5rem;">Chart Unavailable</div><div style="font-size: 0.9rem;">TradingView widget failed to load</div><button onclick="location.reload()" style="margin-top: 1rem; padding: 0.5rem 1rem; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Retry</button></div></div>';
+            };
+            
             const mobileMenuBtn = document.getElementById('mobile-menu-btn');
             const navLinks = document.getElementById('nav-links');
             

@@ -90,6 +90,42 @@ def create_volume_flow_card(netuid: int) -> dbc.Card:
         ], id="volume-flow-collapse", is_open=True)
     ], className="mb-3")
 
+def create_geckoterminal_pool_widget(netuid: int) -> dbc.Card:
+    """Create GeckoTerminal pool data widget."""
+    return dbc.Card([
+        dbc.CardHeader([
+            html.H5("Live Market Data", className="mb-0")
+        ]),
+        dbc.CardBody([
+            html.Div([
+                html.P("Loading market data...", className="text-muted"),
+                html.Iframe(
+                    src=f"https://www.geckoterminal.com/bittensor/pools/0-{netuid}",
+                    style={
+                        'width': '100%',
+                        'height': '600px',
+                        'border': 'none',
+                        'borderRadius': '8px'
+                    },
+                    title=f"GeckoTerminal Pool Data for Subnet {netuid}"
+                ),
+                html.Div([
+                    html.Small(
+                        "Data provided by GeckoTerminal",
+                        className="text-muted"
+                    ),
+                    html.Br(),
+                    html.A(
+                        "View on GeckoTerminal ↗",
+                        href=f"https://www.geckoterminal.com/bittensor/pools/0-{netuid}",
+                        target="_blank",
+                        className="text-decoration-none"
+                    )
+                ], className="mt-2 text-center")
+            ])
+        ])
+    ], className="mb-3")
+
 def create_metrics_grid(netuid: int) -> dbc.Card:
     """Create the key metrics grid with 5 tiles for investor metrics."""
     return dbc.Card([
@@ -325,6 +361,9 @@ def create_subnet_detail_layout(netuid: int | None = None) -> html.Div:
         
         # Volume & Flow card
         create_volume_flow_card(netuid),
+        
+        # GeckoTerminal Pool Data Widget
+        create_geckoterminal_pool_widget(netuid),
         
         # Metrics grid
         create_metrics_grid(netuid),
