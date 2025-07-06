@@ -130,12 +130,31 @@ def load_screener_frame():
         func.coalesce(json_field(ScreenerRaw.raw_json, 'tao_in'), 0).label('tao_in'),
         func.coalesce(json_field(ScreenerRaw.raw_json, 'buy_volume_tao_1d'), 0).label('buy_volume_tao_1d'),
         # Price changes from MetricsSnap
+        MetricsSnap.price_1h_change,
+        MetricsSnap.price_1d_change,
         MetricsSnap.price_7d_change,
         MetricsSnap.price_30d_change,
-        # Flow and momentum
+        # Volume analysis
+        MetricsSnap.sell_volume_tao_1d,
+        MetricsSnap.total_volume_tao_1d,
+        MetricsSnap.buy_sell_ratio,
+        MetricsSnap.net_volume_tao_1h,
+        MetricsSnap.net_volume_tao_7d,
+        MetricsSnap.buy_volume_pct_change,
+        MetricsSnap.sell_volume_pct_change,
+        MetricsSnap.total_volume_pct_change,
+        # Flow and momentum (legacy)
         func.coalesce(json_field(ScreenerRaw.raw_json, 'net_volume_tao_24h'), 0).label('flow_24h'),
-        func.coalesce(json_field(ScreenerRaw.raw_json, 'net_volume_tao_7d'), 0).label('net_volume_tao_7d'),
-        # Metrics from MetricsSnap
+        # Network health
+        MetricsSnap.uid_count,
+        MetricsSnap.active_validators,
+        MetricsSnap.validators_active,
+        MetricsSnap.max_validators,
+        # Stake distribution
+        MetricsSnap.stake_hhi,
+        MetricsSnap.hhi,
+        MetricsSnap.gini_coeff_top_100,
+        # Core metrics from MetricsSnap
         MetricsSnap.reserve_momentum,
         MetricsSnap.stake_quality,
         MetricsSnap.validator_util_pct,
@@ -143,9 +162,22 @@ def load_screener_frame():
         MetricsSnap.consensus_alignment,
         MetricsSnap.emission_pct,
         MetricsSnap.alpha_emitted_pct,
+        MetricsSnap.emission_roi,
         MetricsSnap.tao_score,
         MetricsSnap.stake_quality_rank_pct,
         MetricsSnap.momentum_rank_pct,
+        # PnL and performance
+        MetricsSnap.realized_pnl_tao,
+        MetricsSnap.unrealized_pnl_tao,
+        MetricsSnap.ath_60d,
+        MetricsSnap.atl_60d,
+        # Token flow
+        MetricsSnap.alpha_in,
+        MetricsSnap.alpha_out,
+        MetricsSnap.alpha_circ,
+        MetricsSnap.alpha_prop,
+        MetricsSnap.root_prop,
+        # Timestamps
         MetricsSnap.timestamp.label('metrics_timestamp'),
         ScreenerRaw.fetched_at.label('screener_timestamp')
     ).select_from(
@@ -172,10 +204,15 @@ def load_screener_frame():
     # Ensure numeric with proper defaults
     numeric_columns = [
         'price_tao', 'market_cap_tao', 'fdv_tao', 'total_stake_tao', 'tao_in', 
-        'buy_volume_tao_1d', 'price_7d_change', 'price_30d_change', 'flow_24h',
-        'net_volume_tao_7d', 'reserve_momentum', 'stake_quality', 'validator_util_pct', 'active_stake_ratio',
-        'consensus_alignment', 'emission_pct', 'alpha_emitted_pct', 'tao_score',
-        'stake_quality_rank_pct', 'momentum_rank_pct'
+        'buy_volume_tao_1d', 'price_1h_change', 'price_1d_change', 'price_7d_change', 'price_30d_change',
+        'sell_volume_tao_1d', 'total_volume_tao_1d', 'buy_sell_ratio', 'net_volume_tao_1h', 'net_volume_tao_7d',
+        'buy_volume_pct_change', 'sell_volume_pct_change', 'total_volume_pct_change', 'flow_24h',
+        'uid_count', 'active_validators', 'validators_active', 'max_validators',
+        'stake_hhi', 'hhi', 'gini_coeff_top_100', 'reserve_momentum', 'stake_quality', 
+        'validator_util_pct', 'active_stake_ratio', 'consensus_alignment', 'emission_pct', 
+        'alpha_emitted_pct', 'emission_roi', 'tao_score', 'stake_quality_rank_pct', 'momentum_rank_pct',
+        'realized_pnl_tao', 'unrealized_pnl_tao', 'ath_60d', 'atl_60d',
+        'alpha_in', 'alpha_out', 'alpha_circ', 'alpha_prop', 'root_prop'
     ]
     
     for col in numeric_columns:

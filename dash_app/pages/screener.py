@@ -1,5 +1,5 @@
 import dash
-from dash import html, dcc, callback, Output, Input
+from dash import html, dcc, callback, Output, Input, State
 import dash_bootstrap_components as dbc
 import plotly.express as px
 import plotly.graph_objects as go
@@ -53,44 +53,73 @@ if 'market_cap_tao' in df.columns:
     # Convert to millions USD for display
     df['market_cap_musd'] = df['market_cap_usd'] / 1_000_000
 
-# Bubble scatter chart with better styling
-fig = px.scatter(
-    df,
-    x='price_7d_change',
-    y='price_30d_change',
-    size='market_cap_musd',
-    color='primary_category',
-    hover_data=['subnet_name', 'netuid', 'tao_score', 'metrics_timestamp', 'primary_category', 'market_cap_musd'],
-    title="Price Momentum: 7-Day vs 30-Day Change",
-    labels={
-        'price_7d_change': '7-Day Price Change (%)',
-        'price_30d_change': '30-Day Price Change (%)',
-        'market_cap_musd': 'Market Cap (MUSD)',
-        'primary_category': 'Category'
-    },
-    size_max=40
-)
+# Define available metrics for dynamic axes (only those that exist in the dataframe)
+AXIS_METRICS = {
+    # Price & Momentum
+    'price_1h_change': {'label': '1-Hour Price Change (%)', 'type': 'percentage'},
+    'price_1d_change': {'label': '1-Day Price Change (%)', 'type': 'percentage'},
+    'price_7d_change': {'label': '7-Day Price Change (%)', 'type': 'percentage'},
+    'price_30d_change': {'label': '30-Day Price Change (%)', 'type': 'percentage'},
+    'price_tao': {'label': 'Price (TAO)', 'type': 'price'},
+    'ath_60d': {'label': '60-Day ATH (TAO)', 'type': 'price'},
+    'atl_60d': {'label': '60-Day ATL (TAO)', 'type': 'price'},
+    
+    # Volume & Flow Analysis
+    'buy_volume_tao_1d': {'label': '24h Buy Volume (TAO)', 'type': 'volume'},
+    'sell_volume_tao_1d': {'label': '24h Sell Volume (TAO)', 'type': 'volume'},
+    'total_volume_tao_1d': {'label': '24h Total Volume (TAO)', 'type': 'volume'},
+    'buy_sell_ratio': {'label': 'Buy/Sell Ratio', 'type': 'ratio'},
+    'net_volume_tao_1h': {'label': '1h Net Volume (TAO)', 'type': 'volume'},
+    'net_volume_tao_7d': {'label': '7d Net Volume (TAO)', 'type': 'volume'},
+    'flow_24h': {'label': '24h Net Flow (TAO)', 'type': 'volume'},
+    'buy_volume_pct_change': {'label': 'Buy Volume % Change', 'type': 'percentage'},
+    'sell_volume_pct_change': {'label': 'Sell Volume % Change', 'type': 'percentage'},
+    'total_volume_pct_change': {'label': 'Total Volume % Change', 'type': 'percentage'},
+    
+    # Network Health & Participation
+    'uid_count': {'label': 'Total UIDs', 'type': 'count'},
+    'active_validators': {'label': 'Active Validators', 'type': 'count'},
+    'validators_active': {'label': 'Validators Active', 'type': 'count'},
+    'max_validators': {'label': 'Max Validators', 'type': 'count'},
+    'validator_util_pct': {'label': 'Validator Utilization (%)', 'type': 'percentage'},
+    
+    # Stake Quality & Distribution
+    'tao_score': {'label': 'TAO-Score', 'type': 'score'},
+    'stake_quality': {'label': 'Stake Quality', 'type': 'score'},
+    'stake_quality_rank_pct': {'label': 'Stake Quality Rank (%)', 'type': 'percentage'},
+    'active_stake_ratio': {'label': 'Active Stake Ratio (%)', 'type': 'percentage'},
+    'stake_hhi': {'label': 'Stake HHI', 'type': 'concentration'},
+    'hhi': {'label': 'HHI Index', 'type': 'concentration'},
+    'gini_coeff_top_100': {'label': 'Gini Coefficient (Top 100)', 'type': 'concentration'},
+    
+    # Momentum & Performance
+    'reserve_momentum': {'label': 'Reserve Momentum', 'type': 'momentum'},
+    'momentum_rank_pct': {'label': 'Momentum Rank (%)', 'type': 'percentage'},
+    'consensus_alignment': {'label': 'Consensus Alignment (%)', 'type': 'percentage'},
+    'realized_pnl_tao': {'label': 'Realized PnL (TAO)', 'type': 'pnl'},
+    'unrealized_pnl_tao': {'label': 'Unrealized PnL (TAO)', 'type': 'pnl'},
+    
+    # Market & Valuation
+    'market_cap_tao': {'label': 'Market Cap (TAO)', 'type': 'market_cap'},
+    'fdv_tao': {'label': 'Fully Diluted Valuation (TAO)', 'type': 'market_cap'},
+    'total_stake_tao': {'label': 'Total Stake (TAO)', 'type': 'stake'},
+    
+    # Emission & Token Economics
+    'tao_in': {'label': 'TAO Reserves', 'type': 'reserves'},
+    'emission_pct': {'label': 'Emission Percentage', 'type': 'percentage'},
+    'alpha_emitted_pct': {'label': 'Alpha Emitted (%)', 'type': 'percentage'},
+    'emission_roi': {'label': 'Emission ROI', 'type': 'roi'},
+    
+    # Token Flow & Distribution
+    'alpha_in': {'label': 'Alpha In (TAO)', 'type': 'flow'},
+    'alpha_out': {'label': 'Alpha Out (TAO)', 'type': 'flow'},
+    'alpha_circ': {'label': 'Alpha Circulation', 'type': 'flow'},
+    'alpha_prop': {'label': 'Alpha Proportion', 'type': 'proportion'},
+    'root_prop': {'label': 'Root Proportion', 'type': 'proportion'},
+}
 
-# Add borders and improve dot visibility
-fig.update_traces(
-    marker=dict(
-        line=dict(width=1, color='rgba(0,0,0,0.3)'),
-        sizemin=8  # Minimum dot size
-    ),
-    hovertemplate="<b>%{customdata[0]}</b><br>" +
-                 "NetUID: %{customdata[1]}<br>" +
-                 "Category: %{customdata[4]}<br>" +
-                 "Market Cap: $%{customdata[5]:.1f}M USD<br>" +
-                 "7d: %{x:.1f}%<br>" +
-                 "30d: %{y:.1f}%<br>" +
-                 "TAO-Score: %{customdata[2]:.1f}<br>" +
-                 "Data: %{customdata[3]}<br>" +
-                 "<extra></extra>"
-)
-
-# Add quadrant lines
-fig.add_hline(y=0, line_dash="dash", line_color="gray")
-fig.add_vline(x=0, line_dash="dash", line_color="gray")
+# Create axis options for dropdowns
+axis_options = [{"label": f"{v['label']}", "value": k} for k, v in AXIS_METRICS.items()]
 
 # Get available categories for dropdown
 categories = sorted(df['primary_category'].dropna().unique().tolist())
@@ -101,7 +130,76 @@ category_options = [{"label": "All Categories", "value": "All"}] + [
 # Compute max market cap for slider (set to 1000 MUSD)
 mcap_max = 1000
 
-# Create additional charts for the second section
+# Create initial figures
+def create_initial_momentum_fig():
+    """Create initial momentum figure."""
+    fig = px.scatter(
+        df,
+        x='price_7d_change',
+        y='price_30d_change',
+        size='market_cap_musd',
+        color='primary_category',
+        hover_data=['subnet_name', 'netuid', 'tao_score', 'metrics_timestamp', 'primary_category', 'market_cap_musd'],
+        title="Price Momentum Analysis",
+        labels={
+            'price_7d_change': '7-Day Price Change (%)',
+            'price_30d_change': '30-Day Price Change (%)',
+            'market_cap_musd': 'Market Cap (MUSD)',
+            'primary_category': 'Category'
+        },
+        size_max=40
+    )
+    fig.update_traces(
+        marker=dict(line=dict(width=1, color='rgba(0,0,0,0.3)'), sizemin=8),
+        hovertemplate="<b>%{customdata[0]}</b><br>" +
+                     "NetUID: %{customdata[1]}<br>" +
+                     "Category: %{customdata[4]}<br>" +
+                     "Market Cap: $%{customdata[5]:.1f}M USD<br>" +
+                     "X: %{x:.1f}%<br>" +
+                     "Y: %{y:.1f}%<br>" +
+                     "TAO-Score: %{customdata[2]:.1f}<br>" +
+                     "Data: %{customdata[3]}<br>" +
+                     "<extra></extra>"
+    )
+    fig.add_hline(y=0, line_dash="dash", line_color="gray")
+    fig.add_vline(x=0, line_dash="dash", line_color="gray")
+    return fig
+
+def create_initial_buy_signal_fig():
+    """Create initial buy signal figure."""
+    fig = px.scatter(
+        df,
+        x='tao_score',
+        y='flow_24h',
+        size='market_cap_musd',
+        color='buy_signal',
+        color_continuous_scale=['grey', 'red', 'orange', 'yellow', 'lightgreen', 'darkgreen'],
+        hover_data=['subnet_name', 'netuid', 'tao_score', 'flow_24h', 'buy_signal'],
+        title="Buy Signal Analysis",
+        labels={
+            'tao_score': 'TAO-Score',
+            'flow_24h': '24h Net Flow (TAO)',
+            'market_cap_musd': 'Market Cap (MUSD)',
+            'buy_signal': 'Buy Signal'
+        },
+        size_max=30
+    )
+    fig.update_traces(
+        marker=dict(line=dict(width=1, color='rgba(0,0,0,0.3)'), sizemin=5),
+        hovertemplate="<b>%{customdata[0]}</b><br>" +
+                     "NetUID: %{customdata[1]}<br>" +
+                     "TAO-Score: %{customdata[2]:.1f}<br>" +
+                     "24h Flow: %{customdata[3]:.0f} TAO<br>" +
+                     "Buy Signal: %{customdata[4]}<br>" +
+                     "<extra></extra>"
+    )
+    return fig
+
+# Create initial figures
+momentum_fig = create_initial_momentum_fig()
+buy_signal_fig = create_initial_buy_signal_fig()
+
+# Create additional charts for the third section
 def create_tao_score_distribution():
     """Create TAO-Score distribution histogram."""
     fig = px.histogram(
@@ -121,13 +219,11 @@ def create_tao_score_distribution():
 
 def create_validator_utilization():
     """Create validator utilization scatter plot."""
-    # Create a copy and ensure market_cap_musd is calculated
     viz_df = df.copy()
     if 'market_cap_tao' in viz_df.columns:
         viz_df['market_cap_usd'] = viz_df['market_cap_tao'] * tao_price_usd
         viz_df['market_cap_usd'] = viz_df['market_cap_usd'].fillna(0)
         viz_df.loc[viz_df['market_cap_usd'] < 0, 'market_cap_usd'] = 0
-        # Convert to millions USD for display
         viz_df['market_cap_musd'] = viz_df['market_cap_usd'] / 1_000_000
     
     fig = px.scatter(
@@ -147,10 +243,7 @@ def create_validator_utilization():
         size_max=30
     )
     fig.update_traces(
-        marker=dict(
-            line=dict(width=1, color='rgba(0,0,0,0.3)'),
-            sizemin=5
-        ),
+        marker=dict(line=dict(width=1, color='rgba(0,0,0,0.3)'), sizemin=5),
         hovertemplate="<b>%{customdata[0]}</b><br>" +
                      "NetUID: %{customdata[1]}<br>" +
                      "Validator Util: %{customdata[2]:.1f}%<br>" +
@@ -159,155 +252,224 @@ def create_validator_utilization():
     )
     return fig
 
-def create_stake_quality_analysis():
-    """Create stake quality vs market cap analysis."""
-    # Create a copy and ensure market_cap_musd is calculated
+def create_volume_analysis():
+    """Create volume analysis scatter plot."""
     viz_df = df.copy()
     if 'market_cap_tao' in viz_df.columns:
         viz_df['market_cap_usd'] = viz_df['market_cap_tao'] * tao_price_usd
         viz_df['market_cap_usd'] = viz_df['market_cap_usd'].fillna(0)
         viz_df.loc[viz_df['market_cap_usd'] < 0, 'market_cap_usd'] = 0
-        # Convert to millions USD for display
         viz_df['market_cap_musd'] = viz_df['market_cap_usd'] / 1_000_000
     
     fig = px.scatter(
         viz_df,
-        x='stake_quality',
-        y='market_cap_musd',
-        size='tao_score',
-        color='primary_category',
-        hover_data=['subnet_name', 'netuid', 'stake_quality', 'market_cap_musd', 'tao_score'],
-        title="Stake Quality vs Market Cap",
+        x='buy_volume_tao_1d',
+        y='sell_volume_tao_1d',
+        size='market_cap_musd',
+        color='buy_sell_ratio',
+        color_continuous_scale='RdYlGn',
+        hover_data=['subnet_name', 'netuid', 'buy_volume_tao_1d', 'sell_volume_tao_1d', 'buy_sell_ratio', 'market_cap_musd'],
+        title="Buy vs Sell Volume Analysis",
         labels={
-            'stake_quality': 'Stake Quality',
+            'buy_volume_tao_1d': '24h Buy Volume (TAO)',
+            'sell_volume_tao_1d': '24h Sell Volume (TAO)',
             'market_cap_musd': 'Market Cap (MUSD)',
-            'tao_score': 'TAO-Score',
-            'primary_category': 'Category'
+            'buy_sell_ratio': 'Buy/Sell Ratio'
         },
-        size_max=15
+        size_max=30
     )
     fig.update_traces(
-        marker=dict(
-            line=dict(width=1, color='rgba(0,0,0,0.3)'),
-            sizemin=3
-        ),
+        marker=dict(line=dict(width=1, color='rgba(0,0,0,0.3)'), sizemin=5),
         hovertemplate="<b>%{customdata[0]}</b><br>" +
                      "NetUID: %{customdata[1]}<br>" +
-                     "Stake Quality: %{customdata[2]:.1f}<br>" +
-                     "Market Cap: $%{customdata[3]:.1f}M USD<br>" +
-                     "TAO-Score: %{customdata[4]:.1f}<br>" +
+                     "Buy Volume: %{customdata[2]:.0f} TAO<br>" +
+                     "Sell Volume: %{customdata[3]:.0f} TAO<br>" +
+                     "Buy/Sell Ratio: %{customdata[4]:.2f}<br>" +
+                     "Market Cap: $%{customdata[5]:.1f}M USD<br>" +
                      "<extra></extra>"
     )
+    # Add diagonal line for equal buy/sell
+    max_val = max(viz_df['buy_volume_tao_1d'].max(), viz_df['sell_volume_tao_1d'].max())
+    fig.add_trace(go.Scatter(x=[0, max_val], y=[0, max_val], mode='lines', 
+                            line=dict(dash='dash', color='gray'), 
+                            name='Equal Buy/Sell', showlegend=False))
     return fig
 
-def create_buy_signal_analysis():
-    """Create TAO-Score vs net flow analysis with buy signal heatmap."""
-    # Create a copy of the dataframe for visualization
+def create_stake_distribution():
+    """Create stake distribution analysis."""
     viz_df = df.copy()
-    
-    # Ensure market_cap_musd is calculated
     if 'market_cap_tao' in viz_df.columns:
         viz_df['market_cap_usd'] = viz_df['market_cap_tao'] * tao_price_usd
         viz_df['market_cap_usd'] = viz_df['market_cap_usd'].fillna(0)
         viz_df.loc[viz_df['market_cap_usd'] < 0, 'market_cap_usd'] = 0
-        # Convert to millions USD for display
         viz_df['market_cap_musd'] = viz_df['market_cap_usd'] / 1_000_000
-    
-    # Create color mapping: buy signal if available, grey if not
-    # Use buy_signal as color, but handle missing values
-    viz_df['color_value'] = viz_df['buy_signal'].fillna(0)  # 0 for grey (no signal)
-    
-    # Create custom color scale: grey for 0, then heatmap colors for 1-5
-    import plotly.colors as pc
-    
-    # Create custom colorscale: grey for 0, then sequential colors for 1-5
-    colorscale = [
-        [0, 'lightgrey'],      # 0 = no signal (grey)
-        [0.2, '#ff7f7f'],      # 1 = red (avoid)
-        [0.4, '#ffbf7f'],      # 2 = orange (weak)
-        [0.6, '#ffff7f'],      # 3 = yellow (neutral)
-        [0.8, '#7fff7f'],      # 4 = light green (good)
-        [1.0, '#007f00']       # 5 = dark green (strong buy)
-    ]
     
     fig = px.scatter(
         viz_df,
-        x='tao_score',
-        y='flow_24h',
-        size='market_cap_tao',
-        color='color_value',
-        hover_data=[
-            'subnet_name',    # 0
-            'netuid',         # 1
-            'buy_signal',     # 2
-            'tao_score',      # 3
-            'flow_24h',       # 4
-            'market_cap_tao'  # 5
-        ],
-        title="TAO-Score vs Net Flow (Buy Signal Heatmap)",
+        x='stake_hhi',
+        y='gini_coeff_top_100',
+        size='market_cap_musd',
+        color='active_stake_ratio',
+        color_continuous_scale='Viridis',
+        hover_data=['subnet_name', 'netuid', 'stake_hhi', 'gini_coeff_top_100', 'active_stake_ratio', 'market_cap_musd'],
+        title="Stake Distribution Analysis",
         labels={
-            'tao_score': 'TAO-Score',
-            'flow_24h': 'Net Flow 24h (TAO)',
+            'stake_hhi': 'Stake HHI (Concentration)',
+            'gini_coeff_top_100': 'Gini Coefficient (Top 100)',
             'market_cap_musd': 'Market Cap (MUSD)',
-            'color_value': 'Buy Signal'
+            'active_stake_ratio': 'Active Stake Ratio (%)'
         },
-        size_max=30,
-        color_continuous_scale=colorscale,
-        range_color=[0, 5]
+        size_max=25
     )
-    
     fig.update_traces(
-        marker=dict(
-            line=dict(width=1, color='rgba(0,0,0,0.3)'),
-            sizemin=5
-        ),
+        marker=dict(line=dict(width=1, color='rgba(0,0,0,0.3)'), sizemin=5),
         hovertemplate="<b>%{customdata[0]}</b><br>" +
                      "NetUID: %{customdata[1]}<br>" +
-                     "Buy Signal: %{customdata[2]}/5 (Click to generate)<br>" +
-                     "TAO-Score: %{x:.1f}<br>" +
-                     "Net Flow: %{y:,.0f} TAO<br>" +
-                     "Market Cap: %{marker.size:.0f} TAO<br>" +
+                     "Stake HHI: %{customdata[2]:.2f}<br>" +
+                     "Gini Coefficient: %{customdata[3]:.2f}<br>" +
+                     "Active Stake Ratio: %{customdata[4]:.1f}%<br>" +
+                     "Market Cap: $%{customdata[5]:.1f}M USD<br>" +
                      "<extra></extra>"
     )
-    
-    # Add quadrant lines
-    fig.add_hline(y=0, line_dash="dash", line_color="gray")
-    fig.add_vline(x=50, line_dash="dash", line_color="gray")  # Neutral TAO-Score
-    
-    # Update colorbar title and ticks
-    fig.update_layout(
-        coloraxis_colorbar=dict(
-            title="Buy Signal",
-            tickmode='array',
-            tickvals=[0, 1, 2, 3, 4, 5],
-            ticktext=['No Signal', '1 (Avoid)', '2 (Weak)', '3 (Neutral)', '4 (Good)', '5 (Strong)']
-        )
-    )
-
     return fig
 
-# Create the additional charts
+def create_network_health():
+    """Create network health analysis."""
+    viz_df = df.copy()
+    if 'market_cap_tao' in viz_df.columns:
+        viz_df['market_cap_usd'] = viz_df['market_cap_tao'] * tao_price_usd
+        viz_df['market_cap_usd'] = viz_df['market_cap_usd'].fillna(0)
+        viz_df.loc[viz_df['market_cap_usd'] < 0, 'market_cap_usd'] = 0
+        viz_df['market_cap_musd'] = viz_df['market_cap_usd'] / 1_000_000
+    
+    fig = px.scatter(
+        viz_df,
+        x='active_validators',
+        y='validator_util_pct',
+        size='market_cap_musd',
+        color='uid_count',
+        color_continuous_scale='Plasma',
+        hover_data=['subnet_name', 'netuid', 'active_validators', 'validator_util_pct', 'uid_count', 'market_cap_musd'],
+        title="Network Health & Participation",
+        labels={
+            'active_validators': 'Active Validators',
+            'validator_util_pct': 'Validator Utilization (%)',
+            'market_cap_musd': 'Market Cap (MUSD)',
+            'uid_count': 'Total UIDs'
+        },
+        size_max=25
+    )
+    fig.update_traces(
+        marker=dict(line=dict(width=1, color='rgba(0,0,0,0.3)'), sizemin=5),
+        hovertemplate="<b>%{customdata[0]}</b><br>" +
+                     "NetUID: %{customdata[1]}<br>" +
+                     "Active Validators: %{customdata[2]}<br>" +
+                     "Validator Utilization: %{customdata[3]:.1f}%<br>" +
+                     "Total UIDs: %{customdata[4]}<br>" +
+                     "Market Cap: $%{customdata[5]:.1f}M USD<br>" +
+                     "<extra></extra>"
+    )
+    return fig
+
+# Create initial figures for additional analysis
 tao_score_fig = create_tao_score_distribution()
 validator_fig = create_validator_utilization()
-stake_quality_fig = create_stake_quality_analysis()
-buy_signal_fig = create_buy_signal_analysis()
+volume_fig = create_volume_analysis()
+stake_dist_fig = create_stake_distribution()
+network_health_fig = create_network_health()
 
+# Layout with dynamic control panels
 layout = html.Div([
-    html.H2("Subnet Screener", className="mt-4 mb-2"),
-    html.P("Visual one-glance hunt for undervalued / high-momentum subnets.", className="mb-3"),
+    # --- Tesla-inspired header ---
+    html.Div([
+        html.H1("Subnet Screener", className="dashboard-title"),
+        html.P("Discover and analyze Bittensor subnets with AI-powered insights, dynamic charts, and comprehensive metrics for investment decision making.", className="text-muted mb-4"),
+    ], className="dashboard-header"),
     
-    # Section 1: Price Momentum Analysis
+    # --- Quick Start section (collapsible) ---
+    html.Div([
+        dbc.Button(
+            [
+                html.I(className="bi bi-question-circle me-2"),
+                "Quick Start Guide",
+                html.I(className="bi bi-chevron-down ms-2", id="screener-quick-start-icon")
+            ],
+            id="screener-quick-start-toggle",
+            color="outline-primary",
+            className="mb-3",
+            n_clicks=0
+        ),
+        dbc.Collapse(
+            dbc.Card(
+                dbc.CardBody([
+                    html.H5("🎯 How to Use This Screener", className="mb-3"),
+                    html.P("Welcome to the Subnet Explorer! This tool helps you discover investment opportunities across Bittensor subnets using AI-powered analytics and comprehensive metrics.", className="mb-3"),
+                    html.Div([
+                        html.Div([
+                            html.H6("✅ AI-Generated Buy Signal", className="text-primary"),
+                            html.P("Each subnet is scored 1-5 by an AI model based on fundamentals, market data, and network health. Look for green 'BUY' indicators in the Buy Signal chart.")
+                        ], className="mb-3"),
+                        html.Div([
+                            html.H6("📈 TAO Score", className="text-primary"),
+                            html.P("Higher TAO scores indicate better investment potential. This comprehensive metric considers multiple factors including network health, stake quality, and market performance.")
+                        ], className="mb-3"),
+                        html.Div([
+                            html.H6("🧠 Dynamic Chart Axes", className="text-primary"),
+                            html.P("Choose any two metrics for X and Y axes in the Price Momentum and Buy Signal charts. Over 30 metrics available including price changes, volume analysis, and network health indicators.")
+                        ], className="mb-3"),
+                        html.Div([
+                            html.H6("🔍 Filter & Sort", className="text-primary"),
+                            html.P("Use category and market cap filters to focus your analysis on specific types of subnets or investment ranges.")
+                        ], className="mb-3"),
+                        html.Div([
+                            html.H6("📊 Additional Analysis", className="text-primary"),
+                            html.P("Explore volume analysis, stake distribution, network health, TAO-score distribution, and validator utilization in the bottom section.")
+                        ], className="mb-3"),
+                        html.Div([
+                            html.H6("💡 Interactive Insights", className="text-primary"),
+                            html.P("Click on any dot in the Buy Signal chart to generate AI insights and detailed analysis. Wait a few seconds for the AI analysis to complete.")
+                        ], className="mb-3")
+                    ])
+                ]),
+                className="border-primary"
+            ),
+            id="screener-quick-start-collapse",
+            is_open=False
+        )
+    ], className="mb-4"),
+    # Section 1: Price Momentum Analysis with Dynamic Axes
     dbc.Card([
         dbc.CardHeader([
             html.H4("Price Momentum Analysis", className="mb-0", id="price-momentum-header"),
-            html.Small("7-Day vs 30-Day Price Changes", className="text-muted")
+            html.Small("Dynamic Axis Selection for Price & Momentum Metrics", className="text-muted")
         ]),
         dbc.CardBody([
-            # Filters
+            # Control Panel
             dbc.Row([
                 dbc.Col([
+                    html.Small("X-Axis Metric", className="text-muted mb-1 d-block"),
                     dcc.Dropdown(
-                        id="category-filter",
+                        id="momentum-x-axis",
+                        options=axis_options,
+                        value="price_7d_change",
+                        clearable=False,
+                        placeholder="Select X-axis metric"
+                    )
+                ], width=3),
+                dbc.Col([
+                    html.Small("Y-Axis Metric", className="text-muted mb-1 d-block"),
+                    dcc.Dropdown(
+                        id="momentum-y-axis",
+                        options=axis_options,
+                        value="price_30d_change",
+                        clearable=False,
+                        placeholder="Select Y-axis metric"
+                    )
+                ], width=3),
+                dbc.Col([
+                    html.Small("Category Filter", className="text-muted mb-1 d-block"),
+                    dcc.Dropdown(
+                        id="momentum-category-filter",
                         options=category_options,
                         value="All",
                         clearable=False,
@@ -315,17 +477,9 @@ layout = html.Div([
                     )
                 ], width=3),
                 dbc.Col([
-                    html.Small("TAO-Score Filter", className="text-muted mb-1 d-block"),
-                    dbc.ButtonGroup([
-                        dbc.Button("All", id="score-all", color="outline-primary", n_clicks=0),
-                        dbc.Button("≥70", id="score-high", color="outline-success", n_clicks=0),
-                        dbc.Button("≥40", id="score-medium", color="outline-warning", n_clicks=0),
-                    ])
-                ], width=3),
-                dbc.Col([
                     html.Small("Market Cap Range (MUSD)", className="text-muted mb-1 d-block"),
                     dcc.RangeSlider(
-                        id="mcap-slider",
+                        id="momentum-mcap-slider",
                         min=0,
                         max=mcap_max,
                         step=10,
@@ -333,24 +487,24 @@ layout = html.Div([
                         marks={0: '0', int(mcap_max): f"${int(mcap_max)}M"},
                         tooltip={"placement": "bottom", "always_visible": False}
                     )
-                ], width=4),
-            ], className="mb-3"),
+                ], width=3),
+            ], className="mb-2"),
+            
+            # Chart
+            dcc.Graph(id="momentum-chart", figure=momentum_fig, style={"height": "600px"}),
             
             # Data timestamp
             html.Div([
-                html.Small(f"Data updated: {latest_ts.strftime('%Y-%m-%d %H:%M UTC') if latest_ts else 'Unknown'}", id="data-timestamp", className="text-muted")
-            ], className="mb-3"),
-            
-            # Chart
-            dcc.Graph(id="bubble-scatter-chart", figure=fig, style={"height": "600px"}),
+                html.Small(f"Data updated: {latest_ts.strftime('%Y-%m-%d %H:%M UTC') if latest_ts else 'Unknown'}", id="momentum-data-timestamp", className="text-muted")
+            ], className="mt-2"),
         ])
     ], className="mb-4"),
     
-    # Section 2: Buy Signal Analysis
+    # Section 2: Buy Signal Analysis with Dynamic Axes
     dbc.Card([
         dbc.CardHeader([
             html.H4("Buy Signal Analysis", className="mb-0", id="buy-signal-header"),
-            html.Small("TAO-Score vs Net Flow with AI-Generated Buy Signals", className="text-muted"),
+            html.Small("Dynamic Axis Selection for Buy Signal Analysis", className="text-muted"),
             html.Div([
                 html.P("💡 Click on any grey dot to generate AI insights. Insights will appear below the graph.", 
                        className="text-danger mb-1", style={"fontSize": "14px"}),
@@ -359,36 +513,98 @@ layout = html.Div([
             ], className="mt-2")
         ]),
         dbc.CardBody([
-            # Controls row
+            # Control Panel
             dbc.Row([
+                dbc.Col([
+                    html.Small("X-Axis Metric", className="text-muted mb-1 d-block"),
+                    dcc.Dropdown(
+                        id="buy-signal-x-axis",
+                        options=axis_options,
+                        value="tao_score",
+                        clearable=False,
+                        placeholder="Select X-axis metric"
+                    )
+                ], width=3),
+                dbc.Col([
+                    html.Small("Y-Axis Metric", className="text-muted mb-1 d-block"),
+                    dcc.Dropdown(
+                        id="buy-signal-y-axis",
+                        options=axis_options,
+                        value="flow_24h",
+                        clearable=False,
+                        placeholder="Select Y-axis metric"
+                    )
+                ], width=3),
+                dbc.Col([
+                    html.Small("Category Filter", className="text-muted mb-1 d-block"),
+                    dcc.Dropdown(
+                        id="buy-signal-category-filter",
+                        options=category_options,
+                        value="All",
+                        clearable=False,
+                        placeholder="Category"
+                    )
+                ], width=3),
                 dbc.Col([
                     dbc.Switch(
                         id="show-netuid-labels",
                         label="Show NetUID Labels",
                         value=False,
-                        className="mb-3"
+                        className="mt-4"
                     )
-                ], width=12)
-            ]),
+                ], width=3),
+            ], className="mb-2"),
+            
             # Buy Signal Chart
             dcc.Graph(
-                id="buy-signal-analysis",
+                id="buy-signal-chart",
                 figure=buy_signal_fig,
                 style={"height": "500px"}
             ),
+            
+            # Data timestamp
+            html.Div([
+                html.Small(f"Data updated: {latest_ts.strftime('%Y-%m-%d %H:%M UTC') if latest_ts else 'Unknown'}", id="buy-signal-data-timestamp", className="text-muted")
+            ], className="mt-2"),
             # Insight display area
             html.Div(id="insight-display", className="mt-3")
         ])
     ], className="mb-4"),
     
-    # Section 3: Additional Analysis
+    # Section 3: Additional Analysis - Fixed Charts
     dbc.Card([
         dbc.CardHeader([
             html.H4("Additional Analysis", className="mb-0", id="additional-analysis-header"),
-            html.Small("Network Health & Performance Metrics", className="text-muted")
+            html.Small("Network Health, Volume Analysis & Stake Distribution", className="text-muted")
         ]),
         dbc.CardBody([
-            # First row: TAO-Score Distribution and Validator Utilization
+            # Control Panel (simplified - only category and market cap filters)
+            dbc.Row([
+                dbc.Col([
+                    html.Small("Category Filter", className="text-muted mb-1 d-block"),
+                    dcc.Dropdown(
+                        id="additional-category-filter",
+                        options=category_options,
+                        value="All",
+                        clearable=False,
+                        placeholder="Category"
+                    )
+                ], width=6),
+                dbc.Col([
+                    html.Small("Market Cap Range (MUSD)", className="text-muted mb-1 d-block"),
+                    dcc.RangeSlider(
+                        id="additional-mcap-slider",
+                        min=0,
+                        max=mcap_max,
+                        step=10,
+                        value=[0, mcap_max],
+                        marks={0: '0', int(mcap_max): f"${int(mcap_max)}M"},
+                        tooltip={"placement": "bottom", "always_visible": False}
+                    )
+                ], width=6),
+            ], className="mb-2"),
+            
+            # First row: TAO-Score Distribution and Volume Analysis
             dbc.Row([
                 dbc.Col([
                     dcc.Graph(
@@ -399,167 +615,598 @@ layout = html.Div([
                 ], width=6),
                 dbc.Col([
                     dcc.Graph(
-                        id="validator-utilization",
-                        figure=validator_fig,
+                        id="volume-analysis",
+                        figure=volume_fig,
                         style={"height": "400px"}
                     )
                 ], width=6),
             ], className="mb-4"),
             
-            # Second row: Stake Quality Analysis
+            # Second row: Stake Distribution and Network Health
             dbc.Row([
                 dbc.Col([
                     dcc.Graph(
-                        id="stake-quality-analysis",
-                        figure=stake_quality_fig,
+                        id="stake-distribution",
+                        figure=stake_dist_fig,
+                        style={"height": "400px"}
+                    )
+                ], width=6),
+                dbc.Col([
+                    dcc.Graph(
+                        id="network-health",
+                        figure=network_health_fig,
+                        style={"height": "400px"}
+                    )
+                ], width=6),
+            ], className="mb-4"),
+            
+            # Third row: Validator Utilization
+            dbc.Row([
+                dbc.Col([
+                    dcc.Graph(
+                        id="validator-utilization",
+                        figure=validator_fig,
                         style={"height": "400px"}
                     )
                 ], width=12),
             ], className="mb-4"),
+            
+            # Data timestamp
+            html.Div([
+                html.Small(f"Data updated: {latest_ts.strftime('%Y-%m-%d %H:%M UTC') if latest_ts else 'Unknown'}", id="additional-data-timestamp", className="text-muted")
+            ], className="mt-2"),
         ])
     ], className="mb-4"),
+    
     # Store for buy signal refresh
     dcc.Store(id="buy-signal-refresh"),
-    # Tooltips for section headers
-    dbc.Tooltip(
-        "Scatter plot showing 7-day vs 30-day price changes. Dot size represents market cap. "
-        "Quadrants: Top-right (bullish), Top-left (short-term momentum), "
-        "Bottom-right (recovery), Bottom-left (bearish).",
-        target="price-momentum-header",
-        placement="top"
-    ),
-    dbc.Tooltip(
-        "Scatter plot showing TAO-Score vs 24h net flow. Color indicates AI-generated buy signal: "
-        "Grey = No signal, Red = Avoid (1), Orange = Weak (2), Yellow = Neutral (3), "
-        "Light Green = Good (4), Dark Green = Strong Buy (5). Click dots to generate insights.",
-        target="buy-signal-header",
-        placement="top"
-    ),
-    dbc.Tooltip(
-        "Additional metrics: TAO-Score distribution histogram, validator utilization vs TAO-Score, "
-        "and stake quality vs market cap analysis.",
-        target="additional-analysis-header",
-        placement="top"
-    ),
 ])
 
-# Callback to update chart based on all filters
 @callback(
-    Output("bubble-scatter-chart", "figure"),
-    Input("category-filter", "value"),
-    Input("score-all", "n_clicks"),
-    Input("score-high", "n_clicks"),
-    Input("score-medium", "n_clicks"),
-    Input("mcap-slider", "value")
+    Output("insight-display", "children"),
+    Output("buy-signal-refresh", "data"),
+    Input("buy-signal-chart", "clickData")
 )
-def update_chart(category, score_all, score_high, score_medium, mcap_range):
-    """Update chart based on all filters."""
-    # Determine which score filter is active
-    ctx = dash.callback_context
-    score_filter = "All"
-    if ctx.triggered:
-        triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
-        if triggered_id == "score-high":
-            score_filter = "≥70"
-        elif triggered_id == "score-medium":
-            score_filter = "≥40"
+def handle_buy_signal_click(click_data):
+    """Handle click on buy signal chart to generate insights."""
+    if not click_data or not click_data.get('points'):
+        return "Click on any subnet dot to generate AI insights.", None
     
+    point = click_data['points'][0]
+    netuid = point['customdata'][1]  # NetUID is in customdata[1]
+    
+    try:
+        # Generate insight for the clicked subnet
+        insight = get_insight(netuid)
+        
+        # Extract buy signal from insight
+        buy_signal = extract_buy_signal_from_insight(insight)
+        
+        # Update buy signal in database
+        with get_db() as session:
+            latest_metrics = session.query(MetricsSnap).filter_by(netuid=netuid)\
+                .order_by(MetricsSnap.timestamp.desc()).first()
+            if latest_metrics:
+                latest_metrics.buy_signal = buy_signal
+                session.commit()
+        
+        # Format the insight display
+        insight_display = dbc.Card([
+            dbc.CardHeader([
+                html.H5(f"AI Insight for Subnet {netuid}", className="mb-0"),
+                dbc.Badge(f"Buy Signal: {buy_signal}/5", color="success" if buy_signal >= 4 else "warning" if buy_signal >= 3 else "danger")
+            ]),
+            dbc.CardBody([
+                html.P(insight, className="mb-0")
+            ])
+        ])
+        
+        return insight_display, time.time()
+        
+    except Exception as e:
+        error_display = dbc.Alert([
+            html.H5("Error generating insight", className="alert-heading"),
+            html.P(f"Could not generate AI insight for subnet {netuid}: {str(e)}")
+        ], color="danger")
+        return error_display, None
+
+@callback(
+    Output("momentum-chart", "figure"),
+    Input("momentum-x-axis", "value"),
+    Input("momentum-y-axis", "value"),
+    Input("momentum-category-filter", "value"),
+    Input("momentum-mcap-slider", "value")
+)
+def update_momentum_chart(x_axis, y_axis, category, mcap_range):
+    """Update momentum chart with dynamic axes."""
+    try:
+        # Validate that selected axes exist in dataframe
+        if x_axis not in df.columns or y_axis not in df.columns:
+            # Create error figure
+            fig = go.Figure()
+            fig.add_annotation(
+                text=f"❌ Invalid axis selection<br>'{x_axis}' or '{y_axis}' not available in data<br><br>Please select different metrics",
+                xref="paper", yref="paper",
+                x=0.5, y=0.5, showarrow=False,
+                font=dict(size=16, color="red"),
+                align="center"
+            )
+            fig.update_layout(
+                title="Price Momentum Analysis - Error",
+                xaxis=dict(visible=False),
+                yaxis=dict(visible=False),
+                plot_bgcolor='white'
+            )
+            return fig
+        
+        # Apply category filter
+        if category == "All" or category is None:
+            filtered_df = df
+        else:
+            filtered_df = df[df['primary_category'] == category]
+        
+        # Apply market cap filter (in MUSD)
+        if mcap_range and len(mcap_range) == 2:
+            filtered_df = filtered_df[
+                (filtered_df['market_cap_musd'] >= mcap_range[0]) & 
+                (filtered_df['market_cap_musd'] <= mcap_range[1])
+            ]
+        
+        # Ensure market_cap_musd is at least 0.1 for sizing
+        if 'market_cap_musd' in filtered_df.columns:
+            filtered_df['market_cap_musd'] = filtered_df['market_cap_musd'].fillna(0.1)
+            filtered_df.loc[filtered_df['market_cap_musd'] < 0.1, 'market_cap_musd'] = 0.1
+        
+        # Get axis labels
+        x_label = AXIS_METRICS.get(x_axis, {}).get('label', x_axis)
+        y_label = AXIS_METRICS.get(y_axis, {}).get('label', y_axis)
+        
+        # Create updated figure
+        fig = px.scatter(
+            filtered_df,
+            x=x_axis,
+            y=y_axis,
+            size='market_cap_musd',
+            color='primary_category',
+            hover_data=['subnet_name', 'netuid', 'tao_score', 'metrics_timestamp', 'primary_category', 'market_cap_musd'],
+            title="Price Momentum Analysis",
+            labels={
+                x_axis: x_label,
+                y_axis: y_label,
+                'market_cap_musd': 'Market Cap (MUSD)',
+                'primary_category': 'Category'
+            },
+            size_max=40
+        )
+        
+        fig.update_traces(
+            marker=dict(line=dict(width=1, color='rgba(0,0,0,0.3)'), sizemin=8),
+            hovertemplate="<b>%{customdata[0]}</b><br>" +
+                         "NetUID: %{customdata[1]}<br>" +
+                         "Category: %{customdata[4]}<br>" +
+                         "Market Cap: $%{customdata[5]:.1f}M USD<br>" +
+                         f"{x_label}: %{{x:.1f}}<br>" +
+                         f"{y_label}: %{{y:.1f}}<br>" +
+                         "TAO-Score: %{customdata[2]:.1f}<br>" +
+                         "Data: %{customdata[3]}<br>" +
+                         "<extra></extra>"
+        )
+        
+        # Add quadrant lines for percentage metrics
+        if AXIS_METRICS.get(x_axis, {}).get('type') == 'percentage':
+            fig.add_vline(x=0, line_dash="dash", line_color="gray")
+        if AXIS_METRICS.get(y_axis, {}).get('type') == 'percentage':
+            fig.add_hline(y=0, line_dash="dash", line_color="gray")
+        
+        return fig
+        
+    except Exception as e:
+        # Create error figure
+        fig = go.Figure()
+        fig.add_annotation(
+            text=f"❌ Error creating chart<br>{str(e)}<br><br>Please try different axis selections",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=14, color="red"),
+            align="center"
+        )
+        fig.update_layout(
+            title="Price Momentum Analysis - Error",
+            xaxis=dict(visible=False),
+            yaxis=dict(visible=False),
+            plot_bgcolor='white'
+        )
+        return fig
+
+@callback(
+    Output("buy-signal-chart", "figure"),
+    Input("buy-signal-x-axis", "value"),
+    Input("buy-signal-y-axis", "value"),
+    Input("buy-signal-category-filter", "value"),
+    Input("show-netuid-labels", "value"),
+    Input("buy-signal-refresh", "data")
+)
+def update_buy_signal_chart(x_axis, y_axis, category, show_labels, _):
+    """Update buy signal chart with dynamic axes."""
+    try:
+        # Always reload fresh data from database to get latest buy signals
+        fresh_df = reload_data_with_buy_signals()
+        
+        # Validate that selected axes exist in dataframe
+        if x_axis not in fresh_df.columns or y_axis not in fresh_df.columns:
+            # Create error figure
+            fig = go.Figure()
+            fig.add_annotation(
+                text=f"❌ Invalid axis selection<br>'{x_axis}' or '{y_axis}' not available in data<br><br>Please select different metrics",
+                xref="paper", yref="paper",
+                x=0.5, y=0.5, showarrow=False,
+                font=dict(size=16, color="red"),
+                align="center"
+            )
+            fig.update_layout(
+                title="Buy Signal Analysis - Error",
+                xaxis=dict(visible=False),
+                yaxis=dict(visible=False),
+                plot_bgcolor='white'
+            )
+            return fig
+        
+        # Apply category filter
+        if category == "All" or category is None:
+            filtered_df = fresh_df
+        else:
+            filtered_df = fresh_df[fresh_df['primary_category'] == category]
+        
+        # Reload buy signals from database to get latest values
+        filtered_df['buy_signal'] = filtered_df['netuid'].apply(get_buy_signal_for_subnet)
+        
+        # Ensure market_cap_musd is calculated
+        if 'market_cap_musd' not in filtered_df.columns and 'market_cap_tao' in filtered_df.columns:
+            filtered_df['market_cap_usd'] = filtered_df['market_cap_tao'] * tao_price_usd
+            filtered_df['market_cap_usd'] = filtered_df['market_cap_usd'].fillna(0)
+            filtered_df.loc[filtered_df['market_cap_usd'] < 0, 'market_cap_usd'] = 0
+            filtered_df['market_cap_musd'] = filtered_df['market_cap_usd'] / 1_000_000
+        
+        # Create color mapping: buy signal if available, grey if not
+        filtered_df['color_value'] = filtered_df['buy_signal'].fillna(0)  # 0 for grey (no signal)
+        
+        # Create custom color scale: grey for 0, then heatmap colors for 1-5
+        colorscale = [
+            [0, 'lightgrey'],      # 0 = no signal (grey)
+            [0.2, '#ff7f7f'],      # 1 = red (avoid)
+            [0.4, '#ffbf7f'],      # 2 = orange (weak)
+            [0.6, '#ffff7f'],      # 3 = yellow (neutral)
+            [0.8, '#7fff7f'],      # 4 = light green (good)
+            [1.0, '#007f00']       # 5 = dark green (strong buy)
+        ]
+        
+        # Get axis labels
+        x_label = AXIS_METRICS.get(x_axis, {}).get('label', x_axis)
+        y_label = AXIS_METRICS.get(y_axis, {}).get('label', y_axis)
+        
+        # Ensure market_cap_musd is at least 0.1 for sizing
+        if 'market_cap_musd' in filtered_df.columns:
+            filtered_df['market_cap_musd'] = filtered_df['market_cap_musd'].fillna(0.1)
+            filtered_df.loc[filtered_df['market_cap_musd'] < 0.1, 'market_cap_musd'] = 0.1
+        
+        fig = px.scatter(
+            filtered_df,
+            x=x_axis,
+            y=y_axis,
+            size='market_cap_musd',
+            color='color_value',
+            hover_data=[
+                'subnet_name',    # 0
+                'netuid',         # 1
+                'buy_signal',     # 2
+                x_axis,           # 3
+                y_axis,           # 4
+                'market_cap_musd' # 5
+            ],
+            title="Buy Signal Analysis",
+            labels={
+                x_axis: x_label,
+                y_axis: y_label,
+                'market_cap_musd': 'Market Cap (MUSD)',
+                'color_value': 'Buy Signal'
+            },
+            size_max=30,
+            color_continuous_scale=colorscale,
+            range_color=[0, 5]
+        )
+        
+        fig.update_traces(
+            marker=dict(line=dict(width=1, color='rgba(0,0,0,0.3)'), sizemin=5),
+            hovertemplate="<b>%{customdata[0]}</b><br>" +
+                         "NetUID: %{customdata[1]}<br>" +
+                         "Buy Signal: %{customdata[2]}/5 (Click to generate)<br>" +
+                         f"{x_label}: %{{customdata[3]:.1f}}<br>" +
+                         f"{y_label}: %{{customdata[4]:.1f}}<br>" +
+                         "Market Cap: $%{customdata[5]:.1f}M USD<br>" +
+                         "<extra></extra>"
+        )
+        
+        # Add quadrant lines for percentage metrics
+        if AXIS_METRICS.get(x_axis, {}).get('type') == 'percentage':
+            fig.add_vline(x=0, line_dash="dash", line_color="gray")
+        if AXIS_METRICS.get(y_axis, {}).get('type') == 'percentage':
+            fig.add_hline(y=0, line_dash="dash", line_color="gray")
+        
+        # Update colorbar title and ticks
+        fig.update_layout(
+            coloraxis_colorbar=dict(
+                title="Buy Signal",
+                tickmode='array',
+                tickvals=[0, 1, 2, 3, 4, 5],
+                ticktext=['No Signal', '1 (Avoid)', '2 (Weak)', '3 (Neutral)', '4 (Good)', '5 (Strong)']
+            )
+        )
+        
+        # Add netuid labels if toggle is enabled
+        if show_labels:
+            annotations = []
+            for idx, row in filtered_df.iterrows():
+                annotations.append(
+                    dict(
+                        x=row[x_axis],
+                        y=row[y_axis],
+                        text=str(row['netuid']),
+                        showarrow=False,
+                        font=dict(size=10, color='black')
+                    )
+                )
+            fig.update_layout(annotations=annotations)
+        
+        return fig
+        
+    except Exception as e:
+        # Create error figure
+        fig = go.Figure()
+        fig.add_annotation(
+            text=f"❌ Error creating chart<br>{str(e)}<br><br>Please try different axis selections",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=14, color="red"),
+            align="center"
+        )
+        fig.update_layout(
+            title="Buy Signal Analysis - Error",
+            xaxis=dict(visible=False),
+            yaxis=dict(visible=False),
+            plot_bgcolor='white'
+        )
+        return fig
+
+@callback(
+    Output("volume-analysis", "figure"),
+    Input("additional-category-filter", "value"),
+    Input("additional-mcap-slider", "value")
+)
+def update_volume_analysis(category, mcap_range):
+    """Update volume analysis chart based on filters."""
+    try:
+        # Apply category filter
+        if category == "All" or category is None:
+            filtered_df = df
+        else:
+            filtered_df = df[df['primary_category'] == category]
+        
+        # Apply market cap filter (in MUSD)
+        if mcap_range and len(mcap_range) == 2:
+            filtered_df = filtered_df[
+                (filtered_df['market_cap_musd'] >= mcap_range[0]) & 
+                (filtered_df['market_cap_musd'] <= mcap_range[1])
+            ]
+        
+        fig = px.scatter(
+            filtered_df,
+            x='buy_volume_tao_1d',
+            y='sell_volume_tao_1d',
+            size='market_cap_musd',
+            color='buy_sell_ratio',
+            color_continuous_scale='RdYlGn',
+            hover_data=['subnet_name', 'netuid', 'buy_volume_tao_1d', 'sell_volume_tao_1d', 'buy_sell_ratio', 'market_cap_musd'],
+            title="Buy vs Sell Volume Analysis",
+            labels={
+                'buy_volume_tao_1d': '24h Buy Volume (TAO)',
+                'sell_volume_tao_1d': '24h Sell Volume (TAO)',
+                'market_cap_musd': 'Market Cap (MUSD)',
+                'buy_sell_ratio': 'Buy/Sell Ratio'
+            },
+            size_max=30
+        )
+        
+        fig.update_traces(
+            marker=dict(line=dict(width=1, color='rgba(0,0,0,0.3)'), sizemin=5),
+            hovertemplate="<b>%{customdata[0]}</b><br>" +
+                         "NetUID: %{customdata[1]}<br>" +
+                         "Buy Volume: %{customdata[2]:.0f} TAO<br>" +
+                         "Sell Volume: %{customdata[3]:.0f} TAO<br>" +
+                         "Buy/Sell Ratio: %{customdata[4]:.2f}<br>" +
+                         "Market Cap: $%{customdata[5]:.1f}M USD<br>" +
+                         "<extra></extra>"
+        )
+        
+        # Add diagonal line for equal buy/sell
+        max_val = max(filtered_df['buy_volume_tao_1d'].max(), filtered_df['sell_volume_tao_1d'].max())
+        fig.add_trace(go.Scatter(x=[0, max_val], y=[0, max_val], mode='lines', 
+                                line=dict(dash='dash', color='gray'), 
+                                name='Equal Buy/Sell', showlegend=False))
+        
+        return fig
+        
+    except Exception as e:
+        # Create error figure
+        fig = go.Figure()
+        fig.add_annotation(
+            text=f"❌ Error creating volume analysis<br>{str(e)}",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=14, color="red"),
+            align="center"
+        )
+        fig.update_layout(
+            title="Volume Analysis - Error",
+            xaxis=dict(visible=False),
+            yaxis=dict(visible=False),
+            plot_bgcolor='white'
+        )
+        return fig
+
+@callback(
+    Output("stake-distribution", "figure"),
+    Input("additional-category-filter", "value"),
+    Input("additional-mcap-slider", "value")
+)
+def update_stake_distribution(category, mcap_range):
+    """Update stake distribution chart based on filters."""
+    try:
+        # Apply category filter
+        if category == "All" or category is None:
+            filtered_df = df
+        else:
+            filtered_df = df[df['primary_category'] == category]
+        
+        # Apply market cap filter (in MUSD)
+        if mcap_range and len(mcap_range) == 2:
+            filtered_df = filtered_df[
+                (filtered_df['market_cap_musd'] >= mcap_range[0]) & 
+                (filtered_df['market_cap_musd'] <= mcap_range[1])
+            ]
+        
+        fig = px.scatter(
+            filtered_df,
+            x='stake_hhi',
+            y='gini_coeff_top_100',
+            size='market_cap_musd',
+            color='active_stake_ratio',
+            color_continuous_scale='Viridis',
+            hover_data=['subnet_name', 'netuid', 'stake_hhi', 'gini_coeff_top_100', 'active_stake_ratio', 'market_cap_musd'],
+            title="Stake Distribution Analysis",
+            labels={
+                'stake_hhi': 'Stake HHI (Concentration)',
+                'gini_coeff_top_100': 'Gini Coefficient (Top 100)',
+                'market_cap_musd': 'Market Cap (MUSD)',
+                'active_stake_ratio': 'Active Stake Ratio (%)'
+            },
+            size_max=25
+        )
+        
+        fig.update_traces(
+            marker=dict(line=dict(width=1, color='rgba(0,0,0,0.3)'), sizemin=5),
+            hovertemplate="<b>%{customdata[0]}</b><br>" +
+                         "NetUID: %{customdata[1]}<br>" +
+                         "Stake HHI: %{customdata[2]:.2f}<br>" +
+                         "Gini Coefficient: %{customdata[3]:.2f}<br>" +
+                         "Active Stake Ratio: %{customdata[4]:.1f}%<br>" +
+                         "Market Cap: $%{customdata[5]:.1f}M USD<br>" +
+                         "<extra></extra>"
+        )
+        
+        return fig
+        
+    except Exception as e:
+        # Create error figure
+        fig = go.Figure()
+        fig.add_annotation(
+            text=f"❌ Error creating stake distribution<br>{str(e)}",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=14, color="red"),
+            align="center"
+        )
+        fig.update_layout(
+            title="Stake Distribution - Error",
+            xaxis=dict(visible=False),
+            yaxis=dict(visible=False),
+            plot_bgcolor='white'
+        )
+        return fig
+
+@callback(
+    Output("network-health", "figure"),
+    Input("additional-category-filter", "value"),
+    Input("additional-mcap-slider", "value")
+)
+def update_network_health(category, mcap_range):
+    """Update network health chart based on filters."""
+    try:
+        # Apply category filter
+        if category == "All" or category is None:
+            filtered_df = df
+        else:
+            filtered_df = df[df['primary_category'] == category]
+        
+        # Apply market cap filter (in MUSD)
+        if mcap_range and len(mcap_range) == 2:
+            filtered_df = filtered_df[
+                (filtered_df['market_cap_musd'] >= mcap_range[0]) & 
+                (filtered_df['market_cap_musd'] <= mcap_range[1])
+            ]
+        
+        fig = px.scatter(
+            filtered_df,
+            x='active_validators',
+            y='validator_util_pct',
+            size='market_cap_musd',
+            color='uid_count',
+            color_continuous_scale='Plasma',
+            hover_data=['subnet_name', 'netuid', 'active_validators', 'validator_util_pct', 'uid_count', 'market_cap_musd'],
+            title="Network Health & Participation",
+            labels={
+                'active_validators': 'Active Validators',
+                'validator_util_pct': 'Validator Utilization (%)',
+                'market_cap_musd': 'Market Cap (MUSD)',
+                'uid_count': 'Total UIDs'
+            },
+            size_max=25
+        )
+        
+        fig.update_traces(
+            marker=dict(line=dict(width=1, color='rgba(0,0,0,0.3)'), sizemin=5),
+            hovertemplate="<b>%{customdata[0]}</b><br>" +
+                         "NetUID: %{customdata[1]}<br>" +
+                         "Active Validators: %{customdata[2]}<br>" +
+                         "Validator Utilization: %{customdata[3]:.1f}%<br>" +
+                         "Total UIDs: %{customdata[4]}<br>" +
+                         "Market Cap: $%{customdata[5]:.1f}M USD<br>" +
+                         "<extra></extra>"
+        )
+        
+        return fig
+        
+    except Exception as e:
+        # Create error figure
+        fig = go.Figure()
+        fig.add_annotation(
+            text=f"❌ Error creating network health<br>{str(e)}",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=14, color="red"),
+            align="center"
+        )
+        fig.update_layout(
+            title="Network Health - Error",
+            xaxis=dict(visible=False),
+            yaxis=dict(visible=False),
+            plot_bgcolor='white'
+        )
+        return fig
+
+@callback(
+    Output("tao-score-distribution", "figure"),
+    Input("momentum-category-filter", "value"),
+    Input("momentum-mcap-slider", "value")
+)
+def update_tao_score_distribution(category, mcap_range):
+    """Update TAO-Score distribution based on momentum filters."""
     # Apply category filter
     if category == "All" or category is None:
         filtered_df = df
     else:
         filtered_df = df[df['primary_category'] == category]
     
-    # Apply TAO-Score filter
-    if score_filter == "≥70":
-        filtered_df = filtered_df[filtered_df['tao_score'] >= 70]
-    elif score_filter == "≥40":
-        filtered_df = filtered_df[filtered_df['tao_score'] >= 40]
-    
     # Apply market cap filter (in MUSD)
-    if mcap_range and len(mcap_range) == 2:
-        filtered_df = filtered_df[
-            (filtered_df['market_cap_musd'] >= mcap_range[0]) & 
-            (filtered_df['market_cap_musd'] <= mcap_range[1])
-        ]
-    
-    # Ensure market_cap_musd is at least 0.1 for sizing
-    if 'market_cap_musd' in filtered_df.columns:
-        filtered_df['market_cap_musd'] = filtered_df['market_cap_musd'].fillna(0.1)
-        filtered_df.loc[filtered_df['market_cap_musd'] < 0.1, 'market_cap_musd'] = 0.1
-    
-    # Create updated figure
-    fig = px.scatter(
-        filtered_df,
-        x='price_7d_change',
-        y='price_30d_change',
-        size='market_cap_musd',
-        color='primary_category',
-        hover_data=['subnet_name', 'netuid', 'tao_score', 'metrics_timestamp', 'primary_category', 'market_cap_musd'],
-        title="Price Momentum: 7-Day vs 30-Day Change",
-        labels={
-            'price_7d_change': '7-Day Price Change (%)',
-            'price_30d_change': '30-Day Price Change (%)',
-            'market_cap_musd': 'Market Cap (MUSD)',
-            'primary_category': 'Category'
-        },
-        size_max=40
-    )
-    
-    # Add borders and improve dot visibility
-    fig.update_traces(
-        marker=dict(
-            line=dict(width=1, color='rgba(0,0,0,0.3)'),
-            sizemin=8  # Minimum dot size
-        ),
-        hovertemplate="<b>%{customdata[0]}</b><br>" +
-                     "NetUID: %{customdata[1]}<br>" +
-                     "Category: %{customdata[4]}<br>" +
-                     "Market Cap: $%{customdata[5]:.1f}M USD<br>" +
-                     "7d: %{x:.1f}%<br>" +
-                     "30d: %{y:.1f}%<br>" +
-                     "TAO-Score: %{customdata[2]:.1f}<br>" +
-                     "Data: %{customdata[3]}<br>" +
-                     "<extra></extra>"
-    )
-    
-    # Add quadrant lines
-    fig.add_hline(y=0, line_dash="dash", line_color="gray")
-    fig.add_vline(x=0, line_dash="dash", line_color="gray")
-    
-    return fig
-
-# Additional callbacks for the new charts
-@callback(
-    Output("tao-score-distribution", "figure"),
-    Input("category-filter", "value"),
-    Input("score-all", "n_clicks"),
-    Input("score-high", "n_clicks"),
-    Input("score-medium", "n_clicks"),
-    Input("mcap-slider", "value")
-)
-def update_tao_score_distribution(category, score_all, score_high, score_medium, mcap_range):
-    """Update TAO-Score distribution based on filters."""
-    # Apply same filtering logic as main chart
-    ctx = dash.callback_context
-    score_filter = "All"
-    if ctx.triggered:
-        triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
-        if triggered_id == "score-high":
-            score_filter = "≥70"
-        elif triggered_id == "score-medium":
-            score_filter = "≥40"
-    
-    if category == "All" or category is None:
-        filtered_df = df
-    else:
-        filtered_df = df[df['primary_category'] == category]
-    
-    if score_filter == "≥70":
-        filtered_df = filtered_df[filtered_df['tao_score'] >= 70]
-    elif score_filter == "≥40":
-        filtered_df = filtered_df[filtered_df['tao_score'] >= 40]
-    
     if mcap_range and len(mcap_range) == 2:
         filtered_df = filtered_df[
             (filtered_df['market_cap_musd'] >= mcap_range[0]) & 
@@ -583,34 +1230,18 @@ def update_tao_score_distribution(category, score_all, score_high, score_medium,
 
 @callback(
     Output("validator-utilization", "figure"),
-    Input("category-filter", "value"),
-    Input("score-all", "n_clicks"),
-    Input("score-high", "n_clicks"),
-    Input("score-medium", "n_clicks"),
-    Input("mcap-slider", "value")
+    Input("additional-category-filter", "value"),
+    Input("additional-mcap-slider", "value")
 )
-def update_validator_utilization(category, score_all, score_high, score_medium, mcap_range):
-    """Update validator utilization chart based on filters."""
-    # Apply same filtering logic
-    ctx = dash.callback_context
-    score_filter = "All"
-    if ctx.triggered:
-        triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
-        if triggered_id == "score-high":
-            score_filter = "≥70"
-        elif triggered_id == "score-medium":
-            score_filter = "≥40"
-    
+def update_validator_utilization(category, mcap_range):
+    """Update validator utilization chart based on additional analysis filters."""
+    # Apply category filter
     if category == "All" or category is None:
         filtered_df = df
     else:
         filtered_df = df[df['primary_category'] == category]
     
-    if score_filter == "≥70":
-        filtered_df = filtered_df[filtered_df['tao_score'] >= 70]
-    elif score_filter == "≥40":
-        filtered_df = filtered_df[filtered_df['tao_score'] >= 40]
-    
+    # Apply market cap filter (in MUSD)
     if mcap_range and len(mcap_range) == 2:
         filtered_df = filtered_df[
             (filtered_df['market_cap_musd'] >= mcap_range[0]) & 
@@ -639,10 +1270,7 @@ def update_validator_utilization(category, score_all, score_high, score_medium, 
         size_max=30
     )
     fig.update_traces(
-        marker=dict(
-            line=dict(width=1, color='rgba(0,0,0,0.3)'),
-            sizemin=5
-        ),
+        marker=dict(line=dict(width=1, color='rgba(0,0,0,0.3)'), sizemin=5),
         hovertemplate="<b>%{customdata[0]}</b><br>" +
                      "NetUID: %{customdata[1]}<br>" +
                      "Validator Util: %{customdata[2]:.1f}%<br>" +
@@ -651,261 +1279,18 @@ def update_validator_utilization(category, score_all, score_high, score_medium, 
     )
     return fig
 
+
+# Callback for collapsible quick start guide
 @callback(
-    Output("stake-quality-analysis", "figure"),
-    Input("category-filter", "value"),
-    Input("score-all", "n_clicks"),
-    Input("score-high", "n_clicks"),
-    Input("score-medium", "n_clicks"),
-    Input("mcap-slider", "value")
+    Output("screener-quick-start-collapse", "is_open"),
+    Output("screener-quick-start-icon", "className"),
+    Input("screener-quick-start-toggle", "n_clicks"),
+    State("screener-quick-start-collapse", "is_open"),
+    prevent_initial_call=True
 )
-def update_stake_quality_analysis(category, score_all, score_high, score_medium, mcap_range):
-    """Update stake quality analysis chart based on filters."""
-    # Apply same filtering logic
-    ctx = dash.callback_context
-    score_filter = "All"
-    if ctx.triggered:
-        triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
-        if triggered_id == "score-high":
-            score_filter = "≥70"
-        elif triggered_id == "score-medium":
-            score_filter = "≥40"
-    
-    if category == "All" or category is None:
-        filtered_df = df
-    else:
-        filtered_df = df[df['primary_category'] == category]
-    
-    if score_filter == "≥70":
-        filtered_df = filtered_df[filtered_df['tao_score'] >= 70]
-    elif score_filter == "≥40":
-        filtered_df = filtered_df[filtered_df['tao_score'] >= 40]
-    
-    if mcap_range and len(mcap_range) == 2:
-        filtered_df = filtered_df[
-            (filtered_df['market_cap_musd'] >= mcap_range[0]) & 
-            (filtered_df['market_cap_musd'] <= mcap_range[1])
-        ]
-    
-    # Ensure tao_score is at least 1 for sizing
-    if 'tao_score' in filtered_df.columns:
-        filtered_df['tao_score'] = filtered_df['tao_score'].fillna(1)
-        filtered_df.loc[filtered_df['tao_score'] < 1, 'tao_score'] = 1
-    
-    fig = px.scatter(
-        filtered_df,
-        x='stake_quality',
-        y='market_cap_musd',
-        size='tao_score',
-        color='primary_category',
-        hover_data=['subnet_name', 'netuid', 'stake_quality', 'market_cap_musd', 'tao_score'],
-        title="Stake Quality vs Market Cap",
-        labels={
-            'stake_quality': 'Stake Quality',
-            'market_cap_musd': 'Market Cap (MUSD)',
-            'tao_score': 'TAO-Score',
-            'primary_category': 'Category'
-        },
-        size_max=15
-    )
-    fig.update_traces(
-        marker=dict(
-            line=dict(width=1, color='rgba(0,0,0,0.3)'),
-            sizemin=3
-        ),
-        hovertemplate="<b>%{customdata[0]}</b><br>" +
-                     "NetUID: %{customdata[1]}<br>" +
-                     "Stake Quality: %{customdata[2]:.1f}<br>" +
-                     "Market Cap: $%{customdata[3]:.1f}M USD<br>" +
-                     "TAO-Score: %{customdata[4]:.1f}<br>" +
-                     "<extra></extra>"
-    )
-    return fig
-
-@callback(
-    Output("buy-signal-analysis", "figure"),
-    Input("category-filter", "value"),
-    Input("score-all", "n_clicks"),
-    Input("score-high", "n_clicks"),
-    Input("score-medium", "n_clicks"),
-    Input("mcap-slider", "value"),
-    Input("buy-signal-refresh", "data"),
-    Input("show-netuid-labels", "value")
-)
-def update_buy_signal_analysis(category, score_all, score_high, score_medium, mcap_range, _, show_labels):
-    """Update buy signal analysis chart based on filters."""
-    # Always reload fresh data from database to get latest buy signals
-    fresh_df = reload_data_with_buy_signals()
-    
-    # Apply same filtering logic
-    ctx = dash.callback_context
-    score_filter = "All"
-    if ctx.triggered:
-        triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
-        if triggered_id == "score-high":
-            score_filter = "≥70"
-        elif triggered_id == "score-medium":
-            score_filter = "≥40"
-    
-    if category == "All" or category is None:
-        filtered_df = fresh_df
-    else:
-        filtered_df = fresh_df[fresh_df['primary_category'] == category]
-    
-    if score_filter == "≥70":
-        filtered_df = filtered_df[filtered_df['tao_score'] >= 70]
-    elif score_filter == "≥40":
-        filtered_df = filtered_df[filtered_df['tao_score'] >= 40]
-    
-    if mcap_range and len(mcap_range) == 2:
-        filtered_df = filtered_df[
-            (filtered_df['market_cap_musd'] >= mcap_range[0]) & 
-            (filtered_df['market_cap_musd'] <= mcap_range[1])
-        ]
-    
-    # Use filtered_df directly (like Price Momentum chart) instead of copying
-    viz_df = filtered_df
-    
-    # Reload buy signals from database to get latest values
-    viz_df['buy_signal'] = viz_df['netuid'].apply(get_buy_signal_for_subnet)
-    
-    # Ensure market_cap_musd and market_cap_tao are calculated if not already present
-    if 'market_cap_tao' not in viz_df.columns and 'market_cap_musd' in viz_df.columns:
-        # Calculate market_cap_tao from market_cap_musd
-        viz_df['market_cap_tao'] = (viz_df['market_cap_musd'] * 1_000_000) / tao_price_usd
-        viz_df['market_cap_tao'] = viz_df['market_cap_tao'].fillna(0)
-        viz_df.loc[viz_df['market_cap_tao'] < 0, 'market_cap_tao'] = 0
-    elif 'market_cap_musd' not in viz_df.columns and 'market_cap_tao' in viz_df.columns:
-        # Calculate market_cap_musd from market_cap_tao
-        viz_df['market_cap_usd'] = viz_df['market_cap_tao'] * tao_price_usd
-        viz_df['market_cap_usd'] = viz_df['market_cap_usd'].fillna(0)
-        viz_df.loc[viz_df['market_cap_usd'] < 0, 'market_cap_usd'] = 0
-        # Convert to millions USD for display
-        viz_df['market_cap_musd'] = viz_df['market_cap_usd'] / 1_000_000
-    
-    # Create color mapping: buy signal if available, grey if not
-    viz_df['color_value'] = viz_df['buy_signal'].fillna(0)  # 0 for grey (no signal)
-    
-    # Create custom color scale: grey for 0, then heatmap colors for 1-5
-    colorscale = [
-        [0, 'lightgrey'],      # 0 = no signal (grey)
-        [0.2, '#ff7f7f'],      # 1 = red (avoid)
-        [0.4, '#ffbf7f'],      # 2 = orange (weak)
-        [0.6, '#ffff7f'],      # 3 = yellow (neutral)
-        [0.8, '#7fff7f'],      # 4 = light green (good)
-        [1.0, '#007f00']       # 5 = dark green (strong buy)
-    ]
-    
-    # Ensure market_cap_tao is at least 1 for sizing
-    if 'market_cap_tao' in viz_df.columns:
-        viz_df['market_cap_tao'] = viz_df['market_cap_tao'].fillna(1)
-        viz_df.loc[viz_df['market_cap_tao'] < 1, 'market_cap_tao'] = 1
-    
-    fig = px.scatter(
-        viz_df,
-        x='tao_score',
-        y='flow_24h',
-        size='market_cap_tao',
-        color='color_value',
-        hover_data=[
-            'subnet_name',    # 0
-            'netuid',         # 1
-            'buy_signal',     # 2
-            'tao_score',      # 3
-            'flow_24h',       # 4
-            'market_cap_tao'  # 5
-        ],
-        title="TAO-Score vs Net Flow (Buy Signal Heatmap)",
-        labels={
-            'tao_score': 'TAO-Score',
-            'flow_24h': 'Net Flow 24h (TAO)',
-            'market_cap_musd': 'Market Cap (MUSD)',
-            'color_value': 'Buy Signal'
-        },
-        size_max=30,
-        color_continuous_scale=colorscale,
-        range_color=[0, 5]
-    )
-    
-    fig.update_traces(
-        marker=dict(
-            line=dict(width=1, color='rgba(0,0,0,0.3)'),
-            sizemin=5
-        ),
-        hovertemplate="<b>%{customdata[0]}</b><br>" +
-                     "NetUID: %{customdata[1]}<br>" +
-                     "Buy Signal: %{customdata[2]}/5 (Click to generate)<br>" +
-                     "TAO-Score: %{x:.1f}<br>" +
-                     "Net Flow: %{y:,.0f} TAO<br>" +
-                     "Market Cap: %{marker.size:.0f} TAO<br>" +
-                     "<extra></extra>"
-    )
-    
-    # Add quadrant lines
-    fig.add_hline(y=0, line_dash="dash", line_color="gray")
-    fig.add_vline(x=50, line_dash="dash", line_color="gray")  # Neutral TAO-Score
-    
-    # Update colorbar title and ticks
-    fig.update_layout(
-        coloraxis_colorbar=dict(
-            title="Buy Signal",
-            tickmode='array',
-            tickvals=[0, 1, 2, 3, 4, 5],
-            ticktext=['No Signal', '1 (Avoid)', '2 (Weak)', '3 (Neutral)', '4 (Good)', '5 (Strong)']
-        )
-    )
-
-    # Add netuid labels if toggle is enabled
-    if show_labels:
-        annotations = []
-        for idx, row in viz_df.iterrows():
-            annotations.append(
-                dict(
-                    x=row['tao_score'],
-                    y=row['flow_24h'],
-                    text=str(row['netuid']),
-                    showarrow=False,
-                    font=dict(size=10, color='black')
-                )
-            )
-        fig.update_layout(annotations=annotations)
-
-    return fig
-
-@callback(
-    Output("insight-display", "children"),
-    Output("buy-signal-refresh", "data"),
-    Input("buy-signal-analysis", "clickData")
-)
-def handle_buy_signal_click(click_data):
-    """Handle clicks on buy signal chart to generate GPT insights and update buy signal."""
-    if not click_data or 'points' not in click_data:
-        return html.Div("Click on a subnet dot to generate AI insights", className="text-muted"), None
-    try:
-        # Extract subnet info from click data
-        point = click_data['points'][0]
-        netuid = point['customdata'][1]  # netuid is in customdata[1]
-        subnet_name = point['customdata'][0]  # subnet_name is in customdata[0]
-        # Generate GPT insight
-        insight = get_insight(netuid)
-        # Extract buy signal from insight
-        buy_signal = extract_buy_signal_from_insight(insight)
-        # Save buy signal to latest metrics_snap for this netuid
-        if buy_signal is not None:
-            with get_db() as session:
-                snap = session.query(MetricsSnap).filter_by(netuid=netuid).order_by(MetricsSnap.timestamp.desc()).first()
-                if snap:
-                    snap.buy_signal = buy_signal
-                    session.commit()
-        # Format the insight display
-        return html.Div([
-            html.H5(f"AI Analysis for {subnet_name} (NetUID: {netuid})", className="mb-3"),
-            html.Div([
-                html.P(insight, className="mb-0", style={"whiteSpace": "pre-wrap", "fontSize": "14px"})
-            ], className="p-3 bg-light rounded")
-        ]), time.time()  # Use timestamp to force refresh
-    except Exception as e:
-        return html.Div([
-            html.H5("Error Generating Insight", className="mb-3 text-danger"),
-            html.P(f"Could not generate insight: {str(e)}", className="text-muted")
-        ]), None 
+def toggle_screener_quick_start(n_clicks, is_open):
+    if n_clicks:
+        new_state = not is_open
+        icon_class = "bi bi-chevron-up ms-2" if new_state else "bi bi-chevron-down ms-2"
+        return new_state, icon_class
+    return is_open, "bi bi-chevron-down ms-2"
