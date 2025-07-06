@@ -1,97 +1,123 @@
 """
-Insights Dashboard - Time Series Analytics for Bittensor Network
-Provides comprehensive insights from historical metrics data for investors and newcomers.
+Dynamic Insights Dashboard - Time Series Analytics for Bittensor Network
+Leverages rich metrics_snap data for comprehensive network analysis and trends.
 """
 
 import dash
-from dash import html, dcc, Input, Output, callback
-from dash.dependencies import State
+from dash import html, dcc, Input, Output, callback, State
 import dash_bootstrap_components as dbc
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
+import numpy as np
 from datetime import datetime, timedelta
 from services.db import get_db
-from models import MetricsSnap, SubnetMeta, CoinGeckoPrice
+from models import MetricsSnap, SubnetMeta
 from sqlalchemy import func, desc, and_, or_, text
-import numpy as np
+import json
 
-def get_time_series_data():
-    """Get time series data from metrics_snap table."""
+def get_time_series_data(days_back=30):
+    """Get time series data from metrics_snap table with flexible date range."""
     session = get_db()
     try:
-        # Get all metrics with timestamps
-        query = session.query(
-            MetricsSnap.netuid,
-            MetricsSnap.timestamp,
-            MetricsSnap.tao_score,
-            MetricsSnap.stake_quality,
-            MetricsSnap.validator_util_pct,
-            MetricsSnap.active_stake_ratio,
-            MetricsSnap.consensus_alignment,
-            MetricsSnap.emission_pct,
-            MetricsSnap.alpha_emitted_pct,
-            MetricsSnap.price_7d_change,
-            MetricsSnap.price_30d_change,
-            SubnetMeta.subnet_name,
-            SubnetMeta.primary_category
-        ).join(
-            SubnetMeta, MetricsSnap.netuid == SubnetMeta.netuid
-        ).order_by(
-            MetricsSnap.timestamp.desc()
-        )
+        cutoff_date = datetime.now() - timedelta(days=days_back)
+        
+        query = session.query(MetricsSnap).filter(
+            MetricsSnap.timestamp >= cutoff_date
+        ).order_by(MetricsSnap.timestamp.desc())
         
         df = pd.read_sql(query.statement, session.bind)
+        
+        # Ensure timestamp is properly converted to datetime
+        if 'timestamp' in df.columns:
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+        
         return df
     finally:
         session.close()
 
-def get_network_trends(df):
-    """Calculate network-wide trends and insights."""
-    if df.empty:
-        return {}
-    
-    # Get latest data
-    latest_date = df['timestamp'].max()
-    week_ago = latest_date - timedelta(days=7)
-    month_ago = latest_date - timedelta(days=30)
-    
-    # Latest metrics
-    latest = df[df['timestamp'] == latest_date]
-    week_ago_data = df[df['timestamp'] >= week_ago]
-    month_ago_data = df[df['timestamp'] >= month_ago]
-    
-    insights = {
-        'total_subnets_tracked': len(latest['netuid'].unique()),
-        'data_points_collected': len(df),
-        'date_range': f"{df['timestamp'].min().strftime('%Y-%m-%d')} to {latest_date.strftime('%Y-%m-%d')}",
-        'avg_tao_score': latest['tao_score'].mean(),
-        'avg_stake_quality': latest['stake_quality'].mean(),
-        'avg_validator_util': latest['validator_util_pct'].mean(),
-        'high_performing_subnets': len(latest[latest['tao_score'] >= 70]),
-        'improving_subnets': len(latest[latest['price_7d_change'] > 0]),
-        'declining_subnets': len(latest[latest['price_7d_change'] < 0]),
-        'most_active_category': latest['primary_category'].mode().iloc[0] if not latest['primary_category'].mode().empty else 'N/A',
-        'avg_price_change_7d': latest['price_7d_change'].mean(),
-        'avg_price_change_30d': latest['price_30d_change'].mean(),
-    }
-    
-    return insights
+def get_network_summary_stats():
+    """Get comprehensive network summary statistics."""
+    session = get_db()
+    try:
+        # Get latest data for each subnet
+        latest_query = session.query(
+            MetricsSnap.netuid,
+            MetricsSnap.subnet_name,
+            MetricsSnap.category,
+            MetricsSnap.tao_score,
+            MetricsSnap.stake_quality,
+            MetricsSnap.validator_util_pct,
+            MetricsSnap.market_cap_tao,
+            MetricsSnap.flow_24h,
+            MetricsSnap.price_7d_change,
+            MetricsSnap.active_validators,
+            MetricsSnap.total_stake_tao,
+            MetricsSnap.buy_signal,
+            func.max(MetricsSnap.timestamp).label('latest_timestamp')
+        ).group_by(
+            MetricsSnap.netuid,
+            MetricsSnap.subnet_name,
+            MetricsSnap.category,
+            MetricsSnap.tao_score,
+            MetricsSnap.stake_quality,
+            MetricsSnap.validator_util_pct,
+            MetricsSnap.market_cap_tao,
+            MetricsSnap.flow_24h,
+            MetricsSnap.price_7d_change,
+            MetricsSnap.active_validators,
+            MetricsSnap.total_stake_tao,
+            MetricsSnap.buy_signal
+        ).subquery()
+        
+        latest_df = pd.read_sql(session.query(latest_query).statement, session.bind)
+        
+        # Calculate summary stats
+        stats = {
+            'total_subnets': len(latest_df),
+            'total_market_cap_tao': latest_df['market_cap_tao'].sum(),
+            'total_stake_tao': latest_df['total_stake_tao'].sum(),
+            'avg_tao_score': latest_df['tao_score'].mean(),
+            'avg_stake_quality': latest_df['stake_quality'].mean(),
+            'high_performers': len(latest_df[latest_df['tao_score'] >= 70]),
+            'improving_subnets': len(latest_df[latest_df['price_7d_change'] > 0]),
+            'strong_buy_signals': len(latest_df[latest_df['buy_signal'] >= 4]),
+            'total_validators': latest_df['active_validators'].sum(),
+            'avg_validator_util': latest_df['validator_util_pct'].mean(),
+            'categories': latest_df['category'].nunique(),
+            'data_points': session.query(MetricsSnap).count(),
+            'date_range': f"{session.query(func.min(MetricsSnap.timestamp)).scalar()} to {session.query(func.max(MetricsSnap.timestamp)).scalar()}"
+        }
+        
+        return stats, latest_df
+    finally:
+        session.close()
 
-def create_trend_chart(df, metric, title, color='#3e6ae1'):
-    """Create a trend chart for a specific metric."""
+def create_metric_trend_chart(df, metric, title, color='#3e6ae1', aggregation='mean'):
+    """Create a trend chart for any metric with flexible aggregation."""
     if df.empty:
-        return go.Figure().add_annotation(text="No data available", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+        return go.Figure().add_annotation(
+            text="No data available", 
+            xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False
+        )
     
     # Aggregate by date
-    daily_avg = df.groupby(df['timestamp'].dt.date)[metric].mean().reset_index()
-    daily_avg['timestamp'] = pd.to_datetime(daily_avg['timestamp'])
+    if aggregation == 'mean':
+        daily_data = df.groupby(df['timestamp'].dt.date)[metric].mean().reset_index()
+    elif aggregation == 'sum':
+        daily_data = df.groupby(df['timestamp'].dt.date)[metric].sum().reset_index()
+    elif aggregation == 'median':
+        daily_data = df.groupby(df['timestamp'].dt.date)[metric].median().reset_index()
+    else:
+        daily_data = df.groupby(df['timestamp'].dt.date)[metric].mean().reset_index()
+    
+    daily_data['timestamp'] = pd.to_datetime(daily_data['timestamp'])
     
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=daily_avg['timestamp'],
-        y=daily_avg[metric],
+        x=daily_data['timestamp'],
+        y=daily_data[metric],
         mode='lines+markers',
         name=title,
         line=dict(color=color, width=3),
@@ -111,81 +137,66 @@ def create_trend_chart(df, metric, title, color='#3e6ae1'):
     
     return fig
 
-def create_category_performance(df):
-    """Create category performance comparison."""
+def create_category_comparison(df, metric, title):
+    """Create category comparison chart for any metric."""
     if df.empty:
-        return go.Figure().add_annotation(text="No data available", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+        return go.Figure().add_annotation(
+            text="No data available", 
+            xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False
+        )
     
     # Get latest data for each subnet
     latest = df.loc[df.groupby('netuid')['timestamp'].idxmax()]
     
     # Calculate category averages
-    category_metrics = latest.groupby('primary_category').agg({
-        'tao_score': 'mean',
-        'stake_quality': 'mean',
-        'validator_util_pct': 'mean',
-        'price_7d_change': 'mean'
-    }).round(2)
+    category_metrics = latest.groupby('category')[metric].mean().round(2).sort_values(ascending=False)
     
-    # Create subplot
-    fig = make_subplots(
-        rows=2, cols=2,
-        subplot_titles=('TAO-Score by Category', 'Stake Quality by Category', 
-                       'Validator Utilization by Category', '7-Day Price Change by Category'),
-        specs=[[{"secondary_y": False}, {"secondary_y": False}],
-               [{"secondary_y": False}, {"secondary_y": False}]]
-    )
-    
-    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', 
-              '#e377c2', '#7f7f7f', '#bcbd22', '#17becf', '#ff9896', '#98df8a']
-    
-    for i, metric in enumerate(['tao_score', 'stake_quality', 'validator_util_pct', 'price_7d_change']):
-        row = (i // 2) + 1
-        col = (i % 2) + 1
-        
-        fig.add_trace(
-            go.Bar(
-                x=category_metrics.index,
-                y=category_metrics[metric],
-                name=metric.replace('_', ' ').title(),
-                marker_color=colors[:len(category_metrics)],
-                hovertemplate='<b>%{x}</b><br>%{y:.2f}<extra></extra>'
-            ),
-            row=row, col=col
-        )
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=category_metrics.values,
+        y=category_metrics.index,
+        orientation='h',
+        marker_color='#3e6ae1',
+        hovertemplate='<b>%{y}</b><br>' + title + ': %{x:.2f}<extra></extra>'
+    ))
     
     fig.update_layout(
-        height=600,
-        showlegend=False,
-        title_text="Category Performance Comparison",
-        title_x=0.5
+        title=f"{title} by Category",
+        xaxis_title=title,
+        yaxis_title="Category",
+        height=400,
+        yaxis={'categoryorder':'total ascending'}
     )
     
     return fig
 
-def create_top_performers(df):
-    """Create top performing subnets chart."""
+def create_subnet_performance_chart(df, metric, title, top_n=10):
+    """Create top/bottom subnet performance chart."""
     if df.empty:
-        return go.Figure().add_annotation(text="No data available", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+        return go.Figure().add_annotation(
+            text="No data available", 
+            xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False
+        )
     
     # Get latest data for each subnet
     latest = df.loc[df.groupby('netuid')['timestamp'].idxmax()]
     
-    # Top 10 by TAO-Score
-    top_tao = latest.nlargest(10, 'tao_score')[['subnet_name', 'netuid', 'tao_score', 'primary_category']]
+    # Get top performers
+    top_performers = latest.nlargest(top_n, metric)[['subnet_name', 'netuid', metric, 'category']]
     
     fig = go.Figure()
     fig.add_trace(go.Bar(
-        x=top_tao['tao_score'],
-        y=[f"{row['subnet_name']} ({row['netuid']})" for _, row in top_tao.iterrows()],
+        x=top_performers[metric],
+        y=[f"{row['subnet_name']} ({row['netuid']})" for _, row in top_performers.iterrows()],
         orientation='h',
-        marker_color='#3e6ae1',
-        hovertemplate='<b>%{y}</b><br>TAO-Score: %{x:.1f}<extra></extra>'
+        marker_color='#28a745',
+        hovertemplate='<b>%{y}</b><br>' + title + ': %{x:.2f}<br>Category: %{customdata}<extra></extra>',
+        customdata=top_performers['category']
     ))
     
     fig.update_layout(
-        title="Top 10 Subnets by TAO-Score",
-        xaxis_title="TAO-Score",
+        title=f"Top {top_n} Subnets by {title}",
+        xaxis_title=title,
         yaxis_title="Subnet",
         height=400,
         yaxis={'categoryorder':'total ascending'}
@@ -193,38 +204,41 @@ def create_top_performers(df):
     
     return fig
 
-def create_improvement_tracker(df):
-    """Create subnet improvement tracking."""
+def create_improvement_tracker(df, days_back=30):
+    """Create subnet improvement tracking over specified period."""
     if df.empty:
-        return go.Figure().add_annotation(text="No data available", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
-    
-    # Get data from last 30 days
-    thirty_days_ago = df['timestamp'].max() - timedelta(days=30)
-    recent_data = df[df['timestamp'] >= thirty_days_ago]
+        return go.Figure().add_annotation(
+            text="No data available", 
+            xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False
+        )
     
     # Calculate improvement for each subnet
     improvements = []
-    for netuid in recent_data['netuid'].unique():
-        subnet_data = recent_data[recent_data['netuid'] == netuid].sort_values('timestamp')
+    
+    for netuid in df['netuid'].unique():
+        subnet_data = df[df['netuid'] == netuid].sort_values('timestamp')
         if len(subnet_data) >= 2:
             first_score = subnet_data.iloc[0]['tao_score']
             last_score = subnet_data.iloc[-1]['tao_score']
             improvement = last_score - first_score
             
-            subnet_name = subnet_data.iloc[0]['subnet_name']
-            category = subnet_data.iloc[0]['primary_category']
-            
-            improvements.append({
-                'netuid': netuid,
-                'subnet_name': subnet_name,
-                'category': category,
-                'improvement': improvement,
-                'start_score': first_score,
-                'end_score': last_score
-            })
+            if abs(improvement) >= 0.1:  # Minimum change threshold
+                improvements.append({
+                    'netuid': netuid,
+                    'subnet_name': subnet_data.iloc[0]['subnet_name'],
+                    'category': subnet_data.iloc[0]['category'],
+                    'improvement': improvement,
+                    'start_score': first_score,
+                    'end_score': last_score,
+                    'days_tracked': (subnet_data.iloc[-1]['timestamp'] - subnet_data.iloc[0]['timestamp']).days
+                })
     
     if not improvements:
-        return go.Figure().add_annotation(text="No improvement data available", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+        return go.Figure().add_annotation(
+            text=f"No improvement data available<br>Need at least 2 data points per subnet in last {days_back} days", 
+            xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False,
+            font=dict(size=14)
+        )
     
     improvements_df = pd.DataFrame(improvements)
     top_improvers = improvements_df.nlargest(10, 'improvement')
@@ -235,12 +249,12 @@ def create_improvement_tracker(df):
         y=[f"{row['subnet_name']} ({row['netuid']})" for _, row in top_improvers.iterrows()],
         orientation='h',
         marker_color=['#28a745' if x > 0 else '#dc3545' for x in top_improvers['improvement']],
-        hovertemplate='<b>%{y}</b><br>Improvement: %{x:.1f} points<br>From: %{customdata[0]:.1f} → To: %{customdata[1]:.1f}<extra></extra>',
-        customdata=list(zip(top_improvers['start_score'], top_improvers['end_score']))
+        hovertemplate='<b>%{y}</b><br>Improvement: %{x:.1f} points<br>From: %{customdata[0]:.1f} → To: %{customdata[1]:.1f}<br>Days: %{customdata[2]}<extra></extra>',
+        customdata=list(zip(top_improvers['start_score'], top_improvers['end_score'], top_improvers['days_tracked']))
     ))
     
     fig.update_layout(
-        title="Top 10 Most Improved Subnets (Last 30 Days)",
+        title=f"Top 10 Most Improved Subnets (Last {days_back} Days)",
         xaxis_title="TAO-Score Improvement",
         yaxis_title="Subnet",
         height=400,
@@ -249,76 +263,91 @@ def create_improvement_tracker(df):
     
     return fig
 
-# Get data
-df = get_time_series_data()
-insights = get_network_trends(df)
-
-# Create charts
-tao_score_trend = create_trend_chart(df, 'tao_score', 'Average TAO-Score Over Time')
-stake_quality_trend = create_trend_chart(df, 'stake_quality', 'Average Stake Quality Over Time', '#28a745')
-validator_util_trend = create_trend_chart(df, 'validator_util_pct', 'Average Validator Utilization Over Time', '#ffc107')
-category_performance = create_category_performance(df)
-top_performers = create_top_performers(df)
-improvement_tracker = create_improvement_tracker(df)
-
-layout = html.Div([
-    # Header with onboarding
-    dbc.Card([
-        dbc.CardBody([
-            html.H1("📊 Bittensor Network Insights", className="dashboard-title mb-3"),
-            html.Div([
-                html.H5("🎯 Welcome to Time Series Analytics", className="text-primary mb-2"),
-                html.P([
-                    "This dashboard provides deep insights into the Bittensor network's performance over time. ",
-                    "As our database grows with daily snapshots, these insights become increasingly valuable for ",
-                    "understanding network trends, identifying opportunities, and tracking subnet performance."
-                ], className="mb-3"),
-                html.Div([
-                    html.Strong("💡 For Newcomers: "),
-                    "Learn how the network evolves and which subnets are performing best. ",
-                    "Each metric tells a story about network health and growth."
-                ], className="alert alert-info mb-2"),
-                html.Div([
-                    html.Strong("💰 For Investors: "),
-                    "Track performance trends, identify improving subnets, and understand ",
-                    "which categories are gaining momentum. Use this data to inform your investment decisions."
-                ], className="alert alert-success mb-0")
-            ])
-        ])
-    ], className="mb-4"),
+def create_correlation_matrix(df):
+    """Create correlation matrix for key metrics."""
+    if df.empty:
+        return go.Figure().add_annotation(
+            text="No data available", 
+            xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False
+        )
     
-    # Subnet Search Bar
+    # Get latest data for each subnet
+    latest = df.loc[df.groupby('netuid')['timestamp'].idxmax()]
+    
+    # Select numeric columns for correlation
+    numeric_cols = ['tao_score', 'stake_quality', 'validator_util_pct', 'market_cap_tao', 
+                   'flow_24h', 'price_7d_change', 'active_validators', 'total_stake_tao']
+    
+    # Filter to columns that exist in the data
+    available_cols = [col for col in numeric_cols if col in latest.columns]
+    
+    if len(available_cols) < 2:
+        return go.Figure().add_annotation(
+            text="Insufficient data for correlation analysis", 
+            xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False
+        )
+    
+    corr_matrix = latest[available_cols].corr()
+    
+    fig = go.Figure(data=go.Heatmap(
+        z=corr_matrix.values,
+        x=corr_matrix.columns,
+        y=corr_matrix.columns,
+        colorscale='RdBu',
+        zmid=0,
+        hovertemplate='<b>%{y} vs %{x}</b><br>Correlation: %{z:.3f}<extra></extra>'
+    ))
+    
+    fig.update_layout(
+        title="Metric Correlation Matrix",
+        height=500,
+        xaxis_title="Metrics",
+        yaxis_title="Metrics"
+    )
+    
+    return fig
+
+# Get initial data
+stats, latest_df = get_network_summary_stats()
+df_30d = get_time_series_data(30)
+
+# Create initial charts
+tao_score_trend = create_metric_trend_chart(df_30d, 'tao_score', 'Average TAO-Score Over Time')
+stake_quality_trend = create_metric_trend_chart(df_30d, 'stake_quality', 'Average Stake Quality Over Time', '#28a745')
+market_cap_trend = create_metric_trend_chart(df_30d, 'market_cap_tao', 'Total Market Cap (TAO) Over Time', '#ffc107', 'sum')
+flow_trend = create_metric_trend_chart(df_30d, 'flow_24h', 'Total 24h Flow (TAO) Over Time', '#dc3545', 'sum')
+category_tao_score = create_category_comparison(df_30d, 'tao_score', 'TAO-Score')
+top_performers = create_subnet_performance_chart(df_30d, 'tao_score', 'TAO-Score')
+improvement_tracker = create_improvement_tracker(df_30d, 30)
+correlation_matrix = create_correlation_matrix(df_30d)
+
+# Available metrics for dynamic selection
+AVAILABLE_METRICS = {
+    'tao_score': 'TAO-Score',
+    'stake_quality': 'Stake Quality',
+    'validator_util_pct': 'Validator Utilization (%)',
+    'market_cap_tao': 'Market Cap (TAO)',
+    'flow_24h': '24h Flow (TAO)',
+    'price_7d_change': '7-Day Price Change (%)',
+    'active_validators': 'Active Validators',
+    'total_stake_tao': 'Total Stake (TAO)',
+    'buy_signal': 'Buy Signal',
+    'consensus_alignment': 'Consensus Alignment (%)',
+    'emission_roi': 'Emission ROI',
+    'stake_hhi': 'Stake HHI'
+}
+
+# Layout
+layout = html.Div([
+    # Header
     dbc.Card([
         dbc.CardBody([
-            html.H5("🔍 Quick Subnet Search", className="mb-3"),
-            html.P("Search for any subnet by name or number to view detailed analytics:", className="text-muted mb-3"),
-            dbc.Row([
-                dbc.Col([
-                    dcc.Dropdown(
-                        id="subnet-search",
-                        placeholder="Type subnet name or number (e.g., 'Apex' or '1')",
-                        options=[],
-                        value=None,
-                        clearable=True,
-                        searchable=True,
-                        style={"width": "100%"}
-                    )
-                ], width=8),
-                dbc.Col([
-                    html.A(
-                        dbc.Button(
-                            "Go to Subnet",
-                            id="go-to-subnet-btn",
-                            color="primary",
-                            className="w-100",
-                            disabled=True
-                        ),
-                        id="subnet-link",
-                        href="#",
-                        className="text-decoration-none"
-                    )
-                ], width=4)
-            ])
+            html.H1("📊 Dynamic Network Insights", className="dashboard-title mb-3"),
+            html.P([
+                "Comprehensive time series analytics leveraging our rich metrics database. ",
+                "Track network trends, subnet performance, and discover investment opportunities ",
+                "with interactive charts and dynamic filtering."
+            ], className="text-muted mb-0")
         ])
     ], className="mb-4"),
     
@@ -333,195 +362,482 @@ layout = html.Div([
                 dbc.Col([
                     dbc.Card([
                         dbc.CardBody([
-                            html.H3(f"{insights.get('total_subnets_tracked', 0)}", className="text-primary"),
-                            html.P("Subnets Tracked", className="text-muted mb-0")
+                            html.H3(f"{stats['total_subnets']}", className="text-primary"),
+                            html.P("Active Subnets", className="text-muted mb-0")
                         ])
                     ], className="text-center")
-                ], width=3),
+                ], width=2),
                 dbc.Col([
                     dbc.Card([
                         dbc.CardBody([
-                            html.H3(f"{insights.get('data_points_collected', 0):,}", className="text-success"),
-                            html.P("Data Points", className="text-muted mb-0")
+                            html.H3(f"{stats['total_market_cap_tao']:,.0f}", className="text-success"),
+                            html.P("Total Market Cap (TAO)", className="text-muted mb-0")
                         ])
                     ], className="text-center")
-                ], width=3),
+                ], width=2),
                 dbc.Col([
                     dbc.Card([
                         dbc.CardBody([
-                            html.H3(f"{insights.get('high_performing_subnets', 0)}", className="text-warning"),
-                            html.P("High Performers (≥70 TAO-Score)", className="text-muted mb-0")
+                            html.H3(f"{stats['avg_tao_score']:.1f}", className="text-warning"),
+                            html.P("Avg TAO-Score", className="text-muted mb-0")
                         ])
                     ], className="text-center")
-                ], width=3),
+                ], width=2),
                 dbc.Col([
                     dbc.Card([
                         dbc.CardBody([
-                            html.H3(f"{insights.get('improving_subnets', 0)}", className="text-info"),
-                            html.P("Improving Subnets", className="text-muted mb-0")
+                            html.H3(f"{stats['high_performers']}", className="text-info"),
+                            html.P("High Performers (≥70)", className="text-muted mb-0")
                         ])
                     ], className="text-center")
-                ], width=3),
+                ], width=2),
+                dbc.Col([
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.H3(f"{stats['strong_buy_signals']}", className="text-danger"),
+                            html.P("Strong Buy Signals (≥4)", className="text-muted mb-0")
+                        ])
+                    ], className="text-center")
+                ], width=2),
+                dbc.Col([
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.H3(f"{stats['categories']}", className="text-secondary"),
+                            html.P("Categories", className="text-muted mb-0")
+                        ])
+                    ], className="text-center")
+                ], width=2),
             ], className="mb-3"),
-            html.Small(f"Data range: {insights.get('date_range', 'N/A')}", className="text-muted")
+            html.Small(f"Data: {stats['data_points']:,} points | Range: {stats['date_range']}", className="text-muted")
         ])
     ], className="mb-4"),
     
-    # Trend Analysis
+    # SECTION 1: Custom Trend Analysis
     dbc.Card([
         dbc.CardHeader([
-            html.H4("Network Trends", className="mb-0"),
-            html.I(className="bi bi-info-circle ms-2", id="trends-tooltip")
+            html.H4("📈 Custom Trend Analysis", className="mb-0"),
+            html.I(className="bi bi-graph-up ms-2", id="trend-tooltip")
         ]),
         dbc.CardBody([
+            # Controls for this section
             dbc.Row([
                 dbc.Col([
-                    dcc.Graph(figure=tao_score_trend, config={'displayModeBar': False})
+                    html.Label("Time Range", className="form-label fw-bold"),
+                    dcc.Dropdown(
+                        id="trend-time-range",
+                        options=[
+                            {"label": "Last 7 Days", "value": 7},
+                            {"label": "Last 14 Days", "value": 14},
+                            {"label": "Last 30 Days", "value": 30},
+                            {"label": "Last 60 Days", "value": 60},
+                            {"label": "All Available", "value": 365}
+                        ],
+                        value=30,
+                        clearable=False
+                    )
+                ], width=3),
+                dbc.Col([
+                    html.Label("Metric to Track", className="form-label fw-bold"),
+                    dcc.Dropdown(
+                        id="trend-metric",
+                        options=[{"label": v, "value": k} for k, v in AVAILABLE_METRICS.items()],
+                        value="tao_score",
+                        clearable=False
+                    )
+                ], width=3),
+                dbc.Col([
+                    html.Label("Aggregation Method", className="form-label fw-bold"),
+                    dcc.Dropdown(
+                        id="trend-aggregation",
+                        options=[
+                            {"label": "Average", "value": "mean"},
+                            {"label": "Sum", "value": "sum"},
+                            {"label": "Median", "value": "median"}
+                        ],
+                        value="mean",
+                        clearable=False
+                    )
+                ], width=3),
+                dbc.Col([
+                    html.Label("Filter by Category", className="form-label fw-bold"),
+                    dcc.Dropdown(
+                        id="trend-category-filter",
+                        options=[{"label": "All Categories", "value": "All"}] + 
+                                [{"label": cat, "value": cat} for cat in sorted(latest_df['category'].unique()) if cat],
+                        value="All",
+                        clearable=False
+                    )
+                ], width=3),
+            ], className="mb-4"),
+            # Chart for this section
+            dcc.Graph(id="custom-trend-chart", config={'displayModeBar': False})
+        ])
+    ], className="mb-4"),
+    
+    # SECTION 2: Category Performance Analysis
+    dbc.Card([
+        dbc.CardHeader([
+            html.H4("🏷️ Category Performance Analysis", className="mb-0"),
+            html.I(className="bi bi-pie-chart ms-2", id="category-tooltip")
+        ]),
+        dbc.CardBody([
+            # Controls for this section
+            dbc.Row([
+                dbc.Col([
+                    html.Label("Time Range", className="form-label fw-bold"),
+                    dcc.Dropdown(
+                        id="category-time-range",
+                        options=[
+                            {"label": "Last 7 Days", "value": 7},
+                            {"label": "Last 14 Days", "value": 14},
+                            {"label": "Last 30 Days", "value": 30},
+                            {"label": "Last 60 Days", "value": 60},
+                            {"label": "All Available", "value": 365}
+                        ],
+                        value=30,
+                        clearable=False
+                    )
+                ], width=4),
+                dbc.Col([
+                    html.Label("Metric to Compare", className="form-label fw-bold"),
+                    dcc.Dropdown(
+                        id="category-metric",
+                        options=[{"label": v, "value": k} for k, v in AVAILABLE_METRICS.items()],
+                        value="tao_score",
+                        clearable=False
+                    )
+                ], width=4),
+                dbc.Col([
+                    html.Label("Filter by Category", className="form-label fw-bold"),
+                    dcc.Dropdown(
+                        id="category-filter",
+                        options=[{"label": "All Categories", "value": "All"}] + 
+                                [{"label": cat, "value": cat} for cat in sorted(latest_df['category'].unique()) if cat],
+                        value="All",
+                        clearable=False
+                    )
+                ], width=4),
+            ], className="mb-4"),
+            # Chart for this section
+            dcc.Graph(id="category-performance-chart", config={'displayModeBar': False})
+        ])
+    ], className="mb-4"),
+    
+    # SECTION 3: Top Performers Analysis
+    dbc.Card([
+        dbc.CardHeader([
+            html.H4("🏆 Top Performers Analysis", className="mb-0"),
+            html.I(className="bi bi-trophy ms-2", id="performers-tooltip")
+        ]),
+        dbc.CardBody([
+            # Controls for this section
+            dbc.Row([
+                dbc.Col([
+                    html.Label("Time Range", className="form-label fw-bold"),
+                    dcc.Dropdown(
+                        id="performers-time-range",
+                        options=[
+                            {"label": "Last 7 Days", "value": 7},
+                            {"label": "Last 14 Days", "value": 14},
+                            {"label": "Last 30 Days", "value": 30},
+                            {"label": "Last 60 Days", "value": 60},
+                            {"label": "All Available", "value": 365}
+                        ],
+                        value=30,
+                        clearable=False
+                    )
+                ], width=4),
+                dbc.Col([
+                    html.Label("Performance Metric", className="form-label fw-bold"),
+                    dcc.Dropdown(
+                        id="performers-metric",
+                        options=[{"label": v, "value": k} for k, v in AVAILABLE_METRICS.items()],
+                        value="tao_score",
+                        clearable=False
+                    )
+                ], width=4),
+                dbc.Col([
+                    html.Label("Filter by Category", className="form-label fw-bold"),
+                    dcc.Dropdown(
+                        id="performers-category-filter",
+                        options=[{"label": "All Categories", "value": "All"}] + 
+                                [{"label": cat, "value": cat} for cat in sorted(latest_df['category'].unique()) if cat],
+                        value="All",
+                        clearable=False
+                    )
+                ], width=4),
+            ], className="mb-4"),
+            # Chart for this section
+            dcc.Graph(id="top-performers-chart", config={'displayModeBar': False})
+        ])
+    ], className="mb-4"),
+    
+    # SECTION 4: Improvement Tracking
+    dbc.Card([
+        dbc.CardHeader([
+            html.H4("📈 Improvement Tracking", className="mb-0"),
+            html.I(className="bi bi-arrow-up-circle ms-2", id="improvement-tooltip")
+        ]),
+        dbc.CardBody([
+            # Controls for this section
+            dbc.Row([
+                dbc.Col([
+                    html.Label("Time Range for Improvement Analysis", className="form-label fw-bold"),
+                    dcc.Dropdown(
+                        id="improvement-time-range",
+                        options=[
+                            {"label": "Last 7 Days", "value": 7},
+                            {"label": "Last 14 Days", "value": 14},
+                            {"label": "Last 30 Days", "value": 30},
+                            {"label": "Last 60 Days", "value": 60},
+                            {"label": "All Available", "value": 365}
+                        ],
+                        value=30,
+                        clearable=False
+                    )
                 ], width=6),
                 dbc.Col([
+                    html.Label("Minimum Improvement Threshold", className="form-label fw-bold"),
+                    dcc.Slider(
+                        id="improvement-threshold",
+                        min=0.1,
+                        max=5.0,
+                        step=0.1,
+                        value=0.1,
+                        marks={0.1: '0.1', 1.0: '1.0', 2.0: '2.0', 3.0: '3.0', 4.0: '4.0', 5.0: '5.0'},
+                        tooltip={"placement": "bottom", "always_visible": False}
+                    )
+                ], width=6),
+            ], className="mb-4"),
+            # Chart for this section
+            dcc.Graph(id="improvement-tracking-chart", config={'displayModeBar': False})
+        ])
+    ], className="mb-4"),
+    
+    # SECTION 5: Fixed Network Trends (Static)
+    dbc.Card([
+        dbc.CardHeader([
+            html.H4("📊 Fixed Network Trends", className="mb-0"),
+            html.I(className="bi bi-graph-up ms-2", id="fixed-trends-tooltip")
+        ]),
+        dbc.CardBody([
+            html.P("These charts show key network metrics over time (last 30 days):", className="text-muted mb-3"),
+            dbc.Row([
+                dbc.Col([
                     dcc.Graph(figure=stake_quality_trend, config={'displayModeBar': False})
+                ], width=6),
+                dbc.Col([
+                    dcc.Graph(figure=market_cap_trend, config={'displayModeBar': False})
                 ], width=6),
             ], className="mb-3"),
             dbc.Row([
                 dbc.Col([
-                    dcc.Graph(figure=validator_util_trend, config={'displayModeBar': False})
+                    dcc.Graph(figure=flow_trend, config={'displayModeBar': False})
                 ], width=12),
             ])
         ])
     ], className="mb-4"),
     
-    # Category Performance
+    # SECTION 6: Correlation Analysis (Static)
     dbc.Card([
         dbc.CardHeader([
-            html.H4("Category Performance Analysis", className="mb-0"),
-            html.I(className="bi bi-info-circle ms-2", id="category-tooltip")
+            html.H4("🔗 Metric Correlations", className="mb-0"),
+            html.I(className="bi bi-diagram-3 ms-2", id="correlation-tooltip")
         ]),
         dbc.CardBody([
-            dcc.Graph(figure=category_performance, config={'displayModeBar': False})
+            html.P("Correlation matrix showing relationships between different metrics:", className="text-muted mb-3"),
+            dcc.Graph(figure=correlation_matrix, config={'displayModeBar': False})
         ])
-    ], className="mb-4"),
-    
-    # Top Performers and Improvement Tracking
-    dbc.Row([
-        dbc.Col([
-            dbc.Card([
-                dbc.CardHeader([
-                    html.H5("Top Performers", className="mb-0"),
-                    html.I(className="bi bi-info-circle ms-2", id="performers-tooltip")
-                ]),
-                dbc.CardBody([
-                    dcc.Graph(figure=top_performers, config={'displayModeBar': False})
-                ])
-            ])
-        ], width=6),
-        dbc.Col([
-            dbc.Card([
-                dbc.CardHeader([
-                    html.H5("Improvement Tracking", className="mb-0"),
-                    html.I(className="bi bi-info-circle ms-2", id="improvement-tooltip")
-                ]),
-                dbc.CardBody([
-                    dcc.Graph(figure=improvement_tracker, config={'displayModeBar': False})
-                ])
-            ])
-        ], width=6),
     ], className="mb-4"),
     
     # Tooltips
     dbc.Tooltip(
-        "Overview of key network metrics including total subnets tracked, data points collected, "
-        "high-performing subnets (TAO-Score ≥70), and subnets showing positive momentum.",
+        "Overview of key network metrics including total subnets, market cap, average TAO-Score, "
+        "high performers, strong buy signals, and category diversity.",
         target="overview-tooltip",
         placement="top"
     ),
     dbc.Tooltip(
-        "Historical trends showing how network health metrics change over time. "
-        "TAO-Score measures overall subnet health, Stake Quality shows decentralization, "
-        "and Validator Utilization indicates network capacity usage.",
-        target="trends-tooltip",
+        "Create custom trend charts by selecting any metric, time range, aggregation method, and category filter. "
+        "Perfect for tracking specific metrics over time.",
+        target="trend-tooltip",
         placement="top"
     ),
     dbc.Tooltip(
-        "Performance comparison across different subnet categories. This helps identify "
-        "which types of AI services are performing best and which categories might be "
-        "undervalued or overvalued.",
+        "Compare subnet categories by any metric. Helps identify which types of AI services are performing best "
+        "and which categories might be undervalued.",
         target="category-tooltip",
         placement="top"
     ),
     dbc.Tooltip(
-        "Current top-performing subnets by TAO-Score. These represent the healthiest "
-        "and most well-run subnets in the network. Consider these for investment research.",
+        "View top-performing subnets by any selected metric. These represent the best-performing subnets "
+        "in the network for your chosen criteria.",
         target="performers-tooltip",
         placement="top"
     ),
     dbc.Tooltip(
-        "Subnets showing the most improvement in TAO-Score over the last 30 days. "
-        "These represent emerging opportunities and subnets that are actively improving "
-        "their network health and performance.",
+        "Track subnets showing the most improvement in TAO-Score over the selected time period. "
+        "These represent emerging opportunities and subnets that are actively improving.",
         target="improvement-tooltip",
         placement="top"
     ),
+    dbc.Tooltip(
+        "Fixed network trends showing key metrics over time. These provide a consistent baseline "
+        "for understanding network health and growth.",
+        target="fixed-trends-tooltip",
+        placement="top"
+    ),
+    dbc.Tooltip(
+        "Correlation matrix showing relationships between different metrics. "
+        "Helps understand which factors influence each other.",
+        target="correlation-tooltip",
+        placement="top"
+    ),
     
-    # Refresh interval
-    dcc.Interval(id="insights-interval", interval=300000, n_intervals=0),  # 5 minutes
+    # Store for dynamic data
+    dcc.Store(id="trend-data-store"),
+    dcc.Store(id="category-data-store"),
+    dcc.Store(id="performers-data-store"),
+    dcc.Store(id="improvement-data-store"),
 ])
 
+# Callbacks for SECTION 1: Custom Trend Analysis
 @callback(
-    Output("insights-interval", "disabled"),
-    Input("insights-interval", "n_intervals")
+    Output("trend-data-store", "data"),
+    Input("trend-time-range", "value")
 )
-def update_insights(n_intervals):
-    """Update insights data periodically."""
-    return False
+def update_trend_data(time_range):
+    """Update data for trend analysis."""
+    df = get_time_series_data(time_range)
+    return df.to_dict('records')
 
 @callback(
-    Output("subnet-search", "options"),
-    Input("subnet-search", "search_value")
+    Output("custom-trend-chart", "figure"),
+    Input("trend-data-store", "data"),
+    Input("trend-metric", "value"),
+    Input("trend-aggregation", "value"),
+    Input("trend-category-filter", "value")
 )
-def update_search_options(search_value):
-    """Update search options based on user input."""
-    session = get_db()
-    try:
-        # Get all subnets with names and netuids
-        query = session.query(
-            SubnetMeta.netuid,
-            SubnetMeta.subnet_name,
-            SubnetMeta.primary_category
-        ).order_by(SubnetMeta.netuid)
-        
-        subnets = query.all()
-        
-        options = []
-        for subnet in subnets:
-            # Create option with both name and netuid
-            label = f"{subnet.subnet_name} (Subnet {subnet.netuid})"
-            value = str(subnet.netuid)
-            
-            # If there's a search value, filter options
-            if search_value:
-                search_lower = search_value.lower()
-                if (search_lower in subnet.subnet_name.lower() or 
-                    search_lower in str(subnet.netuid) or
-                    search_lower in subnet.primary_category.lower()):
-                    options.append({"label": label, "value": value})
-            else:
-                options.append({"label": label, "value": value})
-        
-        return options
-    finally:
-        session.close()
+def update_custom_trend_chart(data, metric, aggregation, category):
+    """Update custom trend chart."""
+    if not data:
+        return go.Figure().add_annotation(text="No data available", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+    
+    df = pd.DataFrame(data)
+    
+    # Ensure timestamp is properly converted to datetime
+    if 'timestamp' in df.columns:
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+    
+    # Apply category filter
+    if category != "All":
+        df = df[df['category'] == category]
+    
+    if df.empty:
+        return go.Figure().add_annotation(text="No data available for selected filters", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+    
+    return create_metric_trend_chart(df, metric, f"{AVAILABLE_METRICS[metric]} Over Time", aggregation=aggregation)
+
+# Callbacks for SECTION 2: Category Performance Analysis
+@callback(
+    Output("category-data-store", "data"),
+    Input("category-time-range", "value")
+)
+def update_category_data(time_range):
+    """Update data for category analysis."""
+    df = get_time_series_data(time_range)
+    return df.to_dict('records')
 
 @callback(
-    [Output("go-to-subnet-btn", "disabled"),
-     Output("subnet-link", "href")],
-    Input("subnet-search", "value")
+    Output("category-performance-chart", "figure"),
+    Input("category-data-store", "data"),
+    Input("category-metric", "value"),
+    Input("category-filter", "value")
 )
-def update_button_state_and_link(selected_value):
-    """Enable/disable the Go button and update link href based on selection."""
-    if selected_value:
-        return False, f"/dash/subnet-detail?netuid={selected_value}"
-    else:
-        return True, "#"
+def update_category_performance_chart(data, metric, category):
+    """Update category performance chart."""
+    if not data:
+        return go.Figure().add_annotation(text="No data available", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+    
+    df = pd.DataFrame(data)
+    
+    # Ensure timestamp is properly converted to datetime
+    if 'timestamp' in df.columns:
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+    
+    # Apply category filter
+    if category != "All":
+        df = df[df['category'] == category]
+    
+    if df.empty:
+        return go.Figure().add_annotation(text="No data available for selected category", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+    
+    return create_category_comparison(df, metric, AVAILABLE_METRICS[metric])
+
+# Callbacks for SECTION 3: Top Performers Analysis
+@callback(
+    Output("performers-data-store", "data"),
+    Input("performers-time-range", "value")
+)
+def update_performers_data(time_range):
+    """Update data for performers analysis."""
+    df = get_time_series_data(time_range)
+    return df.to_dict('records')
+
+@callback(
+    Output("top-performers-chart", "figure"),
+    Input("performers-data-store", "data"),
+    Input("performers-metric", "value"),
+    Input("performers-category-filter", "value")
+)
+def update_top_performers_chart(data, metric, category):
+    """Update top performers chart."""
+    if not data:
+        return go.Figure().add_annotation(text="No data available", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+    
+    df = pd.DataFrame(data)
+    
+    # Ensure timestamp is properly converted to datetime
+    if 'timestamp' in df.columns:
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+    
+    # Apply category filter
+    if category != "All":
+        df = df[df['category'] == category]
+    
+    if df.empty:
+        return go.Figure().add_annotation(text="No data available for selected category", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+    
+    return create_subnet_performance_chart(df, metric, AVAILABLE_METRICS[metric])
+
+# Callbacks for SECTION 4: Improvement Tracking
+@callback(
+    Output("improvement-data-store", "data"),
+    Input("improvement-time-range", "value")
+)
+def update_improvement_data(time_range):
+    """Update data for improvement analysis."""
+    df = get_time_series_data(time_range)
+    return df.to_dict('records')
+
+@callback(
+    Output("improvement-tracking-chart", "figure"),
+    Input("improvement-data-store", "data"),
+    Input("improvement-time-range", "value"),
+    Input("improvement-threshold", "value")
+)
+def update_improvement_tracking_chart(data, time_range, threshold):
+    """Update improvement tracking chart."""
+    if not data:
+        return go.Figure().add_annotation(text="No data available", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+    
+    df = pd.DataFrame(data)
+    
+    # Ensure timestamp is properly converted to datetime
+    if 'timestamp' in df.columns:
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+    
+    return create_improvement_tracker(df, time_range)
 
 def register_callbacks(dash_app):
     """Register callbacks for the insights page."""
