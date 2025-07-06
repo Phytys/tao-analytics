@@ -1195,8 +1195,8 @@ def update_network_health(category, mcap_range):
 
 @callback(
     Output("tao-score-distribution", "figure"),
-    Input("momentum-category-filter", "value"),
-    Input("momentum-mcap-slider", "value")
+    Input("additional-category-filter", "value"),
+    Input("additional-mcap-slider", "value")
 )
 def update_tao_score_distribution(category, mcap_range):
     """Update TAO-Score distribution based on momentum filters."""
