@@ -70,6 +70,7 @@ layout = dbc.Container(
         # --- Tesla-inspired header ---
         html.Div([
             html.H1("Bittensor Explorer", className="dashboard-title"),
+            html.P("Discover and explore AI subnets on the Bittensor network - from LLM services to data feeds, compute resources, and specialized AI applications.", className="text-muted mb-4"),
         ], className="dashboard-header"),
         
         # --- Quick Start section (collapsible) ---
@@ -89,6 +90,7 @@ layout = dbc.Container(
                 dbc.Card(
                     dbc.CardBody([
                         html.H5("🎯 How to Use This Explorer", className="mb-3"),
+                        html.P("Welcome to the Bittensor Explorer! This tool helps you discover and understand the diverse AI services running on the Bittensor network. Each subnet represents a different AI application or service that you can interact with.", className="mb-3"),
                         html.Div([
                             html.Div([
                                 html.H6("📊 Browse by Category", className="text-primary"),
@@ -97,6 +99,10 @@ layout = dbc.Container(
                             html.Div([
                                 html.H6("💰 Understanding Market Cap", className="text-primary"),
                                 html.P("Market Capitalisation (MC) = token price × circulating supply. Shows what the network is worth right now, based on the number of tokens actually tradeable today. MC grows as new tokens are emitted, even if price is flat.")
+                            ], className="mb-3"),
+                            html.Div([
+                                html.H6("📊 Understanding Netflow", className="text-primary"),
+                                html.P("Netflow = net volume of TAO tokens flowing in/out of a subnet. Positive netflow means more TAO flowing in than out (bullish), negative means more flowing out than in (bearish).")
                             ], className="mb-3"),
                             html.Div([
                                 html.H6("🎯 Confidence Score (AI classification and description)", className="text-primary"),
@@ -243,11 +249,93 @@ layout = dbc.Container(
             html.Div(id="chart-fig", className="chart-container"),
         ], id="chart-section"),
         
+        # --- Quick Sort Buttons ---
+        html.Div([
+            html.Div(
+                dbc.ButtonGroup([
+                    dbc.Button(
+                        [
+                            html.I(className="bi bi-currency-dollar me-1"),
+                            "Market Cap"
+                        ],
+                        id="btn-sort-mcap",
+                        color="outline-primary",
+                        outline=True,
+                        active=False,
+                        n_clicks=0,
+                        className="sort-btn"
+                    ),
+                    dbc.Button(
+                        [
+                            html.I(className="bi bi-hash me-1"),
+                            "Subnet #"
+                        ],
+                        id="btn-sort-netuid",
+                        color="outline-primary",
+                        outline=True,
+                        active=False,
+                        n_clicks=0,
+                        className="sort-btn"
+                    ),
+                    dbc.Button(
+                        [
+                            html.I(className="bi bi-star-fill me-1"),
+                            "TAO Score"
+                        ],
+                        id="btn-sort-taoscore",
+                        color="outline-primary",
+                        outline=True,
+                        active=False,
+                        n_clicks=0,
+                        className="sort-btn"
+                    ),
+                    dbc.Button(
+                        [
+                            html.I(className="bi bi-graph-up me-1"),
+                            "7d Change"
+                        ],
+                        id="btn-sort-pricechange",
+                        color="outline-primary",
+                        outline=True,
+                        active=False,
+                        n_clicks=0,
+                        className="sort-btn"
+                    ),
+                    dbc.Button(
+                        [
+                            html.I(className="bi bi-arrow-left-right me-1"),
+                            "Netflow 24h"
+                        ],
+                        id="btn-sort-netflow",
+                        color="outline-primary",
+                        outline=True,
+                        active=False,
+                        n_clicks=0,
+                        className="sort-btn"
+                    ),
+                    dbc.Button(
+                        [
+                            html.I(className="bi bi-arrow-left-right me-1"),
+                            "Netflow 7d"
+                        ],
+                        id="btn-sort-netflow7d",
+                        color="outline-primary",
+                        outline=True,
+                        active=False,
+                        n_clicks=0,
+                        className="sort-btn"
+                    ),
+                ], size="sm", className="sort-button-group justify-content-center mb-3", id="sort-button-group"),
+                className="d-flex justify-content-center"
+            ),
+        ], className="mb-3"),
+        
         # --- card grid ---
         html.Div(id="card-grid", className="row g-4"),
         dcc.Store(id="cache-df"),
         dcc.Store(id="chart-mode-store", data="mcap"),
         dcc.Store(id="screen-size-store", data="large"),
+        dcc.Store(id="sort-mode-store", data="mcap"),
     ],
     fluid=True,
     className="px-4"
@@ -323,6 +411,71 @@ def toggle_chart_mode(n_count, n_mcap):
     if btn_id == "btn-chart-mcap":
         return "mcap", False, True, True, False
     return "count", True, False, False, True
+
+@callback(
+    Output("sort-mode-store", "data"),
+    Output("btn-sort-mcap", "active"),
+    Output("btn-sort-netuid", "active"),
+    Output("btn-sort-taoscore", "active"),
+    Output("btn-sort-pricechange", "active"),
+    Output("btn-sort-netflow", "active"),
+    Output("btn-sort-netflow7d", "active"),
+    Output("btn-sort-mcap", "outline"),
+    Output("btn-sort-netuid", "outline"),
+    Output("btn-sort-taoscore", "outline"),
+    Output("btn-sort-pricechange", "outline"),
+    Output("btn-sort-netflow", "outline"),
+    Output("btn-sort-netflow7d", "outline"),
+    Input("btn-sort-mcap", "n_clicks"),
+    Input("btn-sort-netuid", "n_clicks"),
+    Input("btn-sort-taoscore", "n_clicks"),
+    Input("btn-sort-pricechange", "n_clicks"),
+    Input("btn-sort-netflow", "n_clicks"),
+    Input("btn-sort-netflow7d", "n_clicks"),
+)
+def toggle_sort_mode(n_mcap, n_netuid, n_taoscore, n_pricechange, n_netflow, n_netflow7d):
+    ctx = callback_context
+    if not ctx.triggered:
+        # Default: Market Cap is active
+        return "mcap", True, False, False, False, False, False, True, True, True, True
+    
+    btn_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    
+    # Reset all buttons to inactive
+    active_states = [False, False, False, False, False, False]
+    outline_states = [True, True, True, True, True, True]
+    
+    # Set the clicked button to active
+    if btn_id == "btn-sort-mcap":
+        active_states[0] = True
+        outline_states[0] = False
+        sort_mode = "mcap"
+    elif btn_id == "btn-sort-netuid":
+        active_states[1] = True
+        outline_states[1] = False
+        sort_mode = "netuid"
+    elif btn_id == "btn-sort-taoscore":
+        active_states[2] = True
+        outline_states[2] = False
+        sort_mode = "taoscore"
+    elif btn_id == "btn-sort-pricechange":
+        active_states[3] = True
+        outline_states[3] = False
+        sort_mode = "pricechange"
+    elif btn_id == "btn-sort-netflow":
+        active_states[4] = True
+        outline_states[4] = False
+        sort_mode = "netflow"
+    elif btn_id == "btn-sort-netflow7d":
+        active_states[5] = True
+        outline_states[5] = False
+        sort_mode = "netflow7d"
+    else:
+        sort_mode = "mcap"
+        active_states[0] = True
+        outline_states[0] = False
+    
+    return [sort_mode] + active_states + outline_states
 
 @callback(
     Output("chart-fig", "children"),
@@ -442,12 +595,72 @@ def render_chart(json_df, mode, screen_size):
 @callback(
     Output("card-grid", "children"),
     Input("cache-df", "data"),
+    Input("sort-mode-store", "data"),
 )
-def render_cards(json_df):
+def render_cards(json_df, sort_mode):
     if not json_df:
         return html.Div("No data available")
     
-    df = pd.read_json(StringIO(json_df), orient="split").sort_values("mcap_tao", ascending=False)
+    df = pd.read_json(StringIO(json_df), orient="split")
+    
+    # Apply sorting based on sort mode
+    if sort_mode == "mcap":
+        df = df.sort_values("mcap_tao", ascending=False)
+    elif sort_mode == "netuid":
+        df = df.sort_values("netuid", ascending=True)
+    elif sort_mode in ["taoscore", "pricechange", "netflow", "netflow7d"]:
+        # Load additional data for advanced sorting (only for price change and netflow)
+        if sort_mode == "taoscore":
+            # TAO score is now available in main dataframe
+            df = df.sort_values("tao_score", ascending=False, na_position='last')
+        elif sort_mode in ["pricechange", "netflow", "netflow7d"]:
+            # Load additional data for price change and netflow sorting
+            try:
+                from services.db import load_screener_frame
+                screener_df = load_screener_frame()
+                
+                # Check if required columns exist
+                required_cols = ['netuid', 'price_7d_change', 'flow_24h']
+                if sort_mode == "netflow7d":
+                    required_cols.append('net_volume_tao_7d')
+                missing_cols = [col for col in required_cols if col not in screener_df.columns]
+                if missing_cols:
+                    raise ValueError(f"Missing columns: {missing_cols}")
+                
+                # Merge with screener data to get additional metrics
+                merge_df = screener_df[required_cols].copy()
+                # Use suffixes to avoid overwriting existing columns
+                df = df.merge(merge_df, on='netuid', how='left', suffixes=('', '_screener'))
+                
+                # Apply sorting with proper column access
+                if sort_mode == "pricechange":
+                    df = df.sort_values("price_7d_change", ascending=False, na_position='last')
+                elif sort_mode == "netflow":
+                    # Handle the case where merge creates flow_24h_x and flow_24h_y
+                    if 'flow_24h_y' in df.columns:
+                        # Use the screener's flow_24h column (flow_24h_y)
+                        df = df.sort_values("flow_24h_y", ascending=False, na_position='last')
+                    elif 'flow_24h' in df.columns:
+                        # Use the original flow_24h column
+                        df = df.sort_values("flow_24h", ascending=False, na_position='last')
+                    else:
+                        # Fallback if column is missing after merge
+                        df = df.sort_values("mcap_tao", ascending=False)
+                elif sort_mode == "netflow7d":
+                    # Sort by 7-day netflow - check both original and screener columns
+                    if 'net_volume_tao_7d' in df.columns:
+                        df = df.sort_values("net_volume_tao_7d", ascending=False, na_position='last')
+                    elif 'net_volume_tao_7d_screener' in df.columns:
+                        df = df.sort_values("net_volume_tao_7d_screener", ascending=False, na_position='last')
+                    else:
+                        # Fallback if column is missing after merge
+                        df = df.sort_values("mcap_tao", ascending=False)
+            except Exception as e:
+                # Fallback to market cap sorting
+                df = df.sort_values("mcap_tao", ascending=False)
+    else:
+        # Default to market cap sorting
+        df = df.sort_values("mcap_tao", ascending=False)
     
     # Get latest TAO price from database for USD conversions
     from services.db import get_db
@@ -497,6 +710,22 @@ def render_cards(json_df):
         except:
             return "📊 Data source available"
     
+    def format_enrichment_timestamp(timestamp):
+        """Format enrichment timestamp for display."""
+        try:
+            if pd.isna(timestamp) or not timestamp:
+                return ""
+            
+            # Convert to datetime if it's a string
+            if isinstance(timestamp, str):
+                from datetime import datetime
+                timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            
+            # Format as yyyy-mm-dd
+            return f"{timestamp.strftime('%Y-%m-%d')}"
+        except:
+            return ""
+    
     def make_card(row):
         # Handle secondary_tags as comma-separated string
         if pd.isna(row.secondary_tags) or not row.secondary_tags:
@@ -522,18 +751,20 @@ def render_cards(json_df):
         # Get favicon for website
         favicon_element = html.Div()
         try:
-            if bool(pd.notna(row.favicon_url)) and bool(row.favicon_url):
-                # Use cached favicon from database
-                favicon_element = html.Img(
-                    src=row.favicon_url,
-                    alt="Favicon",
-                    style={
-                        'width': '20px',
-                        'height': '20px',
-                        'margin-right': '8px',
-                        'border-radius': '2px'
-                    }
-                )
+            if bool(pd.notna(row.favicon_url)) and bool(row.favicon_url) and str(row.favicon_url).strip() != "":
+                favicon_url = str(row.favicon_url).strip()
+                # Only show favicon if it's a valid URL path (starts with /static/favicons/)
+                if favicon_url.startswith('/static/favicons/'):
+                    favicon_element = html.Img(
+                        src=favicon_url,
+                        alt="",
+                        style={
+                            'width': '20px',
+                            'height': '20px',
+                            'margin-right': '8px',
+                            'border-radius': '2px'
+                        }
+                    )
         except Exception as e:
             # If favicon logic fails, just continue without favicon
             print(f"Favicon error for subnet {row.netuid}: {e}")
@@ -571,8 +802,8 @@ def render_cards(json_df):
         mcap_badge = dbc.Badge(
             f"{mcap_str} ({mcap_usd_str})",
             color="light",
-            className="text-primary mb-0 px-2 py-1 fw-semibold",
-            style={"font-size": "1em"},
+            className="text-primary mb-0 px-1 py-0 fw-normal",
+            style={"font-size": "0.65em", "line-height": "1.2"},
             id=mcap_id
         )
         mcap_tooltip = dbc.Tooltip(
@@ -580,11 +811,83 @@ def render_cards(json_df):
             target=mcap_id,
             placement="auto"
         )
+        
+        # TAO-score badge
+        tao_score = row.tao_score if pd.notna(row.tao_score) else 0
+        tao_score_id = f"tao-score-{row.netuid}"
+        tao_score_badge = dbc.Badge(
+            f"TAO-Score: {tao_score:.0f}",
+            color="light",
+            className="text-success mb-0 px-1 py-0 fw-normal",
+            style={"font-size": "0.65em", "line-height": "1.2"},
+            id=tao_score_id
+        )
+        tao_score_tooltip = dbc.Tooltip(
+            "TAO-Score: AI-generated ranking score (0-100) based on multiple metrics including stake quality, momentum, and validator utilization.",
+            target=tao_score_id,
+            placement="auto"
+        )
+        
+        # Netflow24h badge - handle column naming after merge
+        if 'flow_24h_y' in row:
+            flow_24h = row.flow_24h_y if pd.notna(row.flow_24h_y) else 0
+        elif 'flow_24h_x' in row:
+            flow_24h = row.flow_24h_x if pd.notna(row.flow_24h_x) else 0
+        elif 'flow_24h' in row:
+            flow_24h = row.flow_24h if pd.notna(row.flow_24h) else 0
+        else:
+            flow_24h = 0
+        flow_id = f"flow-24h-{row.netuid}"
+        if flow_24h >= 1000000:
+            flow_str = f"{flow_24h/1000000:.1f}M"
+        elif flow_24h >= 1000:
+            flow_str = f"{flow_24h/1000:.1f}K"
+        else:
+            flow_str = f"{flow_24h:.0f}"
+        flow_badge = dbc.Badge(
+            f"Netflow: {flow_str}",
+            color="light",
+            className="text-info mb-0 px-1 py-0 fw-normal",
+            style={"font-size": "0.65em", "line-height": "1.2"},
+            id=flow_id
+        )
+        flow_tooltip = dbc.Tooltip(
+            "24h Netflow: Net volume of TAO tokens flowing in/out of the subnet in the last 24 hours.",
+            target=flow_id,
+            placement="auto"
+        )
+        
+        # Netflow7d badge - handle column naming after merge
+        if 'net_volume_tao_7d' in row:
+            flow_7d = row.net_volume_tao_7d if pd.notna(row.net_volume_tao_7d) else 0
+        elif 'net_volume_tao_7d_screener' in row:
+            flow_7d = row.net_volume_tao_7d_screener if pd.notna(row.net_volume_tao_7d_screener) else 0
+        else:
+            flow_7d = 0
+        flow_7d_id = f"flow-7d-{row.netuid}"
+        if flow_7d >= 1000000:
+            flow_7d_str = f"{flow_7d/1000000:.1f}M"
+        elif flow_7d >= 1000:
+            flow_7d_str = f"{flow_7d/1000:.1f}K"
+        else:
+            flow_7d_str = f"{flow_7d:.0f}"
+        flow_7d_badge = dbc.Badge(
+            f"Netflow7d: {flow_7d_str}",
+            color="light",
+            className="text-warning mb-0 px-1 py-0 fw-normal",
+            style={"font-size": "0.65em", "line-height": "1.2"},
+            id=flow_7d_id
+        )
+        flow_7d_tooltip = dbc.Tooltip(
+            "7d Netflow: Net volume of TAO tokens flowing in/out of the subnet in the last 7 days.",
+            target=flow_7d_id,
+            placement="auto"
+        )
         # Category badge with tooltip directly on the badge
         cat_id = f"category-badge-{row.netuid}"
         val = row.primary_category
         if isinstance(val, (str, int, float)):
-            show_badge = val is not None and bool(pd.notna(val))
+            show_badge = val is not None and pd.notna(val)
         else:
             show_badge = False
         category_badge = (
@@ -603,11 +906,19 @@ def render_cards(json_df):
         website_ok = isinstance(website_val, (str, int, float)) and website_val is not None and bool(pd.notna(website_val))
         github_ok = isinstance(github_val, (str, int, float)) and github_val is not None and bool(pd.notna(github_val))
         card_body = [
-            # Header with market cap
+            # Header with metrics (Market Cap, TAO-score, Netflow24h, Netflow7d)
             html.Div([
-                mcap_badge,
-                mcap_tooltip
-            ], className="text-end mb-2"),
+                html.Div([
+                    mcap_badge,
+                    mcap_tooltip,
+                    tao_score_badge,
+                    tao_score_tooltip,
+                    flow_badge,
+                    flow_tooltip,
+                    flow_7d_badge,
+                    flow_7d_tooltip
+                ], className="d-flex flex-wrap justify-content-end align-items-center", style={"gap": "2px"})
+            ], className="mb-2"),
             # Title with subnet number and confidence badge
             html.H5([
                 favicon_element,
@@ -624,7 +935,7 @@ def render_cards(json_df):
             
             # Tags
             html.Div([
-                dbc.Badge(tag, color="primary", className="me-1 mb-1")
+                dbc.Badge(tag, color="secondary", className="me-1 mb-1 fw-normal")
                 for tag in tags[:6]  # Limit to 6 tags
             ], className="mb-3"),
             
@@ -672,6 +983,12 @@ def render_cards(json_df):
                 className="text-muted d-block"
             ) if bool(pd.notna(row.provenance)) else html.Div(),
             
+            # Enrichment timestamp (under provenance)
+            html.Small(
+                format_enrichment_timestamp(row.last_enriched_at),
+                className="text-muted d-block"
+            ) if pd.notna(row.last_enriched_at) and format_enrichment_timestamp(row.last_enriched_at) else html.Div(),
+            
             # View Details button - prominent and clear
             html.Div([
                 html.A(
@@ -690,8 +1007,7 @@ def render_cards(json_df):
             ], className="mt-3")
         ]
         
-        # Debug print for link generation
-        print(f"Generated link for subnet {row.netuid}: /dash/subnet-detail?netuid={row.netuid}")
+
         
         return dbc.Col(
             html.Div([
@@ -714,7 +1030,6 @@ def render_cards(json_df):
         )
     
     cards = [make_card(r) for _, r in df.iterrows()]
-    print(f"Generated {len(cards)} cards")  # Debug print
     return cards
 
 # Callback for expandable cards

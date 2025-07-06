@@ -1,6 +1,6 @@
 import os, json, pandas as pd
 import re
-from sqlalchemy import create_engine, text, select, func, String
+from sqlalchemy import create_engine, text, select, func, String, and_
 from sqlalchemy.orm import sessionmaker
 from .db_utils import json_field, get_database_type
 from models import SubnetMeta, ScreenerRaw
@@ -44,15 +44,32 @@ def get_db():
 
 def get_base_query():
     """Get base query with database-agnostic JSON extraction using SQLAlchemy ORM."""
-    # Use SQLAlchemy ORM with JSON helper
+    from models import MetricsSnap
+    
+    # Use SQLAlchemy ORM with JSON helper and TAO scores
     query = select(
         SubnetMeta,
         func.coalesce(json_field(ScreenerRaw.raw_json, 'market_cap_tao'), 0).label('mcap_tao'),
         func.coalesce(json_field(ScreenerRaw.raw_json, 'net_volume_tao_24h'), 0).label('flow_24h'),
+        func.coalesce(json_field(ScreenerRaw.raw_json, 'net_volume_tao_7d'), 0).label('net_volume_tao_7d'),
         json_field(ScreenerRaw.raw_json, 'github_repo').label('github_url'),
-        json_field(ScreenerRaw.raw_json, 'subnet_url').label('website_url')
+        json_field(ScreenerRaw.raw_json, 'subnet_url').label('website_url'),
+        func.coalesce(MetricsSnap.tao_score, 0).label('tao_score')
     ).select_from(
-        SubnetMeta.__table__.outerjoin(ScreenerRaw.__table__, SubnetMeta.netuid == ScreenerRaw.netuid)
+        SubnetMeta.__table__
+        .outerjoin(ScreenerRaw.__table__, SubnetMeta.netuid == ScreenerRaw.netuid)
+        .outerjoin(
+            MetricsSnap.__table__, 
+            and_(
+                SubnetMeta.netuid == MetricsSnap.netuid,
+                MetricsSnap.timestamp == (
+                    select(func.max(MetricsSnap.timestamp))
+                    .where(MetricsSnap.netuid == SubnetMeta.netuid)
+                    .correlate(SubnetMeta)
+                    .scalar_subquery()
+                )
+            )
+        )
     )
     
     return query
@@ -93,6 +110,8 @@ def load_subnet_frame(category="All", search=""):
     # ensure numeric with proper defaults
     df["mcap_tao"] = pd.to_numeric(df["mcap_tao"], errors="coerce").fillna(0.0)
     df["flow_24h"] = pd.to_numeric(df["flow_24h"], errors="coerce").fillna(0.0)
+    df["net_volume_tao_7d"] = pd.to_numeric(df["net_volume_tao_7d"], errors="coerce").fillna(0.0)
+    df["tao_score"] = pd.to_numeric(df["tao_score"], errors="coerce").fillna(0.0)
     return df
 
 def load_screener_frame():
@@ -115,6 +134,7 @@ def load_screener_frame():
         MetricsSnap.price_30d_change,
         # Flow and momentum
         func.coalesce(json_field(ScreenerRaw.raw_json, 'net_volume_tao_24h'), 0).label('flow_24h'),
+        func.coalesce(json_field(ScreenerRaw.raw_json, 'net_volume_tao_7d'), 0).label('net_volume_tao_7d'),
         # Metrics from MetricsSnap
         MetricsSnap.reserve_momentum,
         MetricsSnap.stake_quality,
@@ -153,7 +173,7 @@ def load_screener_frame():
     numeric_columns = [
         'price_tao', 'market_cap_tao', 'fdv_tao', 'total_stake_tao', 'tao_in', 
         'buy_volume_tao_1d', 'price_7d_change', 'price_30d_change', 'flow_24h',
-        'reserve_momentum', 'stake_quality', 'validator_util_pct', 'active_stake_ratio',
+        'net_volume_tao_7d', 'reserve_momentum', 'stake_quality', 'validator_util_pct', 'active_stake_ratio',
         'consensus_alignment', 'emission_pct', 'alpha_emitted_pct', 'tao_score',
         'stake_quality_rank_pct', 'momentum_rank_pct'
     ]

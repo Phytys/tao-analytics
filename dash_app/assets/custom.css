@@ -1191,4 +1191,78 @@ details .btn-outline-secondary:hover {
     .overview-card .fs-6 {
         font-size: 0.75rem !important;
     }
+}
+
+/* Sort Button Styling */
+.sort-button-group {
+    gap: 0.5rem;
+}
+
+.sort-btn {
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--border-radius-sm);
+    transition: var(--transition-fast);
+    border: 1px solid var(--border-color);
+    background: var(--background-primary);
+    color: var(--text-secondary);
+}
+
+.sort-btn:hover {
+    background: var(--background-secondary);
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-light);
+}
+
+.sort-btn.active {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+    color: var(--text-light);
+    box-shadow: var(--shadow-medium);
+}
+
+.sort-btn.active:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+    transform: translateY(-1px);
+}
+
+.sort-btn .bi {
+    font-size: 0.8em;
+    margin-right: 0.25rem;
+}
+
+@media (max-width: 767.98px) {
+    .sort-button-group {
+        width: 100%;
+        justify-content: center;
+        gap: 0.25rem;
+        flex-wrap: wrap;
+    }
+    
+    .sort-btn {
+        font-size: 0.8rem;
+        padding: 0.4rem 0.6rem;
+        min-width: 80px;
+    }
+}
+
+@media (max-width: 480px) {
+    .sort-button-group {
+        gap: 0.2rem;
+    }
+    
+    .sort-btn {
+        font-size: 0.75rem;
+        padding: 0.35rem 0.5rem;
+        min-width: 70px;
+    }
+    
+    .sort-btn .bi {
+        font-size: 0.75em;
+        margin-right: 0.2rem;
+    }
 } 
