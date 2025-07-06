@@ -46,12 +46,12 @@ def get_base_query():
     """Get base query with database-agnostic JSON extraction using SQLAlchemy ORM."""
     from models import MetricsSnap
     
-    # Use SQLAlchemy ORM with JSON helper and TAO scores
+    # Use SQLAlchemy ORM with JSON helper and TAO scores - simplified to avoid casting issues
     query = select(
         SubnetMeta,
-        func.coalesce(func.cast(json_field(ScreenerRaw.raw_json, 'market_cap_tao'), Numeric), 0).label('mcap_tao'),
-        func.coalesce(func.cast(json_field(ScreenerRaw.raw_json, 'net_volume_tao_24h'), Numeric), 0).label('flow_24h'),
-        func.coalesce(func.cast(json_field(ScreenerRaw.raw_json, 'net_volume_tao_7d'), Numeric), 0).label('net_volume_tao_7d'),
+        json_field(ScreenerRaw.raw_json, 'market_cap_tao').label('mcap_tao'),
+        json_field(ScreenerRaw.raw_json, 'net_volume_tao_24h').label('flow_24h'),
+        json_field(ScreenerRaw.raw_json, 'net_volume_tao_7d').label('net_volume_tao_7d'),
         json_field(ScreenerRaw.raw_json, 'github_repo').label('github_url'),
         json_field(ScreenerRaw.raw_json, 'subnet_url').label('website_url'),
         func.coalesce(MetricsSnap.tao_score, 0).label('tao_score')
@@ -123,12 +123,12 @@ def load_screener_frame():
         SubnetMeta.subnet_name,
         SubnetMeta.primary_category,
         # Price and market data
-        func.coalesce(func.cast(json_field(ScreenerRaw.raw_json, 'price_tao'), Numeric), 0).label('price_tao'),
-        func.coalesce(func.cast(json_field(ScreenerRaw.raw_json, 'market_cap_tao'), Numeric), 0).label('market_cap_tao'),
-        func.coalesce(func.cast(json_field(ScreenerRaw.raw_json, 'fdv_tao'), Numeric), 0).label('fdv_tao'),
-        func.coalesce(func.cast(json_field(ScreenerRaw.raw_json, 'total_stake_tao'), Numeric), 0).label('total_stake_tao'),
-        func.coalesce(func.cast(json_field(ScreenerRaw.raw_json, 'tao_in'), Numeric), 0).label('tao_in'),
-        func.coalesce(func.cast(json_field(ScreenerRaw.raw_json, 'buy_volume_tao_1d'), Numeric), 0).label('buy_volume_tao_1d'),
+        json_field(ScreenerRaw.raw_json, 'price_tao').label('price_tao'),
+        json_field(ScreenerRaw.raw_json, 'market_cap_tao').label('market_cap_tao'),
+        json_field(ScreenerRaw.raw_json, 'fdv_tao').label('fdv_tao'),
+        json_field(ScreenerRaw.raw_json, 'total_stake_tao').label('total_stake_tao'),
+        json_field(ScreenerRaw.raw_json, 'tao_in').label('tao_in'),
+        json_field(ScreenerRaw.raw_json, 'buy_volume_tao_1d').label('buy_volume_tao_1d'),
         # Price changes from MetricsSnap
         MetricsSnap.price_1h_change,
         MetricsSnap.price_1d_change,
@@ -144,7 +144,7 @@ def load_screener_frame():
         MetricsSnap.sell_volume_pct_change,
         MetricsSnap.total_volume_pct_change,
         # Flow and momentum (legacy)
-        func.coalesce(func.cast(json_field(ScreenerRaw.raw_json, 'net_volume_tao_24h'), Numeric), 0).label('flow_24h'),
+        json_field(ScreenerRaw.raw_json, 'net_volume_tao_24h').label('flow_24h'),
         # Network health
         MetricsSnap.uid_count,
         MetricsSnap.active_validators,
