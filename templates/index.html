@@ -77,30 +77,48 @@
             </p>
             <div class="hero-stats">
                 {% if data_available %}
-                <div class="stat-item">
+                <div class="stat-item" data-tooltip="Total number of active subnets in the Bittensor network">
                     <span class="stat-number">{{ network_data.total_subnets }}</span>
-                    <span class="stat-label">Subnets</span>
+                    <span class="stat-label">
+                        Subnets
+                        <span class="tooltip-icon">ⓘ</span>
+                    </span>
                 </div>
-                <div class="stat-item">
+                <div class="stat-item" data-tooltip="Combined market capitalization of all subnets, converted to USD using current TAO price">
                     <span class="stat-number">${{ "%.1f"|format(network_data.total_market_cap * network_data.tao_price_usd) }}M</span>
-                    <span class="stat-label">All Subnets Market Cap (USD)</span>
+                    <span class="stat-label">
+                        All Subnets Market Cap (USD)
+                        <span class="tooltip-icon">ⓘ</span>
+                    </span>
                     <span class="stat-usd">{{ "%.1f"|format(network_data.total_market_cap) }}M TAO</span>
                 </div>
-                <div class="stat-item">
+                <div class="stat-item" data-tooltip="Total market capitalization of the TAO token (Bittensor's native token)">
                     <span class="stat-number">${{ "%.1f"|format(network_data.tao_market_cap_usd) }}M</span>
-                    <span class="stat-label">Bittensor Market Cap (USD)</span>
+                    <span class="stat-label">
+                        Bittensor Market Cap (USD)
+                        <span class="tooltip-icon">ⓘ</span>
+                    </span>
                 </div>
-                <div class="stat-item">
+                <div class="stat-item" data-tooltip="Current price of TAO token in US dollars">
                     <span class="stat-number">${{ "%.2f"|format(network_data.tao_price_usd) }}</span>
-                    <span class="stat-label">TAO Price (USD)</span>
+                    <span class="stat-label">
+                        TAO Price (USD)
+                        <span class="tooltip-icon">ⓘ</span>
+                    </span>
                 </div>
-                <div class="stat-item">
+                <div class="stat-item" data-tooltip="Number of subnets with positive 24-hour net volume (more TAO flowing in than out)">
                     <span class="stat-number">{{ network_data.positive_flow_count }}</span>
-                    <span class="stat-label">Positive Flow</span>
+                    <span class="stat-label">
+                        Positive Flow
+                        <span class="tooltip-icon">ⓘ</span>
+                    </span>
                 </div>
-                <div class="stat-item">
+                <div class="stat-item" data-tooltip="Percentage of subnets with positive 24-hour net volume. Higher percentage indicates more subnets are experiencing net inflows">
                     <span class="stat-number">{{ "%.1f"|format(network_data.positive_flow_percentage) }}%</span>
-                    <span class="stat-label">Positive Flow %</span>
+                    <span class="stat-label">
+                        Positive Flow %
+                        <span class="tooltip-icon">ⓘ</span>
+                    </span>
                 </div>
                 {% else %}
                 <div class="data-error-message">
@@ -137,6 +155,13 @@
                     </div>
                 </div>
                 <div class="highlight-card">
+                    <div class="highlight-icon">⭐</div>
+                    <div class="highlight-content">
+                        <h3>Highest TAO Score: {{ network_data.highest_tao_score_name }}</h3>
+                        <p>Score: {{ "%.1f"|format(network_data.highest_tao_score_value) }} | 7d: {{ "%.1f"|format(network_data.highest_tao_score_momentum) }}%</p>
+                    </div>
+                </div>
+                <div class="highlight-card">
                     <div class="highlight-icon">📈</div>
                     <div class="highlight-content">
                         <h3>Network Activity</h3>
@@ -152,19 +177,21 @@
                     <span>
                         TAO price last updated:
                         {% if network_data and network_data.tao_price_updated %}
-                            {{ network_data.tao_price_updated | replace('T', ' ') | replace('Z', '') }} UTC
+                            {{ network_data.tao_price_updated }}
                         {% else %}
                             Unavailable
                         {% endif %}
+                        <span class="tooltip-icon" title="Timestamp when the TAO price data was last fetched from CoinGecko API">ⓘ</span>
                     </span>
                     <br/>
                     <span>
                         Subnet screener last updated:
                         {% if network_data and network_data.screener_updated %}
-                            {{ network_data.screener_updated | replace('T', ' ') | replace('Z', '') }} UTC
+                            {{ network_data.screener_updated }}
                         {% else %}
                             Unavailable
                         {% endif %}
+                        <span class="tooltip-icon" title="Timestamp when subnet market data was last fetched from TAO.app API">ⓘ</span>
                     </span>
                 </small>
             </div>
@@ -203,7 +230,7 @@
         <div class="container">
             <p>&copy; 2025 TAO Analytics. Built with love for the decentralized future.</p>
             <p class="footer-credits">
-                Data powered by <a href="https://tao.app" target="_blank" class="footer-link">TAO.app API</a> • 
+                Data powered by Bittensor SDK and <a href="https://tao.app" target="_blank" class="footer-link">TAO.app API</a> • 
                 Intelligence enhanced by <a href="https://openai.com" target="_blank" class="footer-link">OpenAI GPT-4</a>
             </p>
         </div>

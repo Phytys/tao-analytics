@@ -51,6 +51,37 @@ class TaoMetricsService:
         top_subnet_name = top_subnet['subnet_name'] if top_subnet is not None else 'N/A'
         top_subnet_mcap = top_subnet['mcap_tao'] if top_subnet is not None else 0
         
+        # Highest TAO Score subnet
+        highest_tao_score_subnet = None
+        highest_tao_score_name = 'N/A'
+        highest_tao_score_value = 0
+        highest_tao_score_momentum = 0
+        
+        try:
+            # Load screener frame which includes TAO score and price momentum
+            from .db import load_screener_frame
+            screener_df = load_screener_frame()
+            
+            if not screener_df.empty and 'tao_score' in screener_df.columns:
+                # Filter out rows with no TAO score
+                valid_scores = screener_df[screener_df['tao_score'] > 0]
+                
+                if not valid_scores.empty:
+                    # Find highest TAO score
+                    max_tao_score = valid_scores['tao_score'].max()
+                    highest_scorers = valid_scores[valid_scores['tao_score'] == max_tao_score]
+                    
+                    if len(highest_scorers) > 1:
+                        # If multiple subnets have same TAO score, pick the one with highest 1d price momentum
+                        highest_scorers = highest_scorers.sort_values('price_7d_change', ascending=False)
+                    
+                    highest_tao_score_subnet = highest_scorers.iloc[0]
+                    highest_tao_score_name = str(highest_tao_score_subnet['subnet_name'])
+                    highest_tao_score_value = float(highest_tao_score_subnet['tao_score'])
+                    highest_tao_score_momentum = float(highest_tao_score_subnet.get('price_7d_change', 0))
+        except Exception as e:
+            print(f"Error getting highest TAO score subnet: {e}")
+        
         # Network activity (subnets with positive flow)
         recent_subnets = len(df[df['flow_24h'] > 0])  # Subnets with positive net volume
         
@@ -64,7 +95,7 @@ class TaoMetricsService:
                 if latest_price:
                     tao_price_usd = float(latest_price.price_usd)
                     tao_market_cap_usd = float(latest_price.market_cap_usd or 0)
-                    tao_price_updated = latest_price.fetched_at.isoformat()
+                    tao_price_updated = latest_price.fetched_at.strftime('%Y-%m-%d %H:%M UTC')
         except Exception as e:
             print(f"Error fetching TAO data: {e}")
         
@@ -79,9 +110,9 @@ class TaoMetricsService:
                     # Convert to datetime if it's a string, then to ISO format
                     if isinstance(latest_screener[0], str):
                         dt = datetime.fromisoformat(latest_screener[0].replace('Z', '+00:00'))
-                        screener_updated = dt.isoformat()
+                        screener_updated = dt.strftime('%Y-%m-%d %H:%M UTC')
                     else:
-                        screener_updated = latest_screener[0].isoformat()
+                        screener_updated = latest_screener[0].strftime('%Y-%m-%d %H:%M UTC')
         except Exception as e:
             print(f"Error fetching screener timestamp: {e}")
         
@@ -99,7 +130,10 @@ class TaoMetricsService:
             'tao_price_usd': tao_price_usd,
             'tao_market_cap_usd': round(tao_market_cap_usd / 1000000, 1),  # Convert to millions
             'tao_price_updated': tao_price_updated,
-            'screener_updated': screener_updated
+            'screener_updated': screener_updated,
+            'highest_tao_score_name': highest_tao_score_name,
+            'highest_tao_score_value': round(highest_tao_score_value, 1),
+            'highest_tao_score_momentum': round(highest_tao_score_momentum, 1)
         }
     
     @cached(db_cache)

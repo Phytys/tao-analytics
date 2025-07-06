@@ -311,12 +311,12 @@ class CronFetch:
                 
                 logger.info(f"Total subnets available: {len(all_subnet_ids)}")
                 
-                # OPTIMIZATION: Pre-fetch yesterday's TAO-in data for all subnets in a single query
-                logger.info("Pre-fetching yesterday's TAO-in data for all subnets...")
-                yesterday = snapshot_time - timedelta(days=1)
+                # OPTIMIZATION: Pre-fetch previous TAO-in data for all subnets in a single query
+                logger.info("Pre-fetching previous TAO-in data for all subnets...")
+                # Find the most recent data before the current snapshot time
                 yesterday_data = session.query(MetricsSnap.netuid, MetricsSnap.tao_in)\
                     .filter(MetricsSnap.netuid.in_(subnet_ids))\
-                    .filter(MetricsSnap.timestamp >= yesterday)\
+                    .filter(MetricsSnap.timestamp < snapshot_time)\
                     .order_by(MetricsSnap.netuid, MetricsSnap.timestamp.desc())\
                     .all()
                 

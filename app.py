@@ -153,6 +153,10 @@ def create_app():
         path = request.path.lower()
         query = request.query_string.decode('utf-8').lower()
         
+        # Skip Dash callback endpoints (they're legitimate)
+        if path.startswith('/dash/_dash-'):
+            return
+        
         # Check for suspicious patterns
         for pattern in suspicious_patterns:
             if pattern in path or pattern in query or pattern in user_agent:
