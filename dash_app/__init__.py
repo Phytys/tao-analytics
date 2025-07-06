@@ -10,7 +10,7 @@ from dash_app.pages.system_info import layout as system_info_layout
 from dash_app.pages.subnet_detail import layout as subnet_detail_layout
 from dash_app.pages.sdk_poc import layout as sdk_poc_layout
 from dash_app.pages.screener import layout as screener_layout
-from dash_app.pages.insights import layout as insights_layout
+# from dash_app.pages.insights import layout as insights_layout
 
 from flask import session, redirect
 
@@ -144,7 +144,7 @@ def create_dash(server):
                     html.Button("×", id="mobile-menu-close", className="mobile-menu-close-btn", n_clicks=0),
                     html.A("Explorer", href="/dash/explorer", className="nav-link"),
                     html.A("Screener", href="/dash/screener", className="nav-link"),
-                    html.A("Insights", href="/dash/insights", className="nav-link"),
+                    # html.A("Insights", href="/dash/insights", className="nav-link"),
                     html.A("About", href="/about", className="nav-link", id="about-nav-link"),
                     html.A("System Info", href="/dash/system-info", className="nav-link", id="system-info-nav-link"),
                     html.A("Back to Home", href="/", className="nav-link")
@@ -224,8 +224,8 @@ def create_dash(server):
         if pathname == "/dash/screener":
             return screener_layout
         
-        if pathname == "/dash/insights":
-            return insights_layout
+        # if pathname == "/dash/insights":
+        #     return insights_layout
         
         else:
             return html.Div([
