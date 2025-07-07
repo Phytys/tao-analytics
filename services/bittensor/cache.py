@@ -17,7 +17,14 @@ logger = logging.getLogger("sdk")
 # Try to use Redis if available
 try:
     import redis
-    redis_client = redis.from_url(os.getenv("REDIS_URL")) if os.getenv("REDIS_URL") else None
+    redis_url = os.getenv("REDIS_URL")
+    if redis_url:
+        if redis_url.startswith("rediss://"):
+            redis_client = redis.from_url(redis_url, ssl_cert_reqs=None)
+        else:
+            redis_client = redis.from_url(redis_url)
+    else:
+        redis_client = None
     if redis_client:
         redis_client.ping()  # Test connection
         logger.info("Using Redis for caching")

@@ -19,18 +19,16 @@ from sqlalchemy import func, desc, and_, or_, text
 import json
 import os
 from services.correlation_analysis import correlation_service
+from services.cache_utils import cache_get, cache_set
 
 def get_time_series_data(days_back=30, limit=5000):
     """Get time series data from metrics_snap table with highly optimized queries and caching."""
-    # Try to get from cache first
-    from flask import current_app
-    cache = getattr(current_app, 'cache', None)
-    
     cache_key = f'time_series_data_{days_back}_{limit}'
-    if cache:
-        cached_result = cache.get(cache_key)
-        if cached_result is not None:
-            return cached_result
+    
+    # Try to get from cache first
+    cached_result = cache_get(cache_key)
+    if cached_result is not None:
+        return cached_result
     
     session = get_db()
     try:
@@ -39,11 +37,25 @@ def get_time_series_data(days_back=30, limit=5000):
         # Use raw SQL for better performance with indexes
         from sqlalchemy import text
         
-        # Optimized query that uses our indexes effectively
+        # Comprehensive query for correlation analysis with all available metrics
         sql = text("""
-            SELECT netuid, subnet_name, category, tao_score, stake_quality,
-                   validator_util_pct, market_cap_tao, flow_24h, price_7d_change,
-                   active_validators, total_stake_tao, buy_signal, timestamp
+            SELECT 
+                netuid, subnet_name, category, timestamp,
+                -- Core performance metrics
+                tao_score, stake_quality, buy_signal, emission_roi,
+                -- Market dynamics
+                market_cap_tao, fdv_tao, price_7d_change, price_1d_change, 
+                flow_24h, buy_sell_ratio, total_volume_tao_1d,
+                -- Network health & activity
+                active_validators, validator_util_pct, consensus_alignment,
+                active_stake_ratio, uid_count, max_validators,
+                -- Stake distribution & quality
+                total_stake_tao, stake_hhi, gini_coeff_top_100, hhi,
+                -- Token flow & momentum
+                reserve_momentum, tao_in, alpha_circ, alpha_prop, root_prop,
+                -- Performance & ranking
+                stake_quality_rank_pct, momentum_rank_pct,
+                realized_pnl_tao, unrealized_pnl_tao
             FROM metrics_snap 
             WHERE timestamp >= :cutoff_date
             ORDER BY timestamp DESC
@@ -60,8 +72,7 @@ def get_time_series_data(days_back=30, limit=5000):
             df['timestamp'] = pd.to_datetime(df['timestamp'])
         
         # Cache the result for 5 minutes
-        if cache:
-            cache.set(cache_key, df, timeout=300)
+        cache_set(cache_key, df, timeout=300)
         
         return df
     finally:
@@ -69,14 +80,12 @@ def get_time_series_data(days_back=30, limit=5000):
 
 def get_network_summary_stats():
     """Get comprehensive network summary statistics with highly optimized queries and caching."""
-    # Try to get from cache first
-    from flask import current_app
-    cache = getattr(current_app, 'cache', None)
+    cache_key = 'network_summary_stats'
     
-    if cache:
-        cached_result = cache.get('network_summary_stats')
-        if cached_result:
-            return cached_result
+    # Try to get from cache first
+    cached_result = cache_get(cache_key)
+    if cached_result is not None:
+        return cached_result
     
     session = get_db()
     try:
@@ -143,8 +152,7 @@ def get_network_summary_stats():
         result = (stats, latest_df)
         
         # Cache the result for 5 minutes
-        if cache:
-            cache.set('network_summary_stats', result, timeout=300)
+        cache_set(cache_key, result, timeout=300)
         
         return result
     finally:
@@ -991,7 +999,7 @@ def update_category_filters(data):
 )
 def load_shared_data(pathname, time_range):
     """Load shared time series data for all sections with performance limits."""
-        if pathname != "/dash/insights":
+    if pathname != "/dash/insights":
         raise PreventUpdate
     
     try:
@@ -1018,13 +1026,15 @@ def load_shared_data(pathname, time_range):
         # Load time series data with limits
         df = get_time_series_data(days_back=days_back, limit=limit)
         
-        # Only keep essential columns to reduce memory usage
-        essential_columns = ['netuid', 'subnet_name', 'category', 'tao_score', 'stake_quality',
-                           'validator_util_pct', 'market_cap_tao', 'flow_24h', 'price_7d_change',
-                           'active_validators', 'total_stake_tao', 'buy_signal', 'timestamp']
+        # Keep all columns for comprehensive analysis (correlation matrix needs all metrics)
+        # Only filter out non-numeric columns that aren't useful for analysis
+        exclude_columns = ['id', 'confidence', 'data_quality_flag', 
+                          'last_screener_update', 'created_at', 'updated_at', 'additional', 
+                          'discord', 'github_repo', 'owner_coldkey', 'owner_hotkey', 
+                          'subnet_contact', 'subnet_url', 'subnet_website', 'symbol']
         
-        # Filter to only essential columns that exist in the DataFrame
-        available_columns = [col for col in essential_columns if col in df.columns]
+        # Keep all columns except the excluded ones
+        available_columns = [col for col in df.columns if col not in exclude_columns]
         df_trimmed = df[available_columns]
         
         return {
@@ -1181,6 +1191,8 @@ def update_correlation_matrix(shared_data):
     # Ensure timestamp is properly converted to datetime
     if 'timestamp' in df.columns:
         df['timestamp'] = pd.to_datetime(df['timestamp'])
+    
+    print("Correlation matrix columns:", df.columns.tolist())  # Debug print
     
     return create_correlation_matrix(df)
 

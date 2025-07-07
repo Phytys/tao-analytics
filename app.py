@@ -38,12 +38,19 @@ def create_app():
     server.config["JSONIFY_PRETTYPRINT_REGULAR"] = False
     
     # Configure Redis caching
-    cache_config = {
-        'CACHE_TYPE': 'RedisCache',
-        'CACHE_REDIS_URL': os.getenv('REDIS_URL'),
-        'CACHE_DEFAULT_TIMEOUT': 300,  # 5 minutes default
-        'CACHE_KEY_PREFIX': 'tao_analytics_'
-    }
+    if os.getenv('REDIS_URL'):
+        cache_config = {
+            'CACHE_TYPE': 'RedisCache',
+            'CACHE_REDIS_URL': os.getenv('REDIS_URL'),
+            'CACHE_DEFAULT_TIMEOUT': 300,  # 5 minutes default
+            'CACHE_KEY_PREFIX': 'tao_analytics_'
+        }
+    else:
+        # Use simple in-process cache for local development without Redis
+        cache_config = {
+            'CACHE_TYPE': 'SimpleCache',
+            'CACHE_DEFAULT_TIMEOUT': 300
+        }
     
     # Initialize cache
     cache = Cache()
