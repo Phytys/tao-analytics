@@ -348,8 +348,8 @@
                 // Clear previous timeout
                 clearTimeout(searchTimeout);
                 
-                // Clear results if query is too short
-                if (query.length < 2) {
+                // Allow single character searches (removed minimum length restriction)
+                if (query.length === 0) {
                     searchResults.innerHTML = '';
                     searchResults.style.display = 'none';
                     return;
@@ -395,7 +395,7 @@
             searchInput.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') {
                     const query = this.value.trim();
-                    if (query.length >= 2) {
+                    if (query.length > 0) {
                         // Navigate to first result or search page
                         const firstResult = searchResults.querySelector('.search-result-item');
                         if (firstResult) {

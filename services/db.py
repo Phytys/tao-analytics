@@ -2,7 +2,7 @@ import os, json, pandas as pd
 import re
 import signal
 from contextlib import contextmanager
-from sqlalchemy import create_engine, text, select, func, String, and_, Numeric
+from sqlalchemy import create_engine, text, select, func, String, and_, Numeric, or_
 from sqlalchemy.orm import sessionmaker
 from .db_utils import json_field, get_database_type
 from models import SubnetMeta, ScreenerRaw
@@ -138,9 +138,49 @@ def load_subnet_frame(category="All", search=""):
         query = query.where(SubnetMeta.primary_category == category)
     
     if search:
+        # Handle Greek character mappings for search
+        greek_mappings = {
+            't': 'τ', 'T': 'τ',  # Latin T to Greek tau
+            'a': 'α', 'A': 'α',  # Latin A to Greek alpha
+            'b': 'β', 'B': 'β',  # Latin B to Greek beta
+            'g': 'γ', 'G': 'γ',  # Latin G to Greek gamma
+            'd': 'δ', 'D': 'δ',  # Latin D to Greek delta
+            'e': 'ε', 'E': 'ε',  # Latin E to Greek epsilon
+            'z': 'ζ', 'Z': 'ζ',  # Latin Z to Greek zeta
+            'h': 'η', 'H': 'η',  # Latin H to Greek eta
+            'i': 'ι', 'I': 'ι',  # Latin I to Greek iota
+            'k': 'κ', 'K': 'κ',  # Latin K to Greek kappa
+            'l': 'λ', 'L': 'λ',  # Latin L to Greek lambda
+            'm': 'μ', 'M': 'μ',  # Latin M to Greek mu
+            'n': 'ν', 'N': 'ν',  # Latin N to Greek nu
+            'x': 'ξ', 'X': 'ξ',  # Latin X to Greek xi
+            'o': 'ο', 'O': 'ο',  # Latin O to Greek omicron
+            'p': 'π', 'P': 'π',  # Latin P to Greek pi
+            'r': 'ρ', 'R': 'ρ',  # Latin R to Greek rho
+            's': 'σ', 'S': 'σ',  # Latin S to Greek sigma
+            'u': 'υ', 'U': 'υ',  # Latin U to Greek upsilon
+            'f': 'φ', 'F': 'φ',  # Latin F to Greek phi
+            'c': 'χ', 'C': 'χ',  # Latin C to Greek chi
+            'y': 'ψ', 'Y': 'ψ',  # Latin Y to Greek psi
+            'w': 'ω', 'W': 'ω',  # Latin W to Greek omega
+        }
+        
+        # Create Greek version of search query - only convert first character if it's a single letter
+        greek_search = search
+        if len(search) > 0 and search[0].lower() in greek_mappings:
+            # Only convert the first character to Greek
+            first_char = search[0]
+            if first_char in greek_mappings:
+                greek_search = greek_mappings[first_char] + search[1:]
+            elif first_char.lower() in greek_mappings:
+                greek_search = greek_mappings[first_char.lower()] + search[1:]
+        
+        # Build search conditions for both original and Greek versions
+        search_conditions = []
+        
+        # Original search
         search_like = f"%{search.lower()}%"
-        # Expanded search: match against all relevant fields
-        query = query.where(
+        search_conditions.append(
             func.lower(func.cast(SubnetMeta.netuid, String)).like(search_like) |
             func.lower(SubnetMeta.subnet_name).like(search_like) |
             func.lower(SubnetMeta.primary_category).like(search_like) |
@@ -150,6 +190,28 @@ def load_subnet_frame(category="All", search=""):
             func.lower(SubnetMeta.primary_use_case).like(search_like) |
             func.lower(SubnetMeta.key_technical_features).like(search_like)
         )
+        
+        # Greek search (if different from original)
+        if greek_search != search:
+            greek_like = f"%{greek_search.lower()}%"
+            search_conditions.append(
+                func.lower(SubnetMeta.subnet_name).like(greek_like) |
+                func.lower(SubnetMeta.primary_category).like(greek_like) |
+                func.lower(SubnetMeta.secondary_tags).like(greek_like) |
+                func.lower(SubnetMeta.tagline).like(greek_like) |
+                func.lower(SubnetMeta.what_it_does).like(greek_like) |
+                func.lower(SubnetMeta.primary_use_case).like(greek_like) |
+                func.lower(SubnetMeta.key_technical_features).like(greek_like)
+            )
+        
+        # Combine all search conditions
+        if len(search_conditions) == 1:
+            query = query.where(search_conditions[0])
+        else:
+            query = query.where(search_conditions[0] | search_conditions[1])
+        
+        # Debug: Print search info
+        print(f"Search debug - Original: '{search}', Greek: '{greek_search}', Conditions: {len(search_conditions)}")
     
     # Execute query and convert to DataFrame
     with engine.connect() as conn:
@@ -273,3 +335,122 @@ def load_screener_frame():
 
     
     return df 
+
+# --- Unified search function for all search bars (API and Dash) ---
+def search_subnets(query=None, category=None, return_type='dataframe', limit=10):
+    """
+    Unified search for subnets. Handles netuid, name (with Greek/Latin mapping), category, etc.
+    Args:
+        query: Search string (can be netuid, name, etc.)
+        category: Optional category filter
+        return_type: 'dataframe' (default) or 'dict' (for API)
+        limit: Max number of results (for API)
+    Returns:
+        DataFrame (for Dash) or list of dicts (for API)
+    """
+    from models import SubnetMeta
+    
+    # Sanitize inputs
+    category = sanitize_search_input(category) if category else "All"
+    search = sanitize_search_input(query) if query else ""
+    
+    # Start query
+    query_obj = get_base_query()
+    
+    # Category filter
+    if category != "All":
+        query_obj = query_obj.where(SubnetMeta.primary_category == category)
+    
+    # Search logic
+    search_conditions = []
+    if search:
+        # Netuid search
+        if search.isdigit():
+            search_conditions.append(SubnetMeta.netuid == int(search))
+        
+        # Greek/Latin mapping (first character only)
+        greek_mappings = {
+            't': 'τ', 'T': 'τ',
+            'a': 'α', 'A': 'α',
+            'b': 'β', 'B': 'β',
+            'g': 'γ', 'G': 'γ',
+            'd': 'δ', 'D': 'δ',
+            'e': 'ε', 'E': 'ε',
+            'z': 'ζ', 'Z': 'ζ',
+            'h': 'η', 'H': 'η',
+            'i': 'ι', 'I': 'ι',
+            'k': 'κ', 'K': 'κ',
+            'l': 'λ', 'L': 'λ',
+            'm': 'μ', 'M': 'μ',
+            'n': 'ν', 'N': 'ν',
+            'x': 'ξ', 'X': 'ξ',
+            'o': 'ο', 'O': 'ο',
+            'p': 'π', 'P': 'π',
+            'r': 'ρ', 'R': 'ρ',
+            's': 'σ', 'S': 'σ',
+            'u': 'υ', 'U': 'υ',
+            'f': 'φ', 'F': 'φ',
+            'c': 'χ', 'C': 'χ',
+            'y': 'ψ', 'Y': 'ψ',
+            'w': 'ω', 'W': 'ω',
+        }
+        greek_search = search
+        if len(search) > 0 and search[0].lower() in greek_mappings:
+            first_char = search[0]
+            if first_char in greek_mappings:
+                greek_search = greek_mappings[first_char] + search[1:]
+            elif first_char.lower() in greek_mappings:
+                greek_search = greek_mappings[first_char.lower()] + search[1:]
+        
+        # Name/category/tagline/fields search (original and Greek-mapped)
+        search_like = f"%{search.lower()}%"
+        greek_like = f"%{greek_search.lower()}%" if greek_search != search else None
+        
+        name_fields = [
+            SubnetMeta.subnet_name,
+            SubnetMeta.primary_category,
+            SubnetMeta.secondary_tags,
+            SubnetMeta.tagline,
+            SubnetMeta.what_it_does,
+            SubnetMeta.primary_use_case,
+            SubnetMeta.key_technical_features,
+        ]
+        
+        # Original
+        for field in name_fields:
+            search_conditions.append(func.lower(field).like(search_like))
+        # Greek-mapped
+        if greek_like:
+            for field in name_fields:
+                search_conditions.append(func.lower(field).like(greek_like))
+    
+    # Combine all search conditions
+    if search_conditions:
+        query_obj = query_obj.where(or_(*search_conditions))
+    
+    # Execute query and convert to DataFrame
+    with engine.connect() as conn:
+        result = conn.execute(query_obj)
+        rows = result.fetchall()
+        columns = list(result.keys())
+        df = pd.DataFrame(rows, columns=columns)
+    
+    # Ensure numeric with proper defaults (for Dash)
+    for col in ["mcap_tao", "flow_24h", "net_volume_tao_7d", "tao_score"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
+    
+    if return_type == 'dataframe':
+        return df
+    else:
+        # For API: return list of dicts (limit results)
+        results = []
+        for _, row in df.iterrows():
+            results.append({
+                'netuid': row.get('netuid'),
+                'name': row.get('subnet_name') or f"Subnet {row.get('netuid')}",
+                'category': row.get('primary_category'),
+            })
+            if len(results) >= limit:
+                break
+        return results 

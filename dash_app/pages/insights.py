@@ -82,10 +82,15 @@ def get_network_summary_stats():
     """Get comprehensive network summary statistics with highly optimized queries and caching."""
     cache_key = 'network_summary_stats'
     
+    print(f"DEBUG: Getting network summary stats, cache key: {cache_key}")
+    
     # Try to get from cache first
     cached_result = cache_get(cache_key)
     if cached_result is not None:
+        print("DEBUG: Returning cached result")
         return cached_result
+    
+    print("DEBUG: Cache miss, loading fresh data...")
     
     session = get_db()
     try:
@@ -101,7 +106,7 @@ def get_network_summary_stats():
                    active_validators, total_stake_tao, buy_signal, timestamp as latest_timestamp
             FROM metrics_snap 
             WHERE timestamp >= (
-                SELECT MAX(timestamp) - INTERVAL '7 days' 
+                SELECT datetime(MAX(timestamp), '-7 days') 
                 FROM metrics_snap
             )
             ORDER BY netuid, timestamp DESC
@@ -109,9 +114,16 @@ def get_network_summary_stats():
         """)
         
         latest_df = pd.read_sql(latest_sql, session.bind)
+        print(f"DEBUG: Raw SQL query returned {len(latest_df)} rows")
+        
+        # Ensure timestamp is properly converted to datetime
+        if 'latest_timestamp' in latest_df.columns:
+            latest_df['latest_timestamp'] = pd.to_datetime(latest_df['latest_timestamp'])
+            print(f"DEBUG: Converted timestamp column, sample: {latest_df['latest_timestamp'].head()}")
         
         # Get the latest record for each subnet (much faster than complex window functions)
-        latest_df = latest_df.loc[latest_df.groupby('netuid')['timestamp'].idxmax()]
+        latest_df = latest_df.loc[latest_df.groupby('netuid')['latest_timestamp'].idxmax()]
+        print(f"DEBUG: After idxmax, got {len(latest_df)} unique subnets")
         
         # Limit to top 200 subnets to prevent memory issues
         latest_df = latest_df.head(200)
@@ -125,7 +137,7 @@ def get_network_summary_stats():
                 MAX(timestamp) as max_date
             FROM metrics_snap 
             WHERE timestamp >= (
-                SELECT MAX(timestamp) - INTERVAL '7 days' 
+                SELECT datetime(MAX(timestamp), '-7 days') 
                 FROM metrics_snap
             )
         """)
@@ -148,6 +160,9 @@ def get_network_summary_stats():
             'data_points': 'Recent data only',  # Avoid expensive count
             'date_range': f"{stats_result.min_date} to {stats_result.max_date}" if stats_result else "Recent data"
         }
+        
+        # Debug output
+        print(f"DEBUG: Loaded {len(latest_df)} subnets, total market cap: {stats['total_market_cap_tao']:,.0f}, avg TAO score: {stats['avg_tao_score']:.1f}")
         
         result = (stats, latest_df)
         
@@ -942,12 +957,21 @@ def load_overview_data(pathname):
         raise dash.PreventUpdate
     
     try:
+        print("DEBUG: Loading network summary stats...")
         stats, latest_df = get_network_summary_stats()
-        return {
+        print(f"DEBUG: Got stats: {stats}")
+        print(f"DEBUG: DataFrame shape: {latest_df.shape if latest_df is not None else 'None'}")
+        
+        result = {
             'stats': stats,
-            'categories': sorted(latest_df['category'].unique().tolist()) if not latest_df.empty else []
+            'categories': sorted(latest_df['category'].unique().tolist()) if latest_df is not None and not latest_df.empty else []
         }
+        print(f"DEBUG: Returning result: {result}")
+        return result
     except Exception as e:
+        print(f"DEBUG: Error in load_overview_data: {e}")
+        import traceback
+        traceback.print_exc()
         return {'stats': {}, 'categories': []}
 
 @callback(
@@ -973,7 +997,7 @@ def update_overview_cards(data):
         f"{stats.get('high_performers', 0)}",
         f"{stats.get('strong_buy_signals', 0)}",
         f"{stats.get('categories', 0)}",
-        f"Data: {stats.get('data_points', 0):,} points | Range: {stats.get('date_range', 'N/A')}"
+        f"Data: {stats.get('data_points', 'Recent data only')} | Range: {stats.get('date_range', 'N/A')}"
     )
 
 @callback(

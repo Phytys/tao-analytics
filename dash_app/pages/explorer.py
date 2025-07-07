@@ -2,7 +2,7 @@ import dash_bootstrap_components as dbc
 from dash import html, dcc, Input, Output, State, callback, callback_context, clientside_callback
 import plotly.express as px
 import plotly.graph_objects as go
-from services.db import load_subnet_frame
+from services.db import load_subnet_frame, search_subnets
 from services.favicons import favicon_service
 from services.cache import cache_stats
 import pandas as pd, datetime as dt, json, os
@@ -348,7 +348,7 @@ layout = dbc.Container(
     Input("search-box", "value"),
 )
 def refresh_df(cat, search):
-    df = load_subnet_frame(cat, search or "")
+    df = search_subnets(query=search or "", category=cat, return_type='dataframe')
     stamp = f"Last updated: {dt.datetime.utcnow().strftime('%H:%M:%S')} UTC"
     return df.to_json(date_unit="s", orient="split"), stamp
 

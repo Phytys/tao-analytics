@@ -23,6 +23,7 @@ except Exception:
 
 # Load data once for initial test (will be replaced with callback/caching)
 df = load_screener_frame()
+# Get fresh timestamp for display
 latest_ts = df['metrics_timestamp'].max() if 'metrics_timestamp' in df.columns else None
 
 # Add buy signal scores from GPT insights
@@ -495,7 +496,7 @@ layout = html.Div([
             
             # Data timestamp
             html.Div([
-                html.Small(f"Data updated: {latest_ts.strftime('%Y-%m-%d %H:%M UTC') if latest_ts else 'Unknown'}", id="momentum-data-timestamp", className="text-muted")
+                html.Small(id="momentum-data-timestamp", className="text-muted")
             ], className="mt-2"),
         ])
     ], className="mb-4"),
@@ -564,7 +565,7 @@ layout = html.Div([
             
             # Data timestamp
             html.Div([
-                html.Small(f"Data updated: {latest_ts.strftime('%Y-%m-%d %H:%M UTC') if latest_ts else 'Unknown'}", id="buy-signal-data-timestamp", className="text-muted")
+                html.Small(id="buy-signal-data-timestamp", className="text-muted")
             ], className="mt-2"),
             # Insight display area
             html.Div(id="insight-display", className="mt-3")
@@ -653,7 +654,7 @@ layout = html.Div([
             
             # Data timestamp
             html.Div([
-                html.Small(f"Data updated: {latest_ts.strftime('%Y-%m-%d %H:%M UTC') if latest_ts else 'Unknown'}", id="additional-data-timestamp", className="text-muted")
+                html.Small(id="additional-data-timestamp", className="text-muted")
             ], className="mt-2"),
         ])
     ], className="mb-4"),
@@ -715,13 +716,17 @@ def handle_buy_signal_click(click_data):
     Input("momentum-x-axis", "value"),
     Input("momentum-y-axis", "value"),
     Input("momentum-category-filter", "value"),
-    Input("momentum-mcap-slider", "value")
+    Input("momentum-mcap-slider", "value"),
+    Input("buy-signal-refresh", "data")
 )
-def update_momentum_chart(x_axis, y_axis, category, mcap_range):
+def update_momentum_chart(x_axis, y_axis, category, mcap_range, _):
     """Update momentum chart with dynamic axes."""
     try:
+        # Always reload fresh data from database
+        fresh_df = reload_data_with_buy_signals()
+        
         # Validate that selected axes exist in dataframe
-        if x_axis not in df.columns or y_axis not in df.columns:
+        if x_axis not in fresh_df.columns or y_axis not in fresh_df.columns:
             # Create error figure
             fig = go.Figure()
             fig.add_annotation(
@@ -741,9 +746,9 @@ def update_momentum_chart(x_axis, y_axis, category, mcap_range):
         
         # Apply category filter
         if category == "All" or category is None:
-            filtered_df = df
+            filtered_df = fresh_df
         else:
-            filtered_df = df[df['primary_category'] == category]
+            filtered_df = fresh_df[fresh_df['primary_category'] == category]
         
         # Apply market cap filter (in MUSD)
         if mcap_range and len(mcap_range) == 2:
@@ -980,16 +985,20 @@ def update_buy_signal_chart(x_axis, y_axis, category, show_labels, _):
 @callback(
     Output("volume-analysis", "figure"),
     Input("additional-category-filter", "value"),
-    Input("additional-mcap-slider", "value")
+    Input("additional-mcap-slider", "value"),
+    Input("buy-signal-refresh", "data")
 )
-def update_volume_analysis(category, mcap_range):
+def update_volume_analysis(category, mcap_range, _):
     """Update volume analysis chart based on filters."""
     try:
+        # Always reload fresh data from database
+        fresh_df = reload_data_with_buy_signals()
+        
         # Apply category filter
         if category == "All" or category is None:
-            filtered_df = df
+            filtered_df = fresh_df
         else:
-            filtered_df = df[df['primary_category'] == category]
+            filtered_df = fresh_df[fresh_df['primary_category'] == category]
         
         # Apply market cap filter (in MUSD)
         if mcap_range and len(mcap_range) == 2:
@@ -1056,16 +1065,20 @@ def update_volume_analysis(category, mcap_range):
 @callback(
     Output("stake-distribution", "figure"),
     Input("additional-category-filter", "value"),
-    Input("additional-mcap-slider", "value")
+    Input("additional-mcap-slider", "value"),
+    Input("buy-signal-refresh", "data")
 )
-def update_stake_distribution(category, mcap_range):
+def update_stake_distribution(category, mcap_range, _):
     """Update stake distribution chart based on filters."""
     try:
+        # Always reload fresh data from database
+        fresh_df = reload_data_with_buy_signals()
+        
         # Apply category filter
         if category == "All" or category is None:
-            filtered_df = df
+            filtered_df = fresh_df
         else:
-            filtered_df = df[df['primary_category'] == category]
+            filtered_df = fresh_df[fresh_df['primary_category'] == category]
         
         # Apply market cap filter (in MUSD)
         if mcap_range and len(mcap_range) == 2:
@@ -1126,16 +1139,20 @@ def update_stake_distribution(category, mcap_range):
 @callback(
     Output("network-health", "figure"),
     Input("additional-category-filter", "value"),
-    Input("additional-mcap-slider", "value")
+    Input("additional-mcap-slider", "value"),
+    Input("buy-signal-refresh", "data")
 )
-def update_network_health(category, mcap_range):
+def update_network_health(category, mcap_range, _):
     """Update network health chart based on filters."""
     try:
+        # Always reload fresh data from database
+        fresh_df = reload_data_with_buy_signals()
+        
         # Apply category filter
         if category == "All" or category is None:
-            filtered_df = df
+            filtered_df = fresh_df
         else:
-            filtered_df = df[df['primary_category'] == category]
+            filtered_df = fresh_df[fresh_df['primary_category'] == category]
         
         # Apply market cap filter (in MUSD)
         if mcap_range and len(mcap_range) == 2:
@@ -1196,15 +1213,19 @@ def update_network_health(category, mcap_range):
 @callback(
     Output("tao-score-distribution", "figure"),
     Input("additional-category-filter", "value"),
-    Input("additional-mcap-slider", "value")
+    Input("additional-mcap-slider", "value"),
+    Input("buy-signal-refresh", "data")
 )
-def update_tao_score_distribution(category, mcap_range):
+def update_tao_score_distribution(category, mcap_range, _):
     """Update TAO-Score distribution based on momentum filters."""
+    # Always reload fresh data from database
+    fresh_df = reload_data_with_buy_signals()
+    
     # Apply category filter
     if category == "All" or category is None:
-        filtered_df = df
+        filtered_df = fresh_df
     else:
-        filtered_df = df[df['primary_category'] == category]
+        filtered_df = fresh_df[fresh_df['primary_category'] == category]
     
     # Apply market cap filter (in MUSD)
     if mcap_range and len(mcap_range) == 2:
@@ -1231,15 +1252,19 @@ def update_tao_score_distribution(category, mcap_range):
 @callback(
     Output("validator-utilization", "figure"),
     Input("additional-category-filter", "value"),
-    Input("additional-mcap-slider", "value")
+    Input("additional-mcap-slider", "value"),
+    Input("buy-signal-refresh", "data")
 )
-def update_validator_utilization(category, mcap_range):
+def update_validator_utilization(category, mcap_range, _):
     """Update validator utilization chart based on additional analysis filters."""
+    # Always reload fresh data from database
+    fresh_df = reload_data_with_buy_signals()
+    
     # Apply category filter
     if category == "All" or category is None:
-        filtered_df = df
+        filtered_df = fresh_df
     else:
-        filtered_df = df[df['primary_category'] == category]
+        filtered_df = fresh_df[fresh_df['primary_category'] == category]
     
     # Apply market cap filter (in MUSD)
     if mcap_range and len(mcap_range) == 2:
@@ -1279,6 +1304,25 @@ def update_validator_utilization(category, mcap_range):
     )
     return fig
 
+
+@callback(
+    Output("momentum-data-timestamp", "children"),
+    Output("buy-signal-data-timestamp", "children"),
+    Output("additional-data-timestamp", "children"),
+    Input("buy-signal-refresh", "data")
+)
+def update_data_timestamps(_):
+    """Update all data timestamps with fresh data."""
+    try:
+        # Load fresh data to get latest timestamp
+        fresh_df = reload_data_with_buy_signals()
+        latest_ts = fresh_df['metrics_timestamp'].max() if 'metrics_timestamp' in fresh_df.columns else None
+        
+        timestamp_text = f"Data updated: {latest_ts.strftime('%Y-%m-%d %H:%M UTC') if latest_ts else 'Unknown'}"
+        return timestamp_text, timestamp_text, timestamp_text
+    except Exception as e:
+        error_text = f"Data updated: Error loading timestamp"
+        return error_text, error_text, error_text
 
 # Callback for collapsible quick start guide
 @callback(
