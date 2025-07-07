@@ -1,6 +1,38 @@
 # TAO Analytics
 
-**TAO Analytics** is a production-grade analytics and intelligence dashboard for the Bittensor decentralized AI network. It provides real-time subnet metrics, market cap analytics, AI-powered subnet classification, and deep insights with a modern, responsive UI built using Flask and Dash.
+**TAO Analytics** is a production-grade analytics and intelligence dashboard for the Bittensor decentralized AI network. It provides real-time subnet metrics, market cap analytics, AI-powered insights, and comprehensive correlation analysis with a modern, responsive UI built using Flask and Dash.
+
+---
+
+## 🚀 **Beta Release Features**
+
+### **🤖 GPT-4o Correlation Analysis**
+- **Advanced Statistical Analysis**: P-value filtering, Z-score outlier detection, and statistical digest
+- **Comprehensive Insights**: Undervalued opportunities, low-stake-quality alerts, and healthy subnet identification
+- **Real-time Caching**: 24-hour cache with automatic refresh and graceful fallback
+- **Landing Page Integration**: Live insights displayed on the main landing page
+- **Statistical Rigor**: Professional-grade analysis with confidence intervals and outlier detection
+
+### **🔍 Enhanced Search & Discovery**
+- **Unified Search Logic**: Consistent search across Flask and Dash pages
+- **Greek Character Support**: Comprehensive mapping for international subnet names
+- **Single Character Queries**: No minimum length restrictions
+- **Real-time Results**: Instant search with debounced API calls
+- **Smart Filtering**: Category-aware search with subnet details
+
+### **⚡ Performance & Caching**
+- **Redis Caching**: Production-grade caching with Heroku Redis addon
+- **Graceful Fallback**: Automatic fallback to SimpleCache when Redis unavailable
+- **Multi-layer Caching**: API, database, and analysis caching
+- **Rate Limiting**: Intelligent quota management and rate limiting
+- **Optimized Queries**: SQLite-compatible queries for cross-platform deployment
+
+### **📊 Enhanced Analytics**
+- **30+ Metrics**: Comprehensive correlation heatmaps with all available metrics
+- **Real-time Updates**: Live data with 5-minute refresh cycles
+- **Network Overview**: Landing page cards with live network statistics
+- **Dynamic Timestamps**: Real-time timestamp updates across all pages
+- **Comprehensive Insights**: AI-powered analysis with statistical validation
 
 ---
 
@@ -16,7 +48,6 @@
 - [Dash App Pages](#dash-app-pages)
 - [Database & Data Flow](#database--data-flow)
 - [Scripts & Automation](#scripts--automation)
-- [Data Collection & Database Storage](#data-collection--database-storage)
 - [Services](#services)
 - [Deployment](#deployment)
 - [Development Notes](#development-notes)
@@ -30,10 +61,10 @@
 tao-analytics/
 │
 ├── 📁 Core Application Files
-│   ├── app.py                          # Main Flask application (152 lines)
+│   ├── app.py                          # Main Flask application (335 lines)
 │   ├── config.py                       # Configuration settings (62 lines)
 │   ├── models.py                       # Database models (276 lines)
-│   ├── requirements.txt                # Python dependencies (24 packages)
+│   ├── requirements.txt                # Python dependencies (25 packages)
 │   ├── runtime.txt                     # Python version specification (3.10.14)
 │   ├── Procfile                        # Heroku deployment config
 │   ├── PLAN.md                         # Development roadmap (135 lines)
@@ -44,7 +75,7 @@ tao-analytics/
 │
 ├── 📁 Dash Analytics Dashboard
 │   ├── dash_app/
-│   │   ├── __init__.py                 # Dash app initialization (225 lines)
+│   │   ├── __init__.py                 # Dash app initialization (362 lines)
 │   │   ├── assets/
 │   │   │   ├── custom.css              # Dash app styling
 │   │   │   ├── favicon.ico             # Dash app favicon
@@ -52,6 +83,7 @@ tao-analytics/
 │   │   └── pages/
 │   │       ├── explorer.py             # Main analytics page (779 lines)
 │   │       ├── screener.py             # Subnet screener with AI insights (865 lines)
+│   │       ├── insights.py             # Network insights with GPT analysis (500+ lines)
 │   │       ├── subnet_detail.py        # Subnet detail page (936 lines)
 │   │       ├── system_info.py          # Admin system info (602 lines)
 │   │       └── sdk_poc.py              # Bittensor SDK proof of concept (127 lines)
@@ -88,6 +120,7 @@ tao-analytics/
 │   │   ├── taoapp_cache.py             # TAO.app API caching (346 lines)
 │   │   ├── quota_guard.py              # API quota management (310 lines)
 │   │   ├── gpt_insight.py              # GPT insights service (695 lines)
+│   │   ├── correlation_analysis.py     # GPT-4o correlation analysis (400+ lines)
 │   │   ├── favicons.py                 # Favicon management (217 lines)
 │   │   ├── auth.py                     # Authentication (45 lines)
 │   │   └── cache.py                    # Caching utilities (158 lines)
@@ -131,15 +164,15 @@ tao-analytics/
 ├── 📁 Static Assets & Templates
 │   ├── static/
 │   │   ├── css/
-│   │   │   └── main.css                # Main CSS
+│   │   │   └── main.css                # Main CSS (1754 lines)
 │   │   ├── favicon.ico                 # Main favicon
 │   │   ├── favicon.png                 # PNG favicon
 │   │   ├── favicon.svg                 # SVG favicon
 │   │   └── favicons/                   # Cached favicons
 │   │
 │   └── templates/                      # Flask templates
-│       ├── index.html                  # Landing page
-│       ├── about.html                  # About page
+│       ├── index.html                  # Landing page with GPT insights
+│       ├── about.html                  # About page with mission overview
 │       └── admin_login.html            # Admin login
 │
 ├── 📁 Environment & Configuration
@@ -166,7 +199,8 @@ tao-analytics/
 - **Interactive Dashboards**: Responsive Dash/Plotly visualizations
 - **Buy Signal Analysis**: AI-powered investment insights with GPT integration
 
-### 🤖 **AI-Powered Enrichment**
+### 🤖 **AI-Powered Intelligence**
+- **GPT-4o Correlation Analysis**: Advanced statistical analysis with p-value filtering and Z-score outliers
 - **GPT-4 Classification**: Automated subnet categorization and description
 - **Smart Context Detection**: Website scraping, GitHub README analysis
 - **Confidence Scoring**: Provenance tracking with confidence metrics
@@ -174,18 +208,32 @@ tao-analytics/
 - **Context Hash Caching**: Intelligent caching to avoid redundant processing
 - **Automated Category Sync**: Automatic synchronization between enrichment and GPT insights
 
+### 🔍 **Enhanced Search & Discovery**
+- **Unified Search Logic**: Consistent search across all pages
+- **Greek Character Support**: Comprehensive international character mapping
+- **Single Character Queries**: No minimum length restrictions
+- **Real-time Results**: Instant search with debounced API calls
+- **Smart Filtering**: Category-aware search with subnet details
+
+### ⚡ **Performance & Caching**
+- **Redis Caching**: Production-grade caching with Heroku Redis addon
+- **Graceful Fallback**: Automatic fallback to SimpleCache when Redis unavailable
+- **Multi-layer Caching**: API, database, and analysis caching
+- **Rate Limiting**: Intelligent quota management and rate limiting
+- **Optimized Queries**: SQLite-compatible queries for cross-platform deployment
+
 ### 🔧 **Advanced Features**
 - **Admin System**: Secure admin login with system metrics dashboard
 - **API Quota Management**: Intelligent rate limiting and quota tracking
-- **Caching System**: Multi-layer caching (API, database, SDK, favicons)
 - **Data Migration**: Automated database schema updates
 - **Export Tools**: CSV exports and data analysis utilities
+- **Security**: Input validation, rate limiting, and SQL injection protection
 
 ### 📊 **Data Sources**
 - **TAO.app API**: Subnet screener data with market metrics
 - **CoinGecko API**: TAO price and market cap data
 - **Bittensor SDK**: Live on-chain metrics and emissions
-- **OpenAI GPT-4**: AI-powered content analysis and classification
+- **OpenAI APIs**: AI-powered content analysis and classification
 
 ---
 
@@ -194,16 +242,18 @@ tao-analytics/
 ### **Architecture**
 - **Flask**: Main web server handling routing, authentication, and static assets
 - **Dash**: Interactive analytics dashboard with Plotly visualizations
-- **SQLite**: Lightweight database for persistent storage
+- **SQLite/PostgreSQL**: Flexible database with automatic switching
+- **Redis**: Production caching with graceful fallback
 - **Bittensor SDK**: Real-time blockchain data access
-- **OpenAI API**: AI-powered content analysis and classification
+- **OpenAI APIs**: AI-powered content analysis and classification
 
 ### **Key Components**
 - **Data Collection**: Automated scripts with quota management
-- **AI Enrichment**: GPT-4 powered subnet classification
+- **AI Enrichment**: GPT-4o powered subnet classification and correlation analysis
 - **Caching**: Multi-layer caching for performance optimization
 - **Authentication**: Secure admin access control
 - **Monitoring**: Comprehensive logging and error handling
+- **Search**: Unified search logic across all pages
 
 ---
 
@@ -229,14 +279,15 @@ tao-analytics/
    - **Frequency**: Real-time with 5-minute caching
    - **Storage**: In-memory cache + real-time calculations
 
-4. **OpenAI GPT-4** (`https://api.openai.com/v1/chat/completions`)
-   - **Purpose**: AI-powered subnet classification and description
-   - **Model**: GPT-4o (optimal balance of quality and cost)
+4. **OpenAI APIs** (`https://api.openai.com/v1/chat/completions`)
+   - **Purpose**: AI-powered subnet classification, description, and correlation analysis
+   - **Models**: GPT-4o for correlation analysis, GPT-4 for enrichment
    - **Features**: 
      - 14 granular category classification
      - Confidence scoring with provenance tracking
      - Context-aware enrichment from websites/GitHub
-     - Tag normalization and deduplication
+     - Advanced correlation analysis with statistical rigor
+     - P-value filtering and Z-score outlier detection
      - Real-time insights with comprehensive price momentum data (1d, 7d, 30d)
    - **Storage**: `subnet_meta` table with enriched fields
 
@@ -261,12 +312,15 @@ tao-analytics/
 - **Price Momentum**: Comprehensive 1-day, 7-day, and 30-day price changes
 - **Category Synchronization**: Automatic sync between enrichment and insights
 - **Intelligent Caching**: Context-aware caching with automatic invalidation
+- **Statistical Rigor**: P-value filtering and Z-score outlier detection
 
 ### **Caching Strategy**
+- **Redis Cache**: 5-minute TTL for production caching with graceful fallback
 - **API Cache**: 1-hour TTL for external API responses
 - **Database Cache**: 30-minute TTL for database queries
 - **SDK Cache**: 5-minute TTL for Bittensor SDK data
 - **Favicon Cache**: Persistent storage with URL mapping
+- **Analysis Cache**: 24-hour TTL for GPT correlation analysis
 
 ---
 
@@ -276,6 +330,7 @@ tao-analytics/
 - Python 3.10+ (recommended: 3.11)
 - Git
 - API keys for TAO.app, CoinGecko, and OpenAI
+- Redis (optional, for production caching)
 
 ### **1. Clone Repository**
 ```bash
@@ -306,6 +361,9 @@ OPENAI_API_KEY=your_openai_api_key
 SECRET_KEY=your_secret_key_here
 FLASK_ENV=development
 
+# Redis Configuration (optional, for production caching)
+REDIS_URL=redis://localhost:6379
+
 # Admin Credentials (for admin_config.md)
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=secure_password
@@ -333,9 +391,10 @@ python scripts/data_collection/batch_enrich.py --range 1 128
 
 ### **Main Configuration (`config.py`)**
 - **API Endpoints**: TAO.app, CoinGecko, OpenAI
-- **Database**: SQLite configuration
+- **Database**: SQLite/PostgreSQL configuration with automatic switching
 - **Categories**: 14 granular subnet categories
 - **Enrichment**: AI model settings and parameters
+- **Caching**: Redis and fallback cache configuration
 
 ### **Parameter Settings (`scripts/data_collection/parameter_settings.py`)**
 - **Content Limits**: Website (3000 chars), README (2000 chars)
@@ -388,6 +447,7 @@ gunicorn -w 4 -b 0.0.0.0:5001 app:create_app()
   - Category performance analysis
   - Market cap trends
   - Interactive charts and filters
+  - Enhanced search functionality
 
 ### **2. Screener (`/dash/screener`)**
 - **Purpose**: Subnet screening with AI insights
@@ -396,8 +456,20 @@ gunicorn -w 4 -b 0.0.0.0:5001 app:create_app()
   - Interactive scatter plots with click-to-save buy signals
   - Real-time data updates with comprehensive price momentum (1d, 7d, 30d)
   - AI-powered investment recommendations with category-aware analysis
+  - Dynamic timestamp updates
 
-### **3. Subnet Detail (`/dash/subnet-detail`)**
+### **3. Insights (`/dash/insights`)**
+- **Purpose**: Network insights with GPT-4o correlation analysis
+- **Features**:
+  - GPT-4o correlation analysis with statistical rigor
+  - P-value filtering and Z-score outlier detection
+  - Undervalued opportunities identification
+  - Low-stake-quality alerts (statistical outliers)
+  - Healthy subnet recommendations
+  - Real-time caching with 24-hour TTL
+  - Loading spinners and user feedback
+
+### **4. Subnet Detail (`/dash/subnet-detail`)**
 - **Purpose**: Detailed subnet analysis
 - **Features**:
   - Comprehensive subnet metrics with real-time updates
@@ -405,7 +477,7 @@ gunicorn -w 4 -b 0.0.0.0:5001 app:create_app()
   - Validator information and network health metrics
   - AI-generated insights with category-synchronized analysis
 
-### **4. System Info (`/dash/system-info`)**
+### **5. System Info (`/dash/system-info`)**
 - **Purpose**: Admin system monitoring
 - **Features**:
   - Database statistics
@@ -413,7 +485,7 @@ gunicorn -w 4 -b 0.0.0.0:5001 app:create_app()
   - Cache performance
   - System health metrics
 
-### **5. SDK POC (`/dash/sdk-poc`)**
+### **6. SDK POC (`/dash/sdk-poc`)**
 - **Purpose**: Bittensor SDK testing
 - **Features**:
   - Live SDK connectivity testing
@@ -428,9 +500,9 @@ gunicorn -w 4 -b 0.0.0.0:5001 app:create_app()
 ```
 External APIs → Raw Storage → Context Enrichment → AI Analysis → Quality Validation → Category Sync → Production Database
      ↓              ↓              ↓              ↓              ↓              ↓              ↓
-TAO.app API    screener_raw   prepare_context  OpenAI GPT-4   confidence     auto-sync      subnet_meta
+TAO.app API    screener_raw   prepare_context  OpenAI APIs    confidence     auto-sync      subnet_meta
 CoinGecko API  coingecko      web scraping     classification  validation     categories     metrics_snap
-Bittensor SDK  real-time      GitHub README    confidence      provenance     GPT insights   gpt_insights
+Bittensor SDK  real-time      GitHub README    correlation     provenance     GPT insights   gpt_insights
 ```
 
 ### **Key Database Operations**
@@ -439,6 +511,7 @@ Bittensor SDK  real-time      GitHub README    confidence      provenance     GP
 - **Migration**: Schema updates via migration scripts
 - **Export**: Data export via `export_db_table.py`
 - **Category Sync**: Automatic synchronization between enrichment and GPT insights
+- **Caching**: Multi-layer caching with Redis and fallback options
 
 ---
 
@@ -680,6 +753,9 @@ export OPENAI_API_KEY="your_openai_api_key"
 # Database configuration
 export HEROKU_DATABASE_URL="postgresql://..."  # For Heroku targeting
 export DATABASE_URL="sqlite:///tao.sqlite"     # For local development
+
+# Redis configuration (optional)
+export REDIS_URL="redis://localhost:6379"      # For production caching
 ```
 
 #### **Quota Management**
@@ -700,9 +776,9 @@ export DATABASE_URL="sqlite:///tao.sqlite"     # For local development
 ### **Core Services**
 
 #### **Database Services**
-- **`db.py`**: Database connection and session management
+- **`db.py`**: Database connection and session management with unified search logic
 - **`db_utils.py`**: Database utility functions
-- **`cache.py`**: Multi-layer caching system
+- **`cache.py`**: Multi-layer caching system with Redis and fallback
 
 #### **Metrics Services**
 - **`metrics.py`**: General metrics calculations
@@ -713,6 +789,7 @@ export DATABASE_URL="sqlite:///tao.sqlite"     # For local development
 - **`taoapp_cache.py`**: TAO.app API caching and management
 - **`quota_guard.py`**: API quota tracking and enforcement
 - **`gpt_insight.py`**: OpenAI GPT integration for insights with comprehensive price momentum analysis
+- **`correlation_analysis.py`**: GPT-4o correlation analysis with statistical rigor
 
 #### **Utility Services**
 - **`auth.py`**: Authentication and authorization
@@ -752,6 +829,9 @@ OPENAI_API_KEY=your_openai_api_key
 # Production Settings
 SECRET_KEY=your_production_secret_key
 FLASK_ENV=production
+
+# Redis Configuration (optional, for production caching)
+REDIS_URL=redis://...  # Auto-provided by Heroku Redis addon
 
 # Database (automatically set by Heroku)
 DATABASE_URL=postgresql://...  # Auto-provided by Heroku Postgres addon
@@ -873,6 +953,7 @@ DATABASE_URL=$HEROKU_DATABASE_URL python scripts/data_collection/batch_enrich.py
 - **Async Processing**: Asynchronous operations for Bittensor SDK
 - **Batch Processing**: Efficient bulk operations for enrichment
 - **Connection Pooling**: Database connection optimization
+- **Redis Integration**: Production-grade caching with graceful fallback
 
 ### **Testing**
 - **Test Suite**: Comprehensive test coverage in `tests/`
@@ -885,6 +966,12 @@ DATABASE_URL=$HEROKU_DATABASE_URL python scripts/data_collection/batch_enrich.py
 - **Metrics**: System performance monitoring
 - **Error Tracking**: Comprehensive error handling and reporting
 - **Health Checks**: System health monitoring endpoints
+
+### **Security**
+- **Input Validation**: Comprehensive input sanitization
+- **Rate Limiting**: API rate limiting and quota management
+- **SQL Injection Protection**: Parameterized queries
+- **Authentication**: Secure admin access control
 
 ---
 
@@ -904,4 +991,8 @@ For support and questions:
 
 ---
 
-**TAO Analytics** - Production-grade analytics for the Bittensor network 🚀 
+**TAO Analytics** - Production-grade analytics for the Bittensor network 🚀
+
+**Connect with us:**
+- [LinkedIn](https://www.linkedin.com/in/glenn-landgren/?originalSubdomain=se)
+- [X (Twitter)](https://x.com/_landgren_) 
