@@ -101,7 +101,7 @@ def get_network_summary_stats():
                    active_validators, total_stake_tao, buy_signal, timestamp as latest_timestamp
             FROM metrics_snap 
             WHERE timestamp >= (
-                SELECT datetime(MAX(timestamp), '-7 days') 
+                SELECT MAX(timestamp) - INTERVAL '7 days'
                 FROM metrics_snap
             )
             ORDER BY netuid, timestamp DESC
@@ -129,7 +129,7 @@ def get_network_summary_stats():
                 MAX(timestamp) as max_date
             FROM metrics_snap 
             WHERE timestamp >= (
-                SELECT datetime(MAX(timestamp), '-7 days') 
+                SELECT MAX(timestamp) - INTERVAL '7 days'
                 FROM metrics_snap
             )
         """)
