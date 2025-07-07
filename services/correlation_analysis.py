@@ -456,19 +456,19 @@ class CorrelationAnalysisService:
                     ]
                     lists.append(f"**Potentially Undervalued (Top 5)**: {', '.join(undervalued_list)}")
             
-            # Scam flags (low stake quality, suspicious patterns)
+            # Low stake quality alerts (statistical outliers)
             if 'stake_quality' in df.columns:
-                scam_flags = df[
+                low_stake_alerts = df[
                     (df['stake_quality'] < 20) & 
                     (df['stake_quality'] > 0)
                 ].sort_values(by='stake_quality', ascending=True).head(5)
                 
-                if not scam_flags.empty:
-                    scam_list = [
+                if not low_stake_alerts.empty:
+                    alert_list = [
                         f"{row['subnet_name']} (uid {row['netuid']}, stake_quality={row['stake_quality']:.1f})"
-                        for _, row in scam_flags.iterrows()
+                        for _, row in low_stake_alerts.iterrows()
                     ]
-                    lists.append(f"**Scam / Manipulation Watchlist**: {', '.join(scam_list)}")
+                    lists.append(f"**Low-Stake-Quality Alerts**: {', '.join(alert_list)}")
             
             # Healthy subnets (high scores across metrics)
             if 'tao_score' in df.columns and 'stake_quality' in df.columns:

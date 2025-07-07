@@ -147,6 +147,9 @@
                     🤖 AI-Powered Subnet Insights
                     <span class="tooltip-icon" title="⚠️ DISCLAIMER: This analysis is for data transparency and educational purposes only. It is NOT financial advice. Always conduct your own research and due diligence before making any investment decisions.">ⓘ</span>
                 </h3>
+                <div style="background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; margin: 16px 0; font-size: 14px; color: #333;">
+                    <strong>📊 Analysis Methodology:</strong> "Low Stake Quality Alerts" show subnets with <strong>stake_quality < 20</strong>. This is a <em>statistical outlier</em> flag only. It does <strong>not</strong> evaluate code quality, custody risk, or validator honesty. Early-stage subnets often have low stake quality during dTAO liquidity bootstrapping.
+                </div>
                 <p class="insights-subtitle">Latest AI analysis of Bittensor network correlations and opportunities</p>
                 
                 <div class="insights-cards">
@@ -176,11 +179,11 @@
                         </div>
                     </div>
                     
-                    <!-- Scam Flags Card -->
-                    <div class="insight-card scam-flags">
+                    <!-- Low Stake Quality Alerts Card -->
+                    <div class="insight-card low-stake-alerts">
                         <div class="card-header">
                             <div class="card-icon">⚠️</div>
-                            <h4>Risk Alerts</h4>
+                            <h4>Low Stake Quality Alerts</h4>
                         </div>
                         <div class="card-content">
                             {% if gpt_insights.scam_flags %}
@@ -196,7 +199,7 @@
                                 <div class="more-items">+{{ gpt_insights.scam_flags|length - 3 }} more</div>
                                 {% endif %}
                             {% else %}
-                                <div class="no-data">No risk alerts identified</div>
+                                <div class="no-data">No low stake quality alerts identified</div>
                             {% endif %}
                         </div>
                     </div>
