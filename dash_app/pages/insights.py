@@ -82,15 +82,10 @@ def get_network_summary_stats():
     """Get comprehensive network summary statistics with highly optimized queries and caching."""
     cache_key = 'network_summary_stats'
     
-    print(f"DEBUG: Getting network summary stats, cache key: {cache_key}")
-    
     # Try to get from cache first
     cached_result = cache_get(cache_key)
     if cached_result is not None:
-        print("DEBUG: Returning cached result")
         return cached_result
-    
-    print("DEBUG: Cache miss, loading fresh data...")
     
     session = get_db()
     try:
@@ -114,16 +109,13 @@ def get_network_summary_stats():
         """)
         
         latest_df = pd.read_sql(latest_sql, session.bind)
-        print(f"DEBUG: Raw SQL query returned {len(latest_df)} rows")
         
         # Ensure timestamp is properly converted to datetime
         if 'latest_timestamp' in latest_df.columns:
             latest_df['latest_timestamp'] = pd.to_datetime(latest_df['latest_timestamp'])
-            print(f"DEBUG: Converted timestamp column, sample: {latest_df['latest_timestamp'].head()}")
         
         # Get the latest record for each subnet (much faster than complex window functions)
         latest_df = latest_df.loc[latest_df.groupby('netuid')['latest_timestamp'].idxmax()]
-        print(f"DEBUG: After idxmax, got {len(latest_df)} unique subnets")
         
         # Limit to top 200 subnets to prevent memory issues
         latest_df = latest_df.head(200)
@@ -160,9 +152,6 @@ def get_network_summary_stats():
             'data_points': 'Recent data only',  # Avoid expensive count
             'date_range': f"{stats_result.min_date} to {stats_result.max_date}" if stats_result else "Recent data"
         }
-        
-        # Debug output
-        print(f"DEBUG: Loaded {len(latest_df)} subnets, total market cap: {stats['total_market_cap_tao']:,.0f}, avg TAO score: {stats['avg_tao_score']:.1f}")
         
         result = (stats, latest_df)
         
@@ -778,11 +767,35 @@ def layout():
                 
                 # GPT Analysis Section
                 html.Hr(className="my-4"),
-                html.H5("🤖 GPT-4o Correlation Analysis", className="mb-3"),
+                html.H5([
+                    "🤖 GPT-4o Correlation Analysis",
+                    html.I(
+                        className="bi bi-info-circle ms-2",
+                        id="gpt-analysis-tooltip",
+                        style={"cursor": "pointer"}
+                    )
+                ], className="mb-3"),
                 html.P([
                     "Get AI-powered insights on finding undervalued subnets, detecting scams, and identifying healthy networks. ",
                     "Analysis is cached for 24 hours to optimize performance."
                 ], className="text-muted mb-3"),
+                
+                # Tooltip for GPT Analysis
+                dbc.Tooltip(
+                    """
+                    **Statistical Outlier Detection**: Subnets listed as "scam flags" are statistical outliers – e.g., 
+                    exceptionally high market-cap vs TAO-Score, or extremely low stake-quality.
+                    
+                    ⚠️ **Important**: A flag ≠ scam. Large, capital-intensive projects (like Chutes) can surface here 
+                    simply because they sit in the top 1% of market-caps. Use this list for deeper due-diligence, 
+                    not as an automatic blacklist.
+                    
+                    **Correlation Analysis**: Only statistically significant correlations (|r| ≥ 0.5, p < 0.05) are shown.
+                    """,
+                    target="gpt-analysis-tooltip",
+                    placement="top",
+                    style={"fontSize": "14px", "maxWidth": "450px"}
+                ),
                 
                 dbc.Row([
                     dbc.Col([
@@ -803,7 +816,23 @@ def layout():
                 ]),
                 
                 # Analysis Display Area
-                html.Div(id="gpt-analysis-content", className="mt-3")
+                html.Div(id="gpt-analysis-content", className="mt-3"),
+                
+                # Loading Spinner (hidden by default)
+                html.Div([
+                    dbc.Spinner(
+                        html.Div([
+                            html.H5("🤖 Generating Enhanced Analysis...", className="text-center mb-3"),
+                            html.P([
+                                "Analyzing correlations with statistical rigor...",
+                                html.Br(),
+                                "Detecting outliers and generating insights...",
+                                html.Br(),
+                                "This may take 30-60 seconds."
+                            ], className="text-muted text-center")
+                        ], className="p-4")
+                    )
+                ], id="analysis-loading", style={"display": "none"})
             ])
         ], className="mb-4"),
         
@@ -954,24 +983,18 @@ def layout():
 def load_overview_data(pathname):
     """Load network overview data when page loads."""
     if pathname != "/dash/insights":
-        raise dash.PreventUpdate
+        raise PreventUpdate
     
     try:
-        print("DEBUG: Loading network summary stats...")
         stats, latest_df = get_network_summary_stats()
-        print(f"DEBUG: Got stats: {stats}")
-        print(f"DEBUG: DataFrame shape: {latest_df.shape if latest_df is not None else 'None'}")
         
         result = {
             'stats': stats,
             'categories': sorted(latest_df['category'].unique().tolist()) if latest_df is not None and not latest_df.empty else []
         }
-        print(f"DEBUG: Returning result: {result}")
         return result
     except Exception as e:
-        print(f"DEBUG: Error in load_overview_data: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Error in load_overview_data: {e}")
         return {'stats': {}, 'categories': []}
 
 @callback(
@@ -1061,8 +1084,13 @@ def load_shared_data(pathname, time_range):
         available_columns = [col for col in df.columns if col not in exclude_columns]
         df_trimmed = df[available_columns]
         
+        # Convert DataFrame to list of dictionaries for JSON serialization
+        data_records = []
+        for _, row in df_trimmed.iterrows():
+            data_records.append(row.to_dict())
+        
         return {
-            'data': df_trimmed.to_dict('records'),
+            'data': data_records,
             'time_range': days_back,
             'timestamp': datetime.now().isoformat()
         }
@@ -1216,8 +1244,6 @@ def update_correlation_matrix(shared_data):
     if 'timestamp' in df.columns:
         df['timestamp'] = pd.to_datetime(df['timestamp'])
     
-    print("Correlation matrix columns:", df.columns.tolist())  # Debug print
-    
     return create_correlation_matrix(df)
 
 # Callbacks for GPT Correlation Analysis
@@ -1225,6 +1251,9 @@ def update_correlation_matrix(shared_data):
     Output("gpt-analysis-content", "children"),
     Output("gpt-analysis-status", "children"),
     Output("last-analysis-time", "children"),
+    Output("analysis-loading", "style"),
+    Output("gpt-analysis-btn", "disabled"),
+    Output("gpt-analysis-btn", "children"),
     Input("gpt-analysis-btn", "n_clicks"),
     Input("shared-data-store", "data"),
     Input("url", "pathname")
@@ -1233,39 +1262,46 @@ def generate_gpt_analysis(n_clicks, shared_data, pathname):
     """Generate GPT analysis of correlation matrix."""
     # Check if we're on the insights page
     if pathname != '/dash/insights':
-        return "", "", ""
+        return "", "", "", {"display": "none"}, False, [html.I(className="bi bi-robot me-2"), "Generate GPT Analysis"]
     
-    # If no button click and no data, try to load cached analysis
+    # If no button click, try to load cached analysis
     if not n_clicks:
         if not shared_data or 'data' not in shared_data:
-            return "", "", ""
+            return "", "", "", {"display": "none"}, False, [html.I(className="bi bi-robot me-2"), "Generate GPT Analysis"]
         
         # Try to load cached analysis
         result = correlation_service.get_analysis()
         if result['success'] and result['status'] == 'Cached':
-                    return _format_analysis_display(result)
-    else:
-        return "", "", ""
+            formatted_result = _format_analysis_display(result)
+            return formatted_result[0], formatted_result[1], formatted_result[2], {"display": "none"}, False, [html.I(className="bi bi-robot me-2"), "Generate GPT Analysis"]
+        return "", "", "", {"display": "none"}, False, [html.I(className="bi bi-robot me-2"), "Generate GPT Analysis"]
     
     # Button was clicked, generate new analysis
     if not shared_data or 'data' not in shared_data:
-        return "", "No data available for analysis", ""
+        return "", "No data available for analysis", "", {"display": "none"}, False, [html.I(className="bi bi-robot me-2"), "Generate GPT Analysis"]
     
     try:
         df = pd.DataFrame(shared_data['data'])
         if df.empty:
-            return "", "No data available for analysis", ""
+            return "", "No data available for analysis", "", {"display": "none"}, False, [html.I(className="bi bi-robot me-2"), "Generate GPT Analysis"]
+        
+        # Show loading state immediately
+        loading_state = {"display": "block"}
+        button_disabled = True
+        button_text = [html.I(className="bi bi-hourglass-split me-2"), "Generating Analysis..."]
         
         # Generate analysis using the service
         result = correlation_service.get_analysis()
         
         if not result['success']:
-            return "", result['error'], ""
+            return "", result['error'], "", {"display": "none"}, False, [html.I(className="bi bi-robot me-2"), "Generate GPT Analysis"]
         
-        return _format_analysis_display(result)
+        # Show results and hide loading
+        formatted_result = _format_analysis_display(result)
+        return formatted_result[0], formatted_result[1], formatted_result[2], {"display": "none"}, False, [html.I(className="bi bi-robot me-2"), "Generate GPT Analysis"]
         
     except Exception as e:
-        return "", f"❌ Error generating analysis: {str(e)}", ""
+        return "", f"❌ Error generating analysis: {str(e)}", "", {"display": "none"}, False, [html.I(className="bi bi-robot me-2"), "Generate GPT Analysis"]
 
 def _format_analysis_display(result):
     """Format analysis result for display."""
@@ -1290,7 +1326,18 @@ def _format_analysis_display(result):
         if line.startswith('##'):
             formatted_analysis.append(html.H4(line[3:].strip(), className="mt-3 mb-2"))
         elif line.startswith('###'):
-            formatted_analysis.append(html.H5(line[4:].strip(), className="mt-3 mb-2"))
+            # Add tooltip for scam detection section
+            if 'scam' in line.lower() or 'red flag' in line.lower():
+                formatted_analysis.append(html.H5([
+                    line[4:].strip(),
+                    html.I(
+                        className="bi bi-exclamation-triangle ms-2 text-warning",
+                        id="scam-flags-tooltip",
+                        style={"cursor": "pointer"}
+                    )
+                ], className="mt-3 mb-2"))
+            else:
+                formatted_analysis.append(html.H5(line[4:].strip(), className="mt-3 mb-2"))
         elif line.startswith('**') and line.endswith('**'):
             formatted_analysis.append(html.Strong(line[2:-2], className="d-block mb-2"))
         elif line.startswith('•'):
@@ -1300,10 +1347,31 @@ def _format_analysis_display(result):
         elif line.strip():
             formatted_analysis.append(html.P(line.strip(), className="mb-2"))
     
+    # Add tooltip for scam flags section
+    scam_tooltip = dbc.Tooltip(
+        """
+        ⚠️ **Statistical Outliers, Not Verdicts**
+        
+        Subnets listed here are statistical anomalies – e.g., 
+        exceptionally high market-cap vs TAO-Score, or 
+        extremely low stake-quality.
+        
+        **Large, trusted projects** (like Chutes) can appear here 
+        simply because they're in the top 1% of market-caps.
+        
+        Use this list for deeper due-diligence, not as an 
+        automatic blacklist.
+        """,
+        target="scam-flags-tooltip",
+        placement="top",
+        style={"fontSize": "14px", "maxWidth": "400px"}
+    )
+    
     # Create analysis display
     analysis_display = dbc.Card([
         dbc.CardBody([
-            html.Div(formatted_analysis, className="gpt-analysis-content")
+            html.Div(formatted_analysis, className="gpt-analysis-content"),
+            scam_tooltip  # Include the tooltip
         ])
     ], className="border-primary")
     
@@ -1317,46 +1385,9 @@ def _format_analysis_display(result):
     
     return analysis_display, status, last_time_str
 
-@callback(
-    Output("gpt-analysis-btn", "disabled"),
-    Output("gpt-analysis-btn", "children"),
-    Input("gpt-analysis-btn", "n_clicks"),
-    Input("shared-data-store", "data")
-)
-def update_button_state(n_clicks, shared_data):
-    """Update button state based on 24-hour cache."""
-    if not shared_data or 'data' not in shared_data:
-        return True, [html.I(className="bi bi-robot me-2"), "No Data Available"]
-    
-    try:
-        # Get cache info from service
-        cache_info = correlation_service._get_cache_info()
-        
-        if cache_info.get('is_valid', False):
-            # Button should be disabled, show time remaining
-            hours_remaining = cache_info.get('hours_remaining', 0)
-            hours = int(hours_remaining)
-            minutes = int((hours_remaining - hours) * 60)
-            return True, [html.I(className="bi bi-clock me-2"), f"Available in {hours}h {minutes}m"]
-        
-        # Check rate limits
-        rate_info = correlation_service.get_rate_limit_info()
-        daily_used = rate_info.get('daily_requests_used', 0)
-        daily_limit = rate_info.get('daily_requests_limit', 10)
-        hourly_used = rate_info.get('hourly_requests_used', 0)
-        hourly_limit = rate_info.get('hourly_requests_limit', 2)
-        
-        if daily_used >= daily_limit:
-            return True, [html.I(className="bi bi-exclamation-triangle me-2"), "Daily limit reached"]
-        
-        if hourly_used >= hourly_limit:
-            return True, [html.I(className="bi bi-exclamation-triangle me-2"), "Hourly limit reached"]
-        
-        # Button is enabled
-        return False, [html.I(className="bi bi-robot me-2"), "Generate GPT Analysis"]
-        
-    except Exception:
-        return False, [html.I(className="bi bi-robot me-2"), "Generate GPT Analysis"]
+
+
+
 
 def register_callbacks(dash_app):
     """Register callbacks for the insights page."""

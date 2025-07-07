@@ -411,21 +411,30 @@ body {
 
 .tooltip-icon {
     display: inline-block;
-    margin-left: 0.25rem;
+    margin-left: 0.5rem;
     color: var(--accent-color);
-    font-size: 0.7rem;
+    font-size: 0.9rem;
     cursor: help;
-    opacity: 0.7;
+    opacity: 0.8;
     transition: var(--transition-fast);
-    font-weight: normal;
+    font-weight: bold;
     text-transform: none;
     letter-spacing: normal;
     position: relative;
+    background: rgba(62, 106, 225, 0.1);
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    line-height: 20px;
+    text-align: center;
+    vertical-align: middle;
 }
 
 .tooltip-icon:hover {
     opacity: 1;
-    transform: scale(1.1);
+    transform: scale(1.2);
+    background: rgba(62, 106, 225, 0.2);
+    box-shadow: 0 2px 8px rgba(62, 106, 225, 0.3);
 }
 
 .stat-item:hover::after {
@@ -1501,4 +1510,245 @@ html {
 @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
+}
+
+/* GPT Insights Cards */
+.gpt-insights-section {
+    margin: 3rem 0;
+    padding: 2rem;
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-light);
+}
+
+.insights-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-align: center;
+    margin-bottom: 0.5rem;
+    font-family: 'Orbitron', 'Inter', Arial, sans-serif;
+}
+
+.insights-subtitle {
+    text-align: center;
+    color: var(--text-secondary);
+    margin-bottom: 2rem;
+    font-size: 1rem;
+}
+
+.insights-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.insight-card {
+    background: var(--background-primary);
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-light);
+    transition: var(--transition);
+    overflow: hidden;
+}
+
+.insight-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-medium);
+}
+
+.insight-card.undervalued {
+    border-left: 4px solid #28a745;
+}
+
+.insight-card.scam-flags {
+    border-left: 4px solid #dc3545;
+}
+
+.insight-card.healthy {
+    border-left: 4px solid #007bff;
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    padding: 1.25rem 1.5rem 1rem;
+    background: var(--background-secondary);
+    border-bottom: 1px solid var(--border-light);
+}
+
+.card-icon {
+    font-size: 1.5rem;
+    margin-right: 0.75rem;
+}
+
+.card-header h4 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.card-content {
+    padding: 1.5rem;
+}
+
+.subnet-item {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.subnet-item:last-child {
+    border-bottom: none;
+}
+
+.subnet-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+    font-size: 0.95rem;
+}
+
+.subnet-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.metric {
+    background: var(--background-secondary);
+    color: var(--text-secondary);
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--border-radius-sm);
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.more-items {
+    color: var(--accent-color);
+    font-size: 0.9rem;
+    font-weight: 500;
+    text-align: center;
+    padding: 0.5rem 0;
+    margin-top: 0.5rem;
+}
+
+.no-data {
+    color: var(--text-secondary);
+    font-style: italic;
+    text-align: center;
+    padding: 1rem 0;
+}
+
+.insights-footer {
+    text-align: center;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-light);
+}
+
+.insights-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--accent-color);
+    text-decoration: none;
+    font-weight: 500;
+    padding: 0.75rem 1.5rem;
+    border: 1px solid var(--accent-color);
+    border-radius: var(--border-radius-sm);
+    transition: var(--transition);
+}
+
+.insights-link:hover {
+    background: var(--accent-color);
+    color: var(--text-light);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-medium);
+}
+
+.insights-link svg {
+    transition: var(--transition);
+}
+
+.insights-link:hover svg {
+    transform: translateX(4px);
+}
+
+.insights-disclaimer {
+    margin-top: 1rem;
+    padding: 0.75rem;
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: var(--border-radius-sm);
+    text-align: center;
+}
+
+.insights-disclaimer p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #856404;
+    line-height: 1.4;
+}
+
+/* Mobile Responsive for GPT Insights */
+@media (max-width: 768px) {
+    .gpt-insights-section {
+        margin: 2rem 0;
+        padding: 1.5rem;
+    }
+    
+    .insights-title {
+        font-size: 1.5rem;
+    }
+    
+    .insights-cards {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .card-header {
+        padding: 1rem 1.25rem 0.75rem;
+    }
+    
+    .card-content {
+        padding: 1.25rem;
+    }
+    
+    .subnet-metrics {
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .gpt-insights-section {
+        margin: 1.5rem 0;
+        padding: 1rem;
+    }
+    
+    .insights-title {
+        font-size: 1.25rem;
+    }
+    
+    .insights-subtitle {
+        font-size: 0.9rem;
+    }
+    
+    .card-header {
+        padding: 0.75rem 1rem 0.5rem;
+    }
+    
+    .card-content {
+        padding: 1rem;
+    }
+    
+    .subnet-name {
+        font-size: 0.9rem;
+    }
+    
+    .metric {
+        font-size: 0.75rem;
+    }
 } 

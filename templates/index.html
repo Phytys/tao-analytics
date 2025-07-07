@@ -139,6 +139,109 @@
                 </div>
                 {% endif %}
             </div>
+            
+            <!-- GPT Analysis Insights Cards -->
+            {% if gpt_insights %}
+            <div class="gpt-insights-section">
+                <h3 class="insights-title">
+                    🤖 AI-Powered Subnet Insights
+                    <span class="tooltip-icon" title="⚠️ DISCLAIMER: This analysis is for data transparency and educational purposes only. It is NOT financial advice. Always conduct your own research and due diligence before making any investment decisions.">ⓘ</span>
+                </h3>
+                <p class="insights-subtitle">Latest AI analysis of Bittensor network correlations and opportunities</p>
+                
+                <div class="insights-cards">
+                    <!-- Undervalued Subnets Card -->
+                    <div class="insight-card undervalued">
+                        <div class="card-header">
+                            <div class="card-icon">💎</div>
+                            <h4>Undervalued Opportunities</h4>
+                        </div>
+                        <div class="card-content">
+                            {% if gpt_insights.undervalued %}
+                                {% for subnet in gpt_insights.undervalued[:3] %}
+                                <div class="subnet-item">
+                                    <div class="subnet-name">{{ subnet.name or "Subnet " + subnet.uid|string }}</div>
+                                    <div class="subnet-metrics">
+                                        <span class="metric">TAO-Score: {{ "%.1f"|format(subnet['TAO-Score']) }}</span>
+                                        <span class="metric">Market Cap: {{ "{:,.0f}".format(subnet.market_cap) }} TAO</span>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                                {% if gpt_insights.undervalued|length > 3 %}
+                                <div class="more-items">+{{ gpt_insights.undervalued|length - 3 }} more</div>
+                                {% endif %}
+                            {% else %}
+                                <div class="no-data">No undervalued subnets identified</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Scam Flags Card -->
+                    <div class="insight-card scam-flags">
+                        <div class="card-header">
+                            <div class="card-icon">⚠️</div>
+                            <h4>Risk Alerts</h4>
+                        </div>
+                        <div class="card-content">
+                            {% if gpt_insights.scam_flags %}
+                                {% for subnet in gpt_insights.scam_flags[:3] %}
+                                <div class="subnet-item">
+                                    <div class="subnet-name">{{ subnet.name or "Subnet " + subnet.uid|string }}</div>
+                                    <div class="subnet-metrics">
+                                        <span class="metric">Stake Quality: {{ "%.1f"|format(subnet.stake_quality) }}</span>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                                {% if gpt_insights.scam_flags|length > 3 %}
+                                <div class="more-items">+{{ gpt_insights.scam_flags|length - 3 }} more</div>
+                                {% endif %}
+                            {% else %}
+                                <div class="no-data">No risk alerts identified</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Healthy Subnets Card -->
+                    <div class="insight-card healthy">
+                        <div class="card-header">
+                            <div class="card-icon">🏆</div>
+                            <h4>Top Performers</h4>
+                        </div>
+                        <div class="card-content">
+                            {% if gpt_insights.healthy %}
+                                {% for subnet in gpt_insights.healthy[:3] %}
+                                <div class="subnet-item">
+                                    <div class="subnet-name">{{ subnet.name or "Subnet " + subnet.uid|string }}</div>
+                                    <div class="subnet-metrics">
+                                        <span class="metric">TAO-Score: {{ "%.1f"|format(subnet['TAO-Score']) }}</span>
+                                        <span class="metric">Stake Quality: {{ "%.1f"|format(subnet.stake_quality) }}</span>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                                {% if gpt_insights.healthy|length > 3 %}
+                                <div class="more-items">+{{ gpt_insights.healthy|length - 3 }} more</div>
+                                {% endif %}
+                            {% else %}
+                                <div class="no-data">No top performers identified</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="insights-footer">
+                    <a href="/dash/insights" class="insights-link">
+                        <span>View Full Analysis</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                    </a>
+                    <div class="insights-disclaimer">
+                        <p>⚠️ <strong>Disclaimer:</strong> This analysis is for data transparency and educational purposes only. It is NOT financial advice. Always conduct your own research and due diligence before making any investment decisions.</p>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
             <div class="cta-buttons">
                 <a href="/dash/explorer" class="cta-button primary">
                     <span>Explore Subnets</span>
@@ -226,7 +329,7 @@
                 <div class="feature-card">
                     <div class="feature-icon">🤖</div>
                     <h3>AI-Powered Analysis</h3>
-                    <p>GPT-4 enriched insights with provenance tracking for every subnet</p>
+                    <p>AI enriched insights with provenance tracking for every subnet</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">📊</div>
@@ -252,7 +355,7 @@
             <p>&copy; 2025 TAO Analytics. Built with love for the decentralized future.</p>
             <p class="footer-credits">
                 Data powered by Bittensor SDK and <a href="https://tao.app" target="_blank" class="footer-link">TAO.app API</a> • 
-                Intelligence enhanced by <a href="https://openai.com" target="_blank" class="footer-link">OpenAI GPT-4</a>
+                Intelligence enhanced by <a href="https://openai.com" target="_blank" class="footer-link">OpenAI API/a>
             </p>
         </div>
     </footer>

@@ -22,6 +22,7 @@ gunicorn
 psycopg2-binary>=2.9 
 coingecko
 schedule                   # for automated data collection
+scipy>=1.11.0              # for statistical analysis
 
 # --- security ---
 Flask-Talisman>=1.1.0     # security headers

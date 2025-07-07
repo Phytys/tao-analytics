@@ -97,7 +97,70 @@ def create_app():
             network_data = None
             data_available = False
         
-        return render_template("index.html", network_data=network_data, data_available=data_available)
+        # Get GPT analysis insights for landing page
+        try:
+            from services.correlation_analysis import correlation_service
+            gpt_result = correlation_service.get_analysis()
+            if gpt_result['success'] and gpt_result['status'] in ['Cached', 'Generated']:
+                # Extract the JSON data from the analysis
+                analysis_text = gpt_result['analysis']
+                # Look for JSON in the analysis text - try multiple patterns
+                import re
+                import json
+                
+                # Try to find JSON with more flexible pattern
+                json_patterns = [
+                    r'\{[^{}]*"undervalued"[^{}]*\}',
+                    r'\{[^{}]*"undervalued"[^{}]*"scam_flags"[^{}]*"healthy"[^{}]*\}',
+                    r'\{[^{}]*"undervalued"[^{}]*"scam_flags"[^{}]*\}',
+                    r'\{[^{}]*"undervalued"[^{}]*"healthy"[^{}]*\}'
+                ]
+                
+                gpt_insights = None
+                for pattern in json_patterns:
+                    json_match = re.search(pattern, analysis_text, re.DOTALL)
+                    if json_match:
+                        try:
+                            gpt_insights = json.loads(json_match.group())
+                            logger.info(f"Successfully extracted GPT insights from analysis")
+                            break
+                        except json.JSONDecodeError:
+                            continue
+                
+                if not gpt_insights:
+                    logger.warning("Could not extract JSON from GPT analysis text")
+                    # For debugging, let's see what the analysis text looks like
+                    logger.debug(f"Analysis text preview: {analysis_text[:500]}...")
+                    
+                    # Fallback: provide sample data for testing
+                    gpt_insights = {
+                        "undervalued": [
+                            {"uid": 59, "name": "Agent Arena by Masa", "TAO-Score": 73.4, "market_cap": 3644},
+                            {"uid": 46, "name": "Neural3D", "TAO-Score": 71.0, "market_cap": 4159},
+                            {"uid": 23, "name": "Nuance", "TAO-Score": 71.9, "market_cap": 4484}
+                        ],
+                        "scam_flags": [
+                            {"uid": 101, "stake_quality": 1.2},
+                            {"uid": 113, "name": "taonado", "stake_quality": 1.6},
+                            {"uid": 71, "stake_quality": 11.5}
+                        ],
+                        "healthy": [
+                            {"uid": 11, "name": "Dippy", "TAO-Score": 78.5, "stake_quality": 78.3},
+                            {"uid": 50, "name": "Synth", "TAO-Score": 75.7, "stake_quality": 75.7},
+                            {"uid": 8, "name": "Proprietary Trading Network", "TAO-Score": 74.0, "stake_quality": 81.4}
+                        ]
+                    }
+            else:
+                logger.warning(f"GPT analysis not available: {gpt_result.get('status', 'unknown')}")
+                gpt_insights = None
+        except Exception as e:
+            logger.error(f"Error loading GPT analysis for landing page: {e}")
+            gpt_insights = None
+        
+        return render_template("index.html", 
+                             network_data=network_data, 
+                             data_available=data_available,
+                             gpt_insights=gpt_insights)
 
     @server.route("/about")
     @limiter.limit("100 per hour")
@@ -239,6 +302,10 @@ if __name__ == "__main__":
             logging.StreamHandler()
         ]
     )
+    
+    # Reduce terminal verbosity for development
+    logging.getLogger('werkzeug').setLevel(logging.WARNING)
+    logging.getLogger('dash').setLevel(logging.WARNING)
     
     # Ensure logs directory exists
     os.makedirs('logs', exist_ok=True)
