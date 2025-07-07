@@ -1,5 +1,7 @@
 import os, json, pandas as pd
 import re
+import signal
+from contextlib import contextmanager
 from sqlalchemy import create_engine, text, select, func, String, and_, Numeric
 from sqlalchemy.orm import sessionmaker
 from .db_utils import json_field, get_database_type
@@ -20,8 +22,40 @@ else:
 if ACTIVE_DATABASE_URL.startswith("postgres://"):
     ACTIVE_DATABASE_URL = ACTIVE_DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-engine = create_engine(ACTIVE_DATABASE_URL, pool_pre_ping=True, future=True)
+# Configure connection pooling for Heroku PostgreSQL
+if ACTIVE_DATABASE_URL.startswith("postgresql://"):
+    # Heroku PostgreSQL connection pool configuration
+    engine = create_engine(
+        ACTIVE_DATABASE_URL,
+        pool_pre_ping=True,
+        pool_size=5,  # Maximum number of connections in the pool
+        max_overflow=10,  # Maximum number of connections that can be created beyond pool_size
+        pool_timeout=30,  # Timeout for getting a connection from the pool
+        pool_recycle=3600,  # Recycle connections after 1 hour
+        future=True
+    )
+else:
+    # SQLite configuration (development)
+    engine = create_engine(ACTIVE_DATABASE_URL, pool_pre_ping=True, future=True)
+
 SessionLocal = sessionmaker(bind=engine, autoflush=False, future=True)
+
+@contextmanager
+def query_timeout(seconds=30):
+    """Context manager to timeout long-running queries."""
+    def timeout_handler(signum, frame):
+        raise TimeoutError(f"Query timed out after {seconds} seconds")
+    
+    # Set up signal handler for timeout
+    old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(seconds)
+    
+    try:
+        yield
+    finally:
+        # Restore original signal handler and cancel alarm
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old_handler)
 
 def sanitize_search_input(search_text):
     """Sanitize search input to prevent SQL injection."""
@@ -34,12 +68,29 @@ def sanitize_search_input(search_text):
     return sanitized[:100]
 
 def get_db():
-    """Get database session."""
+    """Get database session with timeout protection."""
     db = SessionLocal()
     try:
         return db
     except Exception:
         db.close()
+        raise
+
+def safe_query_execute(query, timeout_seconds=30, limit=10000):
+    """Execute a query with timeout protection and limits."""
+    try:
+        with query_timeout(timeout_seconds):
+            # Add limit if not already present
+            if hasattr(query, 'limit') and not hasattr(query, '_limit_applied'):
+                query = query.limit(limit)
+                query._limit_applied = True
+            
+            return query
+    except TimeoutError:
+        print(f"Query timed out after {timeout_seconds} seconds")
+        raise
+    except Exception as e:
+        print(f"Query execution error: {e}")
         raise
 
 def get_base_query():

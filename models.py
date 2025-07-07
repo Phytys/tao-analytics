@@ -193,6 +193,22 @@ class GptInsights(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, onupdate=func.now())
 
+class CorrelationAnalysis(Base):
+    """GPT-4o correlation analysis cache for network-wide insights."""
+    __tablename__ = "correlation_analysis"
+    
+    id = Column(Integer, primary_key=True)  # Analysis ID
+    analysis_text = Column(Text, nullable=False)  # Full analysis text
+    status = Column(String(20), nullable=False)  # 'cached', 'generated', 'error'
+    daily_requests_used = Column(Integer, default=0)  # Daily rate limit counter
+    hourly_requests_used = Column(Integer, default=0)  # Hourly rate limit counter
+    last_request_time = Column(DateTime)  # Last request timestamp
+    ts = Column(DateTime, nullable=False, default=datetime.utcnow)  # Cache timestamp
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, onupdate=func.now())
+
 class AggregatedCache(Base):
     """Cache for TAO.app /subnets/aggregated API responses."""
     __tablename__ = "aggregated_cache"

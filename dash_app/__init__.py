@@ -26,7 +26,8 @@ def create_dash(server):
             dbc.themes.BOOTSTRAP,
             "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap",
             "https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap",
-            "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+            "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css",
+            "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css"
         ],
         suppress_callback_exceptions=True,
         title="Bittensor Subnet Explorer - TAO Analytics",

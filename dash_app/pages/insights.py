@@ -16,16 +16,19 @@ from services.db import get_db
 from models import MetricsSnap, SubnetMeta
 from sqlalchemy import func, desc, and_, or_, text
 import json
+import os
+from services.correlation_analysis import correlation_service
 
-def get_time_series_data(days_back=30):
-    """Get time series data from metrics_snap table with flexible date range."""
+def get_time_series_data(days_back=30, limit=10000):
+    """Get time series data from metrics_snap table with flexible date range and limits."""
     session = get_db()
     try:
         cutoff_date = datetime.now() - timedelta(days=days_back)
         
+        # Optimized query with limits and proper indexing
         query = session.query(MetricsSnap).filter(
             MetricsSnap.timestamp >= cutoff_date
-        ).order_by(MetricsSnap.timestamp.desc())
+        ).order_by(MetricsSnap.timestamp.desc()).limit(limit)
         
         df = pd.read_sql(query.statement, session.bind)
         
@@ -38,40 +41,39 @@ def get_time_series_data(days_back=30):
         session.close()
 
 def get_network_summary_stats():
-    """Get comprehensive network summary statistics."""
+    """Get comprehensive network summary statistics with optimized queries."""
     session = get_db()
     try:
-        # Get latest data for each subnet
-        latest_query = session.query(
-            MetricsSnap.netuid,
-            MetricsSnap.subnet_name,
-            MetricsSnap.category,
-            MetricsSnap.tao_score,
-            MetricsSnap.stake_quality,
-            MetricsSnap.validator_util_pct,
-            MetricsSnap.market_cap_tao,
-            MetricsSnap.flow_24h,
-            MetricsSnap.price_7d_change,
-            MetricsSnap.active_validators,
-            MetricsSnap.total_stake_tao,
-            MetricsSnap.buy_signal,
-            func.max(MetricsSnap.timestamp).label('latest_timestamp')
-        ).group_by(
-            MetricsSnap.netuid,
-            MetricsSnap.subnet_name,
-            MetricsSnap.category,
-            MetricsSnap.tao_score,
-            MetricsSnap.stake_quality,
-            MetricsSnap.validator_util_pct,
-            MetricsSnap.market_cap_tao,
-            MetricsSnap.flow_24h,
-            MetricsSnap.price_7d_change,
-            MetricsSnap.active_validators,
-            MetricsSnap.total_stake_tao,
-            MetricsSnap.buy_signal
-        ).subquery()
+        # Database-agnostic query to get latest data for each subnet
+        from sqlalchemy import text
+        from config import ACTIVE_DATABASE_URL
         
-        latest_df = pd.read_sql(session.query(latest_query).statement, session.bind)
+        if ACTIVE_DATABASE_URL.startswith("postgresql://"):
+            # PostgreSQL-specific query using DISTINCT ON
+            latest_sql = text("""
+                SELECT DISTINCT ON (netuid) 
+                    netuid, subnet_name, category, tao_score, stake_quality,
+                    validator_util_pct, market_cap_tao, flow_24h, price_7d_change,
+                    active_validators, total_stake_tao, buy_signal, timestamp as latest_timestamp
+                FROM metrics_snap 
+                ORDER BY netuid, timestamp DESC
+                LIMIT 200
+            """)
+        else:
+            # SQLite-compatible query using window function
+            latest_sql = text("""
+                SELECT netuid, subnet_name, category, tao_score, stake_quality,
+                       validator_util_pct, market_cap_tao, flow_24h, price_7d_change,
+                       active_validators, total_stake_tao, buy_signal, timestamp as latest_timestamp
+                FROM (
+                    SELECT *, ROW_NUMBER() OVER (PARTITION BY netuid ORDER BY timestamp DESC) as rn
+                    FROM metrics_snap
+                ) ranked
+                WHERE rn = 1
+                LIMIT 200
+            """)
+        
+        latest_df = pd.read_sql(latest_sql, session.bind)
         
         # Calculate summary stats
         stats = {
@@ -264,7 +266,7 @@ def create_improvement_tracker(df, days_back=30):
     return fig
 
 def create_correlation_matrix(df):
-    """Create correlation matrix for key metrics."""
+    """Create correlation matrix for comprehensive metrics analysis."""
     if df.empty:
         return go.Figure().add_annotation(
             text="No data available", 
@@ -274,12 +276,34 @@ def create_correlation_matrix(df):
     # Get latest data for each subnet
     latest = df.loc[df.groupby('netuid')['timestamp'].idxmax()]
     
-    # Select numeric columns for correlation
-    numeric_cols = ['tao_score', 'stake_quality', 'validator_util_pct', 'market_cap_tao', 
-                   'flow_24h', 'price_7d_change', 'active_validators', 'total_stake_tao']
+    # Enhanced numeric columns for correlation analysis
+    # Core performance metrics
+    core_metrics = ['tao_score', 'stake_quality', 'buy_signal', 'emission_roi']
+    
+    # Market dynamics
+    market_metrics = ['market_cap_tao', 'price_7d_change', 'price_1d_change', 'flow_24h', 
+                     'buy_sell_ratio', 'total_volume_tao_1d', 'fdv_tao']
+    
+    # Network health & activity
+    network_metrics = ['active_validators', 'validator_util_pct', 'consensus_alignment', 
+                      'active_stake_ratio', 'uid_count', 'max_validators']
+    
+    # Stake distribution & quality
+    stake_metrics = ['total_stake_tao', 'stake_hhi', 'gini_coeff_top_100', 'hhi']
+    
+    # Token flow & momentum
+    flow_metrics = ['reserve_momentum', 'tao_in', 'alpha_circ', 'alpha_prop', 'root_prop']
+    
+    # Performance & ranking
+    performance_metrics = ['stake_quality_rank_pct', 'momentum_rank_pct', 
+                          'realized_pnl_tao', 'unrealized_pnl_tao']
+    
+    # Combine all metric categories
+    all_metrics = (core_metrics + market_metrics + network_metrics + 
+                  stake_metrics + flow_metrics + performance_metrics)
     
     # Filter to columns that exist in the data
-    available_cols = [col for col in numeric_cols if col in latest.columns]
+    available_cols = [col for col in all_metrics if col in latest.columns]
     
     if len(available_cols) < 2:
         return go.Figure().add_annotation(
@@ -287,40 +311,100 @@ def create_correlation_matrix(df):
             xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False
         )
     
+    # Calculate correlation matrix
     corr_matrix = latest[available_cols].corr()
     
+    # Create heatmap with enhanced styling
     fig = go.Figure(data=go.Heatmap(
         z=corr_matrix.values,
         x=corr_matrix.columns,
         y=corr_matrix.columns,
         colorscale='RdBu',
         zmid=0,
-        hovertemplate='<b>%{y} vs %{x}</b><br>Correlation: %{z:.3f}<extra></extra>'
+        zmin=-1,
+        zmax=1,
+        hovertemplate='<b>%{y} vs %{x}</b><br>Correlation: %{z:.3f}<extra></extra>',
+        text=corr_matrix.values.round(3),
+        texttemplate="%{text}",
+        textfont={"size": 10},
+        showscale=True
     ))
     
     fig.update_layout(
-        title="Metric Correlation Matrix",
-        height=500,
+        title={
+            'text': "📊 Comprehensive Metric Correlation Matrix",
+            'x': 0.5,
+            'xanchor': 'center',
+            'font': {'size': 18, 'color': '#2c3e50'}
+        },
+        height=700,
         xaxis_title="Metrics",
-        yaxis_title="Metrics"
+        yaxis_title="Metrics",
+        margin=dict(l=50, r=50, t=80, b=50),
+        font=dict(size=10),
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        autosize=True
+    )
+    
+    # Update axes for better readability
+    fig.update_xaxes(
+        tickangle=45,
+        tickfont=dict(size=9),
+        showgrid=False
+    )
+    fig.update_yaxes(
+        tickfont=dict(size=9),
+        showgrid=False
     )
     
     return fig
 
+
+
 # Available metrics for dynamic selection (static - no DB calls)
 AVAILABLE_METRICS = {
+    # Core performance metrics
     'tao_score': 'TAO-Score',
     'stake_quality': 'Stake Quality',
-    'validator_util_pct': 'Validator Utilization (%)',
-    'market_cap_tao': 'Market Cap (TAO)',
-    'flow_24h': '24h Flow (TAO)',
-    'price_7d_change': '7-Day Price Change (%)',
-    'active_validators': 'Active Validators',
-    'total_stake_tao': 'Total Stake (TAO)',
     'buy_signal': 'Buy Signal',
-    'consensus_alignment': 'Consensus Alignment (%)',
     'emission_roi': 'Emission ROI',
-    'stake_hhi': 'Stake HHI'
+    
+    # Market dynamics
+    'market_cap_tao': 'Market Cap (TAO)',
+    'fdv_tao': 'Fully Diluted Valuation (TAO)',
+    'price_7d_change': '7-Day Price Change (%)',
+    'price_1d_change': '1-Day Price Change (%)',
+    'flow_24h': '24h Flow (TAO)',
+    'buy_sell_ratio': 'Buy/Sell Ratio',
+    'total_volume_tao_1d': '24h Total Volume (TAO)',
+    
+    # Network health & activity
+    'active_validators': 'Active Validators',
+    'validator_util_pct': 'Validator Utilization (%)',
+    'consensus_alignment': 'Consensus Alignment (%)',
+    'active_stake_ratio': 'Active Stake Ratio (%)',
+    'uid_count': 'Registered UIDs',
+    'max_validators': 'Max Validators',
+    
+    # Stake distribution & quality
+    'total_stake_tao': 'Total Stake (TAO)',
+    'stake_hhi': 'Stake HHI',
+    'gini_coeff_top_100': 'Gini Coefficient (Top 100)',
+    'hhi': 'HHI',
+    
+    # Token flow & momentum
+    'reserve_momentum': 'Reserve Momentum',
+    'tao_in': 'TAO Reserves',
+    'alpha_circ': 'Circulating Alpha',
+    'alpha_prop': 'Alpha Proportion',
+    'root_prop': 'Root Proportion',
+    
+    # Performance & ranking
+    'stake_quality_rank_pct': 'Stake Quality Rank (%)',
+    'momentum_rank_pct': 'Momentum Rank (%)',
+    'realized_pnl_tao': 'Realized PnL (TAO)',
+    'unrealized_pnl_tao': 'Unrealized PnL (TAO)'
 }
 
 def layout():
@@ -350,7 +434,8 @@ def layout():
                         dbc.Card([
                             dbc.CardBody([
                                 html.H3(id="total-subnets", className="text-primary"),
-                                html.P("Active Subnets", className="text-muted mb-0")
+                                html.P("Active Subnets", className="text-muted mb-0"),
+                                html.I(className="bi bi-info-circle ms-1", id="subnets-tooltip", style={"cursor": "pointer"})
                             ])
                         ], className="text-center")
                     ], width=2),
@@ -358,7 +443,8 @@ def layout():
                         dbc.Card([
                             dbc.CardBody([
                                 html.H3(id="total-market-cap", className="text-success"),
-                                html.P("Total Market Cap (TAO)", className="text-muted mb-0")
+                                html.P("Total Market Cap (TAO)", className="text-muted mb-0"),
+                                html.I(className="bi bi-info-circle ms-1", id="market-cap-tooltip", style={"cursor": "pointer"})
                             ])
                         ], className="text-center")
                     ], width=2),
@@ -366,7 +452,8 @@ def layout():
                         dbc.Card([
                             dbc.CardBody([
                                 html.H3(id="avg-tao-score", className="text-warning"),
-                                html.P("Avg TAO-Score", className="text-muted mb-0")
+                                html.P("Avg TAO-Score", className="text-muted mb-0"),
+                                html.I(className="bi bi-info-circle ms-1", id="tao-score-tooltip", style={"cursor": "pointer"})
                             ])
                         ], className="text-center")
                     ], width=2),
@@ -374,7 +461,8 @@ def layout():
                         dbc.Card([
                             dbc.CardBody([
                                 html.H3(id="high-performers", className="text-info"),
-                                html.P("High Performers (≥70)", className="text-muted mb-0")
+                                html.P("High Performers (≥70)", className="text-muted mb-0"),
+                                html.I(className="bi bi-info-circle ms-1", id="performers-tooltip", style={"cursor": "pointer"})
                             ])
                         ], className="text-center")
                     ], width=2),
@@ -382,7 +470,8 @@ def layout():
                         dbc.Card([
                             dbc.CardBody([
                                 html.H3(id="strong-buy-signals", className="text-danger"),
-                                html.P("Strong Buy Signals (≥4)", className="text-muted mb-0")
+                                html.P("Strong Buy Signals (≥4)", className="text-muted mb-0"),
+                                html.I(className="bi bi-info-circle ms-1", id="buy-signals-tooltip", style={"cursor": "pointer"})
                             ])
                         ], className="text-center")
                     ], width=2),
@@ -390,7 +479,8 @@ def layout():
                         dbc.Card([
                             dbc.CardBody([
                                 html.H3(id="categories", className="text-secondary"),
-                                html.P("Categories", className="text-muted mb-0")
+                                html.P("Categories", className="text-muted mb-0"),
+                                html.I(className="bi bi-info-circle ms-1", id="categories-tooltip", style={"cursor": "pointer"})
                             ])
                         ], className="text-center")
                     ], width=2),
@@ -436,7 +526,10 @@ def layout():
                 # Controls for this section
                 dbc.Row([
                     dbc.Col([
-                        html.Label("Metric to Track", className="form-label fw-bold"),
+                        html.Label([
+                            "Metric to Track",
+                            html.I(className="bi bi-info-circle ms-1", id="trend-metric-tooltip", style={"cursor": "pointer"})
+                        ], className="form-label fw-bold"),
                         dcc.Dropdown(
                             id="trend-metric",
                             options=[{"label": v, "value": k} for k, v in AVAILABLE_METRICS.items()],
@@ -445,7 +538,10 @@ def layout():
                         )
                     ], width=4),
                     dbc.Col([
-                        html.Label("Aggregation Method", className="form-label fw-bold"),
+                        html.Label([
+                            "Aggregation Method",
+                            html.I(className="bi bi-info-circle ms-1", id="trend-aggregation-tooltip", style={"cursor": "pointer"})
+                        ], className="form-label fw-bold"),
                         dcc.Dropdown(
                             id="trend-aggregation",
                             options=[
@@ -458,7 +554,10 @@ def layout():
                         )
                     ], width=4),
                     dbc.Col([
-                        html.Label("Filter by Category", className="form-label fw-bold"),
+                        html.Label([
+                            "Filter by Category",
+                            html.I(className="bi bi-info-circle ms-1", id="trend-category-tooltip", style={"cursor": "pointer"})
+                        ], className="form-label fw-bold"),
                         dcc.Dropdown(
                             id="trend-category-filter",
                             options=[{"label": "All Categories", "value": "All"}],
@@ -590,7 +689,7 @@ def layout():
             ])
         ], className="mb-4"),
         
-        # SECTION 6: Correlation Analysis (Static)
+        # SECTION 6: Correlation Analysis with GPT Insights
         dbc.Card([
             dbc.CardHeader([
                 html.H4("🔗 Metric Correlations", className="mb-0"),
@@ -598,58 +697,171 @@ def layout():
             ]),
             dbc.CardBody([
                 html.P("Correlation matrix showing relationships between different metrics:", className="text-muted mb-3"),
-                dcc.Graph(id="correlation-matrix", config={'displayModeBar': False})
+                dcc.Graph(id="correlation-matrix", config={'displayModeBar': False}),
+                
+                # GPT Analysis Section
+                html.Hr(className="my-4"),
+                html.H5("🤖 GPT-4o Correlation Analysis", className="mb-3"),
+                html.P([
+                    "Get AI-powered insights on finding undervalued subnets, detecting scams, and identifying healthy networks. ",
+                    "Analysis is cached for 24 hours to optimize performance."
+                ], className="text-muted mb-3"),
+                
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Button([
+                            html.I(className="bi bi-robot me-2"),
+                            "Generate GPT Analysis"
+                        ], 
+                        id="gpt-analysis-btn",
+                        color="primary",
+                        className="mb-3",
+                        n_clicks=0
+                        ),
+                        html.Div(id="gpt-analysis-status", className="text-muted small mb-2")
+                    ], width=6),
+                    dbc.Col([
+                        html.Div(id="last-analysis-time", className="text-muted small")
+                    ], width=6, className="text-end")
+                ]),
+                
+                # Analysis Display Area
+                html.Div(id="gpt-analysis-content", className="mt-3")
             ])
         ], className="mb-4"),
         
-        # Tooltips
+        # Enhanced Tooltips with Detailed Information
         dbc.Tooltip(
-            "Overview of key network metrics including total subnets, market cap, average TAO-Score, "
-            "high performers, strong buy signals, and category diversity.",
+            "📊 Network Overview: Key metrics snapshot including total active subnets, combined market cap in TAO, "
+            "average TAO-Score across all subnets, count of high performers (≥70 score), strong buy signals (≥4/5), "
+            "and total category diversity. Data points and date range show the scope of analysis.",
             target="overview-tooltip",
-            placement="top"
+            placement="top",
+            style={"fontSize": "14px", "maxWidth": "400px"}
         ),
         dbc.Tooltip(
-            "Set the time range for all charts on this page. Changing this will update all sections "
-            "simultaneously for consistent analysis across all metrics.",
+            "⏰ Global Time Range: Control the time period for all charts simultaneously. Options range from 7 days "
+            "to all available data. This ensures consistent analysis across all sections and prevents data mismatches. "
+            "Performance optimized with smart data limits.",
             target="time-range-tooltip",
-            placement="top"
+            placement="top",
+            style={"fontSize": "14px", "maxWidth": "400px"}
         ),
         dbc.Tooltip(
-            "Create custom trend charts by selecting any metric, time range, aggregation method, and category filter. "
-            "Perfect for tracking specific metrics over time.",
+            "📈 Custom Trend Analysis: Create personalized trend charts by selecting any metric, aggregation method "
+            "(average, sum, median), and category filter. Perfect for tracking specific metrics over time and "
+            "identifying patterns in subnet performance. Supports all 20+ available metrics.",
             target="trend-tooltip",
-            placement="top"
+            placement="top",
+            style={"fontSize": "14px", "maxWidth": "400px"}
         ),
         dbc.Tooltip(
-            "Compare subnet categories by any metric. Helps identify which types of AI services are performing best "
-            "and which categories might be undervalued.",
+            "🏷️ Category Performance: Compare subnet categories by any metric to identify which AI service types "
+            "are performing best. Helps discover undervalued categories and understand market trends. "
+            "Categories include LLM-Inference, Data-Feeds, Serverless-Compute, and more.",
             target="category-tooltip",
-            placement="top"
+            placement="top",
+            style={"fontSize": "14px", "maxWidth": "400px"}
         ),
         dbc.Tooltip(
-            "View top-performing subnets by any selected metric. These represent the best-performing subnets "
-            "in the network for your chosen criteria.",
+            "🏆 Top Performers: View the best-performing subnets by any selected metric. These represent "
+            "the highest-quality subnets in the network for your chosen criteria. Useful for identifying "
+            "investment opportunities and understanding what drives success in different categories.",
             target="performers-tooltip",
-            placement="top"
+            placement="top",
+            style={"fontSize": "14px", "maxWidth": "400px"}
         ),
         dbc.Tooltip(
-            "Track subnets showing the most improvement in TAO-Score over the last 7 days. "
-            "These represent emerging opportunities and subnets that are actively improving in the short term.",
+            "📈 Improvement Tracking: Monitor subnets showing the most TAO-Score improvement over the last 7 days. "
+            "These represent emerging opportunities and subnets that are actively improving. "
+            "Adjust the threshold to focus on significant improvements only.",
             target="improvement-tooltip",
-            placement="top"
+            placement="top",
+            style={"fontSize": "14px", "maxWidth": "400px"}
         ),
         dbc.Tooltip(
-            "Fixed network trends showing key metrics over time. These provide a consistent baseline "
-            "for understanding network health and growth.",
+            "📊 Fixed Network Trends: Consistent baseline charts showing stake quality, market cap, and flow trends "
+            "over time. These provide essential context for understanding network health, growth patterns, "
+            "and overall market dynamics in the Bittensor ecosystem.",
             target="fixed-trends-tooltip",
-            placement="top"
+            placement="top",
+            style={"fontSize": "14px", "maxWidth": "400px"}
         ),
         dbc.Tooltip(
-            "Correlation matrix showing relationships between different metrics. "
-            "Helps understand which factors influence each other.",
+            "🔗 Metric Correlations: Heatmap showing relationships between different metrics. Red indicates positive "
+            "correlation, blue indicates negative correlation. Helps understand which factors influence each other "
+            "and identify potential arbitrage opportunities or risk factors.",
             target="correlation-tooltip",
-            placement="top"
+            placement="top",
+            style={"fontSize": "14px", "maxWidth": "400px"}
+        ),
+        
+        # Individual metric card tooltips
+        dbc.Tooltip(
+            "🌐 Active Subnets: Total number of subnets currently active in the Bittensor network. "
+            "This represents the diversity and scale of AI services available on the network.",
+            target="subnets-tooltip",
+            placement="top",
+            style={"fontSize": "14px", "maxWidth": "300px"}
+        ),
+        dbc.Tooltip(
+            "💰 Total Market Cap: Combined market capitalization of all subnets in TAO tokens. "
+            "This represents the total value of all subnet tokens in the network.",
+            target="market-cap-tooltip",
+            placement="top",
+            style={"fontSize": "14px", "maxWidth": "300px"}
+        ),
+        dbc.Tooltip(
+            "📊 Average TAO-Score: Mean TAO-Score across all subnets (0-100 scale). "
+            "Higher scores indicate better overall network quality and performance.",
+            target="tao-score-tooltip",
+            placement="top",
+            style={"fontSize": "14px", "maxWidth": "300px"}
+        ),
+        dbc.Tooltip(
+            "⭐ High Performers: Number of subnets with TAO-Score ≥ 70. "
+            "These represent the highest-quality subnets in the network.",
+            target="performers-tooltip",
+            placement="top",
+            style={"fontSize": "14px", "maxWidth": "300px"}
+        ),
+        dbc.Tooltip(
+            "🚀 Strong Buy Signals: Number of subnets with buy signal ≥ 4/5. "
+            "These represent subnets with strong positive momentum and investment potential.",
+            target="buy-signals-tooltip",
+            placement="top",
+            style={"fontSize": "14px", "maxWidth": "300px"}
+        ),
+        dbc.Tooltip(
+            "🏷️ Categories: Total number of unique subnet categories. "
+            "Higher diversity indicates a more robust and varied AI service ecosystem.",
+            target="categories-tooltip",
+            placement="top",
+            style={"fontSize": "14px", "maxWidth": "300px"}
+        ),
+        
+        # Control element tooltips
+        dbc.Tooltip(
+            "📊 Metric to Track: Select from 20+ available metrics including TAO-Score, stake quality, "
+            "market cap, flow, validator utilization, and more. Each metric provides different insights "
+            "into subnet performance and network health.",
+            target="trend-metric-tooltip",
+            placement="top",
+            style={"fontSize": "14px", "maxWidth": "350px"}
+        ),
+        dbc.Tooltip(
+            "📈 Aggregation Method: Choose how to combine data points over time. Average shows typical performance, "
+            "Sum shows total impact, Median shows middle performance (less affected by outliers).",
+            target="trend-aggregation-tooltip",
+            placement="top",
+            style={"fontSize": "14px", "maxWidth": "350px"}
+        ),
+        dbc.Tooltip(
+            "🏷️ Filter by Category: Focus analysis on specific AI service types. Categories include LLM-Inference, "
+            "Data-Feeds, Serverless-Compute, and more. 'All Categories' shows network-wide trends.",
+            target="trend-category-tooltip",
+            placement="top",
+            style={"fontSize": "14px", "maxWidth": "350px"}
         ),
         
         # Store for dynamic data
@@ -723,18 +935,39 @@ def update_category_filters(data):
     Input("shared-time-range", "value")
 )
 def load_shared_data(pathname, time_range):
-    """Load shared time series data for all sections."""
+    """Load shared time series data for all sections with performance limits."""
     if pathname == "/dash/insights":
         try:
-            # Use default 30 days if no time range specified
-            days_back = time_range if time_range else 30
-            df = get_time_series_data(days_back)
+            # Map time range to days with reasonable limits
+            days_map = {
+                "7d": 7,
+                "14d": 14,
+                "30d": 30,
+                "60d": 60,
+                "90d": 90
+            }
+            days_back = days_map.get(time_range, 30)
+            
+            # Limit data points based on time range to prevent memory issues
+            limit_map = {
+                "7d": 1000,
+                "14d": 2000,
+                "30d": 5000,
+                "60d": 8000,
+                "90d": 10000
+            }
+            limit = limit_map.get(time_range, 5000)
+            
+            # Load time series data with limits
+            df = get_time_series_data(days_back=days_back, limit=limit)
+            
             return {
                 'data': df.to_dict('records'),
                 'time_range': days_back,
                 'timestamp': datetime.now().isoformat()
             }
         except Exception as e:
+            print(f"Error loading shared data: {e}")
             return {'data': [], 'time_range': 30, 'timestamp': datetime.now().isoformat()}
     return {'data': [], 'time_range': 30, 'timestamp': datetime.now().isoformat()}
 
@@ -885,6 +1118,144 @@ def update_correlation_matrix(shared_data):
         df['timestamp'] = pd.to_datetime(df['timestamp'])
     
     return create_correlation_matrix(df)
+
+# Callbacks for GPT Correlation Analysis
+@callback(
+    Output("gpt-analysis-content", "children"),
+    Output("gpt-analysis-status", "children"),
+    Output("last-analysis-time", "children"),
+    Input("gpt-analysis-btn", "n_clicks"),
+    Input("shared-data-store", "data"),
+    Input("url", "pathname")
+)
+def generate_gpt_analysis(n_clicks, shared_data, pathname):
+    """Generate GPT analysis of correlation matrix."""
+    # Check if we're on the insights page
+    if pathname != '/dash/insights':
+        return "", "", ""
+    
+    # If no button click and no data, try to load cached analysis
+    if not n_clicks:
+        if not shared_data or 'data' not in shared_data:
+            return "", "", ""
+        
+        # Try to load cached analysis
+        result = correlation_service.get_analysis()
+        if result['success'] and result['status'] == 'Cached':
+                    return _format_analysis_display(result)
+    else:
+        return "", "", ""
+    
+    # Button was clicked, generate new analysis
+    if not shared_data or 'data' not in shared_data:
+        return "", "No data available for analysis", ""
+    
+    try:
+        df = pd.DataFrame(shared_data['data'])
+        if df.empty:
+            return "", "No data available for analysis", ""
+        
+        # Generate analysis using the service
+        result = correlation_service.get_analysis()
+        
+        if not result['success']:
+            return "", result['error'], ""
+        
+        return _format_analysis_display(result)
+        
+    except Exception as e:
+        return "", f"❌ Error generating analysis: {str(e)}", ""
+
+def _format_analysis_display(result):
+    """Format analysis result for display."""
+    analysis = result['analysis']
+    
+    # Get status from service result
+    status_map = {
+        'Cached': f"✅ Using cached analysis",
+        'Generated': "🔄 Generated new analysis",
+        'Rate limited': "⏰ Rate limit exceeded",
+        'No data': "📊 No data available",
+        'Generation failed': "❌ Analysis failed",
+        'Error': "❌ Analysis error"
+    }
+    status = status_map.get(result['status'], result['status'])
+    
+    # Format analysis for display
+    analysis_lines = analysis.split('\n')
+    formatted_analysis = []
+    
+    for line in analysis_lines:
+        if line.startswith('##'):
+            formatted_analysis.append(html.H4(line[3:].strip(), className="mt-3 mb-2"))
+        elif line.startswith('###'):
+            formatted_analysis.append(html.H5(line[4:].strip(), className="mt-3 mb-2"))
+        elif line.startswith('**') and line.endswith('**'):
+            formatted_analysis.append(html.Strong(line[2:-2], className="d-block mb-2"))
+        elif line.startswith('•'):
+            formatted_analysis.append(html.Li(line[2:], className="mb-1"))
+        elif line.startswith('*') and line.endswith('*'):
+            formatted_analysis.append(html.Small(line[1:-1], className="text-muted d-block mt-2"))
+        elif line.strip():
+            formatted_analysis.append(html.P(line.strip(), className="mb-2"))
+    
+    # Create analysis display
+    analysis_display = dbc.Card([
+        dbc.CardBody([
+            html.Div(formatted_analysis, className="gpt-analysis-content")
+        ])
+    ], className="border-primary")
+    
+    # Get last analysis time from service
+    cache_info = result.get('cache_info', {})
+    if cache_info.get('last_update'):
+        last_time = datetime.fromisoformat(cache_info['last_update'])
+        last_time_str = f"Last updated: {last_time.strftime('%Y-%m-%d %H:%M')}"
+    else:
+        last_time_str = "No previous analysis"
+    
+    return analysis_display, status, last_time_str
+
+@callback(
+    Output("gpt-analysis-btn", "disabled"),
+    Output("gpt-analysis-btn", "children"),
+    Input("gpt-analysis-btn", "n_clicks"),
+    Input("shared-data-store", "data")
+)
+def update_button_state(n_clicks, shared_data):
+    """Update button state based on 24-hour cache."""
+    if not shared_data or 'data' not in shared_data:
+        return True, [html.I(className="bi bi-robot me-2"), "No Data Available"]
+    
+    try:
+        # Get cache info from service
+        cache_info = correlation_service._get_cache_info()
+        
+        if cache_info.get('is_valid', False):
+            # Button should be disabled, show time remaining
+            hours_remaining = cache_info.get('hours_remaining', 0)
+            hours = int(hours_remaining)
+            minutes = int((hours_remaining - hours) * 60)
+            return True, [html.I(className="bi bi-clock me-2"), f"Available in {hours}h {minutes}m"]
+        
+        # Check rate limits
+        rate_info = correlation_service.get_rate_limit_info()
+        daily_used = rate_info.get('daily_requests_used', 0)
+        daily_limit = rate_info.get('daily_requests_limit', 10)
+        hourly_used = rate_info.get('hourly_requests_used', 0)
+        hourly_limit = rate_info.get('hourly_requests_limit', 2)
+        
+        if daily_used >= daily_limit:
+            return True, [html.I(className="bi bi-exclamation-triangle me-2"), "Daily limit reached"]
+        
+        if hourly_used >= hourly_limit:
+            return True, [html.I(className="bi bi-exclamation-triangle me-2"), "Hourly limit reached"]
+        
+        # Button is enabled
+        return False, [html.I(className="bi bi-robot me-2"), "Generate GPT Analysis"]
+        
+    except Exception:
+        return False, [html.I(className="bi bi-robot me-2"), "Generate GPT Analysis"]
 
 def register_callbacks(dash_app):
     """Register callbacks for the insights page."""
