@@ -5,6 +5,7 @@ Leverages rich metrics_snap data for comprehensive network analysis and trends.
 
 import dash
 from dash import html, dcc, Input, Output, callback, State
+from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
 import plotly.express as px
 import plotly.graph_objects as go
@@ -12,70 +13,117 @@ from plotly.subplots import make_subplots
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-from services.db import get_db
+from services.db import get_db, safe_query_execute
 from models import MetricsSnap, SubnetMeta
 from sqlalchemy import func, desc, and_, or_, text
 import json
 import os
 from services.correlation_analysis import correlation_service
 
-def get_time_series_data(days_back=30, limit=10000):
-    """Get time series data from metrics_snap table with flexible date range and limits."""
+def get_time_series_data(days_back=30, limit=5000):
+    """Get time series data from metrics_snap table with highly optimized queries and caching."""
+    # Try to get from cache first
+    from flask import current_app
+    cache = getattr(current_app, 'cache', None)
+    
+    cache_key = f'time_series_data_{days_back}_{limit}'
+    if cache:
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            return cached_result
+    
     session = get_db()
     try:
         cutoff_date = datetime.now() - timedelta(days=days_back)
         
-        # Optimized query with limits and proper indexing
-        query = session.query(MetricsSnap).filter(
-            MetricsSnap.timestamp >= cutoff_date
-        ).order_by(MetricsSnap.timestamp.desc()).limit(limit)
+        # Use raw SQL for better performance with indexes
+        from sqlalchemy import text
         
-        df = pd.read_sql(query.statement, session.bind)
+        # Optimized query that uses our indexes effectively
+        sql = text("""
+            SELECT netuid, subnet_name, category, tao_score, stake_quality,
+                   validator_util_pct, market_cap_tao, flow_24h, price_7d_change,
+                   active_validators, total_stake_tao, buy_signal, timestamp
+            FROM metrics_snap 
+            WHERE timestamp >= :cutoff_date
+            ORDER BY timestamp DESC
+            LIMIT :limit
+        """)
+        
+        df = pd.read_sql(sql, session.bind, params={
+            'cutoff_date': cutoff_date,
+            'limit': limit
+        })
         
         # Ensure timestamp is properly converted to datetime
         if 'timestamp' in df.columns:
             df['timestamp'] = pd.to_datetime(df['timestamp'])
+        
+        # Cache the result for 5 minutes
+        if cache:
+            cache.set(cache_key, df, timeout=300)
         
         return df
     finally:
         session.close()
 
 def get_network_summary_stats():
-    """Get comprehensive network summary statistics with optimized queries."""
+    """Get comprehensive network summary statistics with highly optimized queries and caching."""
+    # Try to get from cache first
+    from flask import current_app
+    cache = getattr(current_app, 'cache', None)
+    
+    if cache:
+        cached_result = cache.get('network_summary_stats')
+        if cached_result:
+            return cached_result
+    
     session = get_db()
     try:
-        # Database-agnostic query to get latest data for each subnet
+        # Use a much simpler and faster query approach
         from sqlalchemy import text
         from config import ACTIVE_DATABASE_URL
         
-        if ACTIVE_DATABASE_URL.startswith("postgresql://"):
-            # PostgreSQL-specific query using DISTINCT ON
-            latest_sql = text("""
-                SELECT DISTINCT ON (netuid) 
-                    netuid, subnet_name, category, tao_score, stake_quality,
-                    validator_util_pct, market_cap_tao, flow_24h, price_7d_change,
-                    active_validators, total_stake_tao, buy_signal, timestamp as latest_timestamp
-                FROM metrics_snap 
-                ORDER BY netuid, timestamp DESC
-                LIMIT 200
-            """)
-        else:
-            # SQLite-compatible query using window function
-            latest_sql = text("""
-                SELECT netuid, subnet_name, category, tao_score, stake_quality,
-                       validator_util_pct, market_cap_tao, flow_24h, price_7d_change,
-                       active_validators, total_stake_tao, buy_signal, timestamp as latest_timestamp
-                FROM (
-                    SELECT *, ROW_NUMBER() OVER (PARTITION BY netuid ORDER BY timestamp DESC) as rn
-                    FROM metrics_snap
-                ) ranked
-                WHERE rn = 1
-                LIMIT 200
-            """)
+        # Get latest data for each subnet using a more efficient approach
+        # This query uses the indexes we created and limits the data processed
+        latest_sql = text("""
+            SELECT netuid, subnet_name, category, tao_score, stake_quality,
+                   validator_util_pct, market_cap_tao, flow_24h, price_7d_change,
+                   active_validators, total_stake_tao, buy_signal, timestamp as latest_timestamp
+            FROM metrics_snap 
+            WHERE timestamp >= (
+                SELECT MAX(timestamp) - INTERVAL '7 days' 
+                FROM metrics_snap
+            )
+            ORDER BY netuid, timestamp DESC
+            LIMIT 1000
+        """)
         
         latest_df = pd.read_sql(latest_sql, session.bind)
         
-        # Calculate summary stats
+        # Get the latest record for each subnet (much faster than complex window functions)
+        latest_df = latest_df.loc[latest_df.groupby('netuid')['timestamp'].idxmax()]
+        
+        # Limit to top 200 subnets to prevent memory issues
+        latest_df = latest_df.head(200)
+        
+        # Get quick stats without expensive count queries
+        stats_sql = text("""
+            SELECT 
+                COUNT(DISTINCT netuid) as total_subnets,
+                COUNT(DISTINCT category) as categories,
+                MIN(timestamp) as min_date,
+                MAX(timestamp) as max_date
+            FROM metrics_snap 
+            WHERE timestamp >= (
+                SELECT MAX(timestamp) - INTERVAL '7 days' 
+                FROM metrics_snap
+            )
+        """)
+        
+        stats_result = session.execute(stats_sql).fetchone()
+        
+        # Calculate summary stats from the limited dataset
         stats = {
             'total_subnets': len(latest_df),
             'total_market_cap_tao': latest_df['market_cap_tao'].sum(),
@@ -88,11 +136,17 @@ def get_network_summary_stats():
             'total_validators': latest_df['active_validators'].sum(),
             'avg_validator_util': latest_df['validator_util_pct'].mean(),
             'categories': latest_df['category'].nunique(),
-            'data_points': session.query(MetricsSnap).count(),
-            'date_range': f"{session.query(func.min(MetricsSnap.timestamp)).scalar()} to {session.query(func.max(MetricsSnap.timestamp)).scalar()}"
+            'data_points': 'Recent data only',  # Avoid expensive count
+            'date_range': f"{stats_result.min_date} to {stats_result.max_date}" if stats_result else "Recent data"
         }
         
-        return stats, latest_df
+        result = (stats, latest_df)
+        
+        # Cache the result for 5 minutes
+        if cache:
+            cache.set('network_summary_stats', result, timeout=300)
+        
+        return result
     finally:
         session.close()
 
@@ -876,16 +930,17 @@ def layout():
 )
 def load_overview_data(pathname):
     """Load network overview data when page loads."""
-    if pathname == "/dash/insights":
-        try:
-            stats, latest_df = get_network_summary_stats()
-            return {
-                'stats': stats,
-                'categories': sorted(latest_df['category'].unique().tolist()) if not latest_df.empty else []
-            }
-        except Exception as e:
-            return {'stats': {}, 'categories': []}
-    return {'stats': {}, 'categories': []}
+    if pathname != "/dash/insights":
+        raise dash.PreventUpdate
+    
+    try:
+        stats, latest_df = get_network_summary_stats()
+        return {
+            'stats': stats,
+            'categories': sorted(latest_df['category'].unique().tolist()) if not latest_df.empty else []
+        }
+    except Exception as e:
+        return {'stats': {}, 'categories': []}
 
 @callback(
     Output("total-subnets", "children"),
@@ -936,40 +991,50 @@ def update_category_filters(data):
 )
 def load_shared_data(pathname, time_range):
     """Load shared time series data for all sections with performance limits."""
-    if pathname == "/dash/insights":
-        try:
-            # Map time range to days with reasonable limits
-            days_map = {
-                "7d": 7,
-                "14d": 14,
-                "30d": 30,
-                "60d": 60,
-                "90d": 90
-            }
-            days_back = days_map.get(time_range, 30)
-            
-            # Limit data points based on time range to prevent memory issues
-            limit_map = {
-                "7d": 1000,
-                "14d": 2000,
-                "30d": 5000,
-                "60d": 8000,
-                "90d": 10000
-            }
-            limit = limit_map.get(time_range, 5000)
-            
-            # Load time series data with limits
-            df = get_time_series_data(days_back=days_back, limit=limit)
-            
-            return {
-                'data': df.to_dict('records'),
-                'time_range': days_back,
-                'timestamp': datetime.now().isoformat()
-            }
-        except Exception as e:
-            print(f"Error loading shared data: {e}")
-            return {'data': [], 'time_range': 30, 'timestamp': datetime.now().isoformat()}
-    return {'data': [], 'time_range': 30, 'timestamp': datetime.now().isoformat()}
+        if pathname != "/dash/insights":
+        raise PreventUpdate
+    
+    try:
+        # Map time range to days with reasonable limits
+        days_map = {
+            "7d": 7,
+            "14d": 14,
+            "30d": 30,
+            "60d": 60,
+            "90d": 90
+        }
+        days_back = days_map.get(time_range, 30)
+        
+        # Limit data points based on time range to prevent memory issues
+        limit_map = {
+            "7d": 1000,
+            "14d": 2000,
+            "30d": 5000,
+            "60d": 8000,
+            "90d": 10000
+        }
+        limit = limit_map.get(time_range, 5000)
+        
+        # Load time series data with limits
+        df = get_time_series_data(days_back=days_back, limit=limit)
+        
+        # Only keep essential columns to reduce memory usage
+        essential_columns = ['netuid', 'subnet_name', 'category', 'tao_score', 'stake_quality',
+                           'validator_util_pct', 'market_cap_tao', 'flow_24h', 'price_7d_change',
+                           'active_validators', 'total_stake_tao', 'buy_signal', 'timestamp']
+        
+        # Filter to only essential columns that exist in the DataFrame
+        available_columns = [col for col in essential_columns if col in df.columns]
+        df_trimmed = df[available_columns]
+        
+        return {
+            'data': df_trimmed.to_dict('records'),
+            'time_range': days_back,
+            'timestamp': datetime.now().isoformat()
+        }
+    except Exception as e:
+        print(f"Error loading shared data: {e}")
+        return {'data': [], 'time_range': 30, 'timestamp': datetime.now().isoformat()}
 
 # Callbacks for SECTION 1: Custom Trend Analysis
 @callback(

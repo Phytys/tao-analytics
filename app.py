@@ -9,6 +9,7 @@ from datetime import datetime
 from flask_talisman import Talisman
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_caching import Cache
 import re
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,21 @@ def create_app():
     server = Flask(__name__)
     server.secret_key = os.getenv('SECRET_KEY', 'tao-analytics-secret-key-2024')
     server.config["JSONIFY_PRETTYPRINT_REGULAR"] = False
+    
+    # Configure Redis caching
+    cache_config = {
+        'CACHE_TYPE': 'RedisCache',
+        'CACHE_REDIS_URL': os.getenv('REDIS_URL'),
+        'CACHE_DEFAULT_TIMEOUT': 300,  # 5 minutes default
+        'CACHE_KEY_PREFIX': 'tao_analytics_'
+    }
+    
+    # Initialize cache
+    cache = Cache()
+    cache.init_app(server, config=cache_config)
+    
+    # Make cache available globally
+    server.cache = cache
 
     # Security headers
     Talisman(server, 
