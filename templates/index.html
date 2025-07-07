@@ -165,8 +165,12 @@
                                 <div class="subnet-item">
                                     <div class="subnet-name">{{ subnet.name or "Subnet " + subnet.uid|string }}</div>
                                     <div class="subnet-metrics">
+                                        {% if subnet['TAO-Score'] is defined %}
                                         <span class="metric">TAO-Score: {{ "%.1f"|format(subnet['TAO-Score']) }}</span>
-                                        <span class="metric">Market Cap: {{ "{:,.0f}".format(subnet.market_cap) }} TAO</span>
+                                        {% endif %}
+                                        {% if subnet['Market Cap'] is defined %}
+                                        <span class="metric">Market Cap: {{ "{:,.0f}".format(subnet['Market Cap']) }} TAO</span>
+                                        {% endif %}
                                     </div>
                                 </div>
                                 {% endfor %}
@@ -191,7 +195,12 @@
                                 <div class="subnet-item">
                                     <div class="subnet-name">{{ subnet.name or "Subnet " + subnet.uid|string }}</div>
                                     <div class="subnet-metrics">
-                                        <span class="metric">Stake Quality: {{ "%.1f"|format(subnet.stake_quality) }}</span>
+                                        {% if subnet['Stake Quality'] is defined %}
+                                        <span class="metric">Stake Quality: {{ "%.1f"|format(subnet['Stake Quality']) }}</span>
+                                        {% endif %}
+                                        {% if subnet['Market Cap'] is defined %}
+                                        <span class="metric">Market Cap: {{ "{:,.0f}".format(subnet['Market Cap']) }}</span>
+                                        {% endif %}
                                     </div>
                                 </div>
                                 {% endfor %}
@@ -216,8 +225,12 @@
                                 <div class="subnet-item">
                                     <div class="subnet-name">{{ subnet.name or "Subnet " + subnet.uid|string }}</div>
                                     <div class="subnet-metrics">
+                                        {% if subnet['TAO-Score'] is defined %}
                                         <span class="metric">TAO-Score: {{ "%.1f"|format(subnet['TAO-Score']) }}</span>
-                                        <span class="metric">Stake Quality: {{ "%.1f"|format(subnet.stake_quality) }}</span>
+                                        {% endif %}
+                                        {% if subnet['Stake Quality'] is defined %}
+                                        <span class="metric">Stake Quality: {{ "%.1f"|format(subnet['Stake Quality']) }}</span>
+                                        {% endif %}
                                     </div>
                                 </div>
                                 {% endfor %}

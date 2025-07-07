@@ -109,11 +109,14 @@ def create_app():
                 import json
                 
                 # Try to find JSON with more flexible pattern
+                # Look for complete JSON object at the end of the analysis
                 json_patterns = [
-                    r'\{[^{}]*"undervalued"[^{}]*\}',
-                    r'\{[^{}]*"undervalued"[^{}]*"scam_flags"[^{}]*"healthy"[^{}]*\}',
-                    r'\{[^{}]*"undervalued"[^{}]*"scam_flags"[^{}]*\}',
-                    r'\{[^{}]*"undervalued"[^{}]*"healthy"[^{}]*\}'
+                    # Look for JSON at the end of the text (most common case)
+                    r'(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})\s*$',
+                    # Look for JSON with the specific keys we expect
+                    r'(\{[^{}]*"undervalued"[^{}]*(?:\{[^{}]*\}[^{}]*)*"scam_flags"[^{}]*(?:\{[^{}]*\}[^{}]*)*"healthy"[^{}]*(?:\{[^{}]*\}[^{}]*)*\})',
+                    # Fallback: look for any JSON object with our expected keys
+                    r'(\{[^{}]*"undervalued"[^{}]*\})',
                 ]
                 
                 gpt_insights = None
@@ -121,10 +124,13 @@ def create_app():
                     json_match = re.search(pattern, analysis_text, re.DOTALL)
                     if json_match:
                         try:
-                            gpt_insights = json.loads(json_match.group())
+                            # Use the first capture group if it exists, otherwise use the whole match
+                            json_str = json_match.group(1) if json_match.groups() else json_match.group()
+                            gpt_insights = json.loads(json_str)
                             logger.info(f"Successfully extracted GPT insights from analysis")
                             break
-                        except json.JSONDecodeError:
+                        except json.JSONDecodeError as e:
+                            logger.debug(f"JSON decode error with pattern {pattern}: {e}")
                             continue
                 
                 if not gpt_insights:

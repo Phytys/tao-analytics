@@ -95,18 +95,37 @@ def get_network_summary_stats():
         
         # Get latest data for each subnet using a more efficient approach
         # This query uses the indexes we created and limits the data processed
-        latest_sql = text("""
-            SELECT netuid, subnet_name, category, tao_score, stake_quality,
-                   validator_util_pct, market_cap_tao, flow_24h, price_7d_change,
-                   active_validators, total_stake_tao, buy_signal, timestamp as latest_timestamp
-            FROM metrics_snap 
-            WHERE timestamp >= (
-                SELECT MAX(timestamp) - INTERVAL '7 days'
-                FROM metrics_snap
-            )
-            ORDER BY netuid, timestamp DESC
-            LIMIT 1000
-        """)
+        # Use database-agnostic date arithmetic
+        from config import ACTIVE_DATABASE_URL
+        
+        if 'postgresql' in ACTIVE_DATABASE_URL:
+            # PostgreSQL syntax
+            latest_sql = text("""
+                SELECT netuid, subnet_name, category, tao_score, stake_quality,
+                       validator_util_pct, market_cap_tao, flow_24h, price_7d_change,
+                       active_validators, total_stake_tao, buy_signal, timestamp as latest_timestamp
+                FROM metrics_snap 
+                WHERE timestamp >= (
+                    SELECT MAX(timestamp) - INTERVAL '7 days'
+                    FROM metrics_snap
+                )
+                ORDER BY netuid, timestamp DESC
+                LIMIT 1000
+            """)
+        else:
+            # SQLite syntax
+            latest_sql = text("""
+                SELECT netuid, subnet_name, category, tao_score, stake_quality,
+                       validator_util_pct, market_cap_tao, flow_24h, price_7d_change,
+                       active_validators, total_stake_tao, buy_signal, timestamp as latest_timestamp
+                FROM metrics_snap 
+                WHERE timestamp >= (
+                    SELECT datetime(MAX(timestamp), '-7 days')
+                    FROM metrics_snap
+                )
+                ORDER BY netuid, timestamp DESC
+                LIMIT 1000
+            """)
         
         latest_df = pd.read_sql(latest_sql, session.bind)
         
@@ -121,18 +140,34 @@ def get_network_summary_stats():
         latest_df = latest_df.head(200)
         
         # Get quick stats without expensive count queries
-        stats_sql = text("""
-            SELECT 
-                COUNT(DISTINCT netuid) as total_subnets,
-                COUNT(DISTINCT category) as categories,
-                MIN(timestamp) as min_date,
-                MAX(timestamp) as max_date
-            FROM metrics_snap 
-            WHERE timestamp >= (
-                SELECT MAX(timestamp) - INTERVAL '7 days'
-                FROM metrics_snap
-            )
-        """)
+        if 'postgresql' in ACTIVE_DATABASE_URL:
+            # PostgreSQL syntax
+            stats_sql = text("""
+                SELECT 
+                    COUNT(DISTINCT netuid) as total_subnets,
+                    COUNT(DISTINCT category) as categories,
+                    MIN(timestamp) as min_date,
+                    MAX(timestamp) as max_date
+                FROM metrics_snap 
+                WHERE timestamp >= (
+                    SELECT MAX(timestamp) - INTERVAL '7 days'
+                    FROM metrics_snap
+                )
+            """)
+        else:
+            # SQLite syntax
+            stats_sql = text("""
+                SELECT 
+                    COUNT(DISTINCT netuid) as total_subnets,
+                    COUNT(DISTINCT category) as categories,
+                    MIN(timestamp) as min_date,
+                    MAX(timestamp) as max_date
+                FROM metrics_snap 
+                WHERE timestamp >= (
+                    SELECT datetime(MAX(timestamp), '-7 days')
+                    FROM metrics_snap
+                )
+            """)
         
         stats_result = session.execute(stats_sql).fetchone()
         
