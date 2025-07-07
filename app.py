@@ -132,24 +132,8 @@ def create_app():
                     # For debugging, let's see what the analysis text looks like
                     logger.debug(f"Analysis text preview: {analysis_text[:500]}...")
                     
-                    # Fallback: provide sample data for testing
-                    gpt_insights = {
-                        "undervalued": [
-                            {"uid": 59, "name": "Agent Arena by Masa", "TAO-Score": 73.4, "market_cap": 3644},
-                            {"uid": 46, "name": "Neural3D", "TAO-Score": 71.0, "market_cap": 4159},
-                            {"uid": 23, "name": "Nuance", "TAO-Score": 71.9, "market_cap": 4484}
-                        ],
-                        "scam_flags": [
-                            {"uid": 101, "stake_quality": 1.2},
-                            {"uid": 113, "name": "taonado", "stake_quality": 1.6},
-                            {"uid": 71, "stake_quality": 11.5}
-                        ],
-                        "healthy": [
-                            {"uid": 11, "name": "Dippy", "TAO-Score": 78.5, "stake_quality": 78.3},
-                            {"uid": 50, "name": "Synth", "TAO-Score": 75.7, "stake_quality": 75.7},
-                            {"uid": 8, "name": "Proprietary Trading Network", "TAO-Score": 74.0, "stake_quality": 81.4}
-                        ]
-                    }
+                    # No fallback data - show missing data instead
+                    gpt_insights = None
             else:
                 logger.warning(f"GPT analysis not available: {gpt_result.get('status', 'unknown')}")
                 gpt_insights = None

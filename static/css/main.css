@@ -1713,6 +1713,11 @@ html {
     border-left: 4px solid #007bff;
 }
 
+.insight-card.missing-data {
+    border-left: 4px solid #6b7280;
+    background: #f9fafb;
+}
+
 .card-header {
     display: flex;
     align-items: center;

@@ -243,6 +243,32 @@
                     </div>
                 </div>
             </div>
+            {% else %}
+            <div class="gpt-insights-section">
+                <h3 class="insights-title">
+                    🤖 AI-Powered Subnet Insights
+                    <span class="tooltip-icon" title="⚠️ DISCLAIMER: This analysis is for data transparency and educational purposes only. It is NOT financial advice. Always conduct your own research and due diligence before making any investment decisions.">ⓘ</span>
+                </h3>
+                <div class="insights-cards">
+                    <div class="insight-card missing-data">
+                        <div class="card-header">
+                            <div class="card-icon">📊</div>
+                            <h4>Analysis Unavailable</h4>
+                        </div>
+                        <div class="card-content">
+                            <div class="no-data">GPT analysis data is currently unavailable. Please check back later or visit the Insights page for the latest analysis.</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="insights-footer">
+                    <a href="/dash/insights" class="insights-link">
+                        <span>View Full Analysis</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                    </a>
+                </div>
+            </div>
             {% endif %}
             
             <div class="cta-buttons">
