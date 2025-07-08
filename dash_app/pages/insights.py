@@ -79,7 +79,7 @@ def get_time_series_data(days_back=30, limit=5000):
         session.close()
 
 def get_network_summary_stats():
-    """Get comprehensive network summary statistics with highly optimized queries and caching."""
+    """Get comprehensive network summary statistics using the same data source as other pages."""
     cache_key = 'network_summary_stats'
     
     # Try to get from cache first
@@ -87,115 +87,40 @@ def get_network_summary_stats():
     if cached_result is not None:
         return cached_result
     
-    session = get_db()
     try:
-        # Use a much simpler and faster query approach
-        from sqlalchemy import text
-        from config import ACTIVE_DATABASE_URL
+        # Use the same data source as the screener page for consistency
+        from services.db import load_screener_frame
         
-        # Get latest data for each subnet using a more efficient approach
-        # This query uses the indexes we created and limits the data processed
-        # Use database-agnostic date arithmetic
-        from config import ACTIVE_DATABASE_URL
+        # Get the same data that the screener page uses
+        df = load_screener_frame()
         
-        if 'postgresql' in ACTIVE_DATABASE_URL:
-            # PostgreSQL syntax
-            latest_sql = text("""
-                SELECT netuid, subnet_name, category, tao_score, stake_quality,
-                       validator_util_pct, market_cap_tao, flow_24h, price_7d_change,
-                       active_validators, total_stake_tao, buy_signal, timestamp as latest_timestamp
-                FROM metrics_snap 
-                WHERE timestamp >= (
-                    SELECT MAX(timestamp) - INTERVAL '7 days'
-                    FROM metrics_snap
-                )
-                ORDER BY netuid, timestamp DESC
-                LIMIT 1000
-            """)
-        else:
-            # SQLite syntax
-            latest_sql = text("""
-                SELECT netuid, subnet_name, category, tao_score, stake_quality,
-                       validator_util_pct, market_cap_tao, flow_24h, price_7d_change,
-                       active_validators, total_stake_tao, buy_signal, timestamp as latest_timestamp
-                FROM metrics_snap 
-                WHERE timestamp >= (
-                    SELECT datetime(MAX(timestamp), '-7 days')
-                    FROM metrics_snap
-                )
-                ORDER BY netuid, timestamp DESC
-                LIMIT 1000
-            """)
-        
-        latest_df = pd.read_sql(latest_sql, session.bind)
-        
-        # Ensure timestamp is properly converted to datetime
-        if 'latest_timestamp' in latest_df.columns:
-            latest_df['latest_timestamp'] = pd.to_datetime(latest_df['latest_timestamp'])
-        
-        # Get the latest record for each subnet (much faster than complex window functions)
-        latest_df = latest_df.loc[latest_df.groupby('netuid')['latest_timestamp'].idxmax()]
-        
-        # Limit to top 200 subnets to prevent memory issues
-        latest_df = latest_df.head(200)
-        
-        # Get quick stats without expensive count queries
-        if 'postgresql' in ACTIVE_DATABASE_URL:
-            # PostgreSQL syntax
-            stats_sql = text("""
-                SELECT 
-                    COUNT(DISTINCT netuid) as total_subnets,
-                    COUNT(DISTINCT category) as categories,
-                    MIN(timestamp) as min_date,
-                    MAX(timestamp) as max_date
-                FROM metrics_snap 
-                WHERE timestamp >= (
-                    SELECT MAX(timestamp) - INTERVAL '7 days'
-                    FROM metrics_snap
-                )
-            """)
-        else:
-            # SQLite syntax
-            stats_sql = text("""
-                SELECT 
-                    COUNT(DISTINCT netuid) as total_subnets,
-                    COUNT(DISTINCT category) as categories,
-                    MIN(timestamp) as min_date,
-                    MAX(timestamp) as max_date
-                FROM metrics_snap 
-                WHERE timestamp >= (
-                    SELECT datetime(MAX(timestamp), '-7 days')
-                    FROM metrics_snap
-                )
-            """)
-        
-        stats_result = session.execute(stats_sql).fetchone()
-        
-        # Calculate summary stats from the limited dataset
+        # Calculate summary stats from the complete dataset
         stats = {
-            'total_subnets': len(latest_df),
-            'total_market_cap_tao': latest_df['market_cap_tao'].sum(),
-            'total_stake_tao': latest_df['total_stake_tao'].sum(),
-            'avg_tao_score': latest_df['tao_score'].mean(),
-            'avg_stake_quality': latest_df['stake_quality'].mean(),
-            'high_performers': len(latest_df[latest_df['tao_score'] >= 70]),
-            'improving_subnets': len(latest_df[latest_df['price_7d_change'] > 0]),
-            'strong_buy_signals': len(latest_df[latest_df['buy_signal'] >= 4]),
-            'total_validators': latest_df['active_validators'].sum(),
-            'avg_validator_util': latest_df['validator_util_pct'].mean(),
-            'categories': latest_df['category'].nunique(),
-            'data_points': 'Recent data only',  # Avoid expensive count
-            'date_range': f"{stats_result.min_date} to {stats_result.max_date}" if stats_result else "Recent data"
+            'total_subnets': len(df),
+            'total_market_cap_tao': df['market_cap_tao'].sum() if 'market_cap_tao' in df.columns else 0,
+            'total_stake_tao': df['total_stake_tao'].sum() if 'total_stake_tao' in df.columns else 0,
+            'avg_tao_score': df['tao_score'].mean() if 'tao_score' in df.columns else 0,
+            'avg_stake_quality': df['stake_quality'].mean() if 'stake_quality' in df.columns else 0,
+            'high_performers': len(df[df['tao_score'] >= 70]) if 'tao_score' in df.columns else 0,
+            'improving_subnets': len(df[df['flow_24h'] > 0]) if 'flow_24h' in df.columns else 0,
+            'strong_buy_signals': len(df[df['buy_signal'] >= 4]) if 'buy_signal' in df.columns else 0,
+            'total_validators': df['active_validators'].sum() if 'active_validators' in df.columns else 0,
+            'avg_validator_util': df['validator_util_pct'].mean() if 'validator_util_pct' in df.columns else 0,
+            'categories': df['primary_category'].nunique() if 'primary_category' in df.columns else 0,
+            'data_points': 'All active subnets',
+            'date_range': 'Current data'
         }
         
-        result = (stats, latest_df)
+        result = (stats, df)
         
         # Cache the result for 5 minutes
         cache_set(cache_key, result, timeout=300)
         
         return result
-    finally:
-        session.close()
+    except Exception as e:
+        print(f"Error in get_network_summary_stats: {e}")
+        # Return empty stats if there's an error
+        return ({'total_subnets': 0, 'total_market_cap_tao': 0, 'avg_tao_score': 0, 'high_performers': 0, 'strong_buy_signals': 0, 'categories': 0, 'data_points': 'Error loading data', 'date_range': 'N/A'}, pd.DataFrame())
 
 def create_metric_trend_chart(df, metric, title, color='#3e6ae1', aggregation='mean'):
     """Create a trend chart for any metric with flexible aggregation."""
@@ -865,7 +790,7 @@ def load_overview_data(pathname):
         
         result = {
             'stats': stats,
-            'categories': sorted(latest_df['category'].unique().tolist()) if latest_df is not None and not latest_df.empty else []
+            'categories': sorted(latest_df['primary_category'].unique().tolist()) if latest_df is not None and not latest_df.empty and 'primary_category' in latest_df.columns else []
         }
         return result
     except Exception as e:
