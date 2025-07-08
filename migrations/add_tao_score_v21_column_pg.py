@@ -5,8 +5,9 @@ Migration: Add tao_score_v21 column to metrics_snap table (Postgres/Heroku compa
 import os
 from sqlalchemy import create_engine, text
 
-# Read DB URL from environment variable
 DB_URL = os.environ.get("DATABASE_URL")
+if DB_URL and DB_URL.startswith("postgres://"):
+    DB_URL = DB_URL.replace("postgres://", "postgresql://", 1)
 print(f"Using DB_URL: {DB_URL}")
 
 def migrate():
