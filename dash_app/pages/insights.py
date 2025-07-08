@@ -51,7 +51,7 @@ def get_time_series_data(days_back=30, limit=5000):
             # Query using the same TAO score approach as load_screener_frame
             sql = text("""
                 SELECT 
-                    netuid, subnet_name, primary_category as category, timestamp,
+                    netuid, subnet_name, category, timestamp,
                     -- Core performance metrics (use tao_score_v21 as tao_score)
                     COALESCE(tao_score_v21, tao_score, 0) as tao_score, 
                     stake_quality, buy_signal, emission_roi,
