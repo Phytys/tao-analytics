@@ -157,21 +157,27 @@
                     <div class="insight-card undervalued">
                         <div class="card-header">
                             <div class="card-icon">💎</div>
-                            <h4>Undervalued Opportunities</h4>
+                            <h4>Undervalued</h4>
                         </div>
                         <div class="card-content">
                             {% if gpt_insights.undervalued %}
                                 {% for subnet in gpt_insights.undervalued[:3] %}
                                 <div class="subnet-item">
-                                    <div class="subnet-name">{{ subnet.name or "Subnet " + subnet.uid|string }}</div>
-                                    <div class="subnet-metrics">
-                                        {% if subnet['TAO-Score'] is defined %}
-                                        <span class="metric">TAO-Score: {{ "%.1f"|format(subnet['TAO-Score']) }}</span>
-                                        {% endif %}
-                                        {% if subnet['Market Cap'] is defined %}
-                                        <span class="metric">Market Cap: {{ "{:,.0f}".format(subnet['Market Cap']) }} TAO</span>
-                                        {% endif %}
-                                    </div>
+                                    {% if subnet is string %}
+                                        <div class="subnet-name">{{ subnet }}</div>
+                                    {% elif subnet.name is defined %}
+                                        <div class="subnet-name">{{ subnet.name }}</div>
+                                        <div class="subnet-metrics">
+                                            {% if subnet['TAO-Score'] is defined %}
+                                            <span class="metric">TAO-Score: {{ "%.1f"|format(subnet['TAO-Score']) }}</span>
+                                            {% endif %}
+                                            {% if subnet['Market Cap'] is defined %}
+                                            <span class="metric">Market Cap: {{ "{:,.0f}".format(subnet['Market Cap']) }} TAO</span>
+                                            {% endif %}
+                                        </div>
+                                    {% else %}
+                                        <div class="subnet-name">{{ subnet }}</div>
+                                    {% endif %}
                                 </div>
                                 {% endfor %}
                                 {% if gpt_insights.undervalued|length > 3 %}
@@ -193,15 +199,21 @@
                             {% if gpt_insights.scam_flags %}
                                 {% for subnet in gpt_insights.scam_flags[:3] %}
                                 <div class="subnet-item">
-                                    <div class="subnet-name">{{ subnet.name or "Subnet " + subnet.uid|string }}</div>
-                                    <div class="subnet-metrics">
-                                        {% if subnet['Stake Quality'] is defined %}
-                                        <span class="metric">Stake Quality: {{ "%.1f"|format(subnet['Stake Quality']) }}</span>
-                                        {% endif %}
-                                        {% if subnet['Market Cap'] is defined %}
-                                        <span class="metric">Market Cap: {{ "{:,.0f}".format(subnet['Market Cap']) }}</span>
-                                        {% endif %}
-                                    </div>
+                                    {% if subnet is string %}
+                                        <div class="subnet-name">{{ subnet }}</div>
+                                    {% elif subnet.name is defined %}
+                                        <div class="subnet-name">{{ subnet.name }}</div>
+                                        <div class="subnet-metrics">
+                                            {% if subnet['Stake Quality'] is defined %}
+                                            <span class="metric">Stake Quality: {{ "%.1f"|format(subnet['Stake Quality']) }}</span>
+                                            {% endif %}
+                                            {% if subnet['Market Cap'] is defined %}
+                                            <span class="metric">Market Cap: {{ "{:,.0f}".format(subnet['Market Cap']) }}</span>
+                                            {% endif %}
+                                        </div>
+                                    {% else %}
+                                        <div class="subnet-name">{{ subnet }}</div>
+                                    {% endif %}
                                 </div>
                                 {% endfor %}
                                 {% if gpt_insights.scam_flags|length > 3 %}
@@ -217,21 +229,27 @@
                     <div class="insight-card healthy">
                         <div class="card-header">
                             <div class="card-icon">🏆</div>
-                            <h4>Top Performers</h4>
+                            <h4>Healthy Subnets</h4>
                         </div>
                         <div class="card-content">
                             {% if gpt_insights.healthy %}
                                 {% for subnet in gpt_insights.healthy[:3] %}
                                 <div class="subnet-item">
-                                    <div class="subnet-name">{{ subnet.name or "Subnet " + subnet.uid|string }}</div>
-                                    <div class="subnet-metrics">
-                                        {% if subnet['TAO-Score'] is defined %}
-                                        <span class="metric">TAO-Score: {{ "%.1f"|format(subnet['TAO-Score']) }}</span>
-                                        {% endif %}
-                                        {% if subnet['Stake Quality'] is defined %}
-                                        <span class="metric">Stake Quality: {{ "%.1f"|format(subnet['Stake Quality']) }}</span>
-                                        {% endif %}
-                                    </div>
+                                    {% if subnet is string %}
+                                        <div class="subnet-name">{{ subnet }}</div>
+                                    {% elif subnet.name is defined %}
+                                        <div class="subnet-name">{{ subnet.name }}</div>
+                                        <div class="subnet-metrics">
+                                            {% if subnet['TAO-Score'] is defined %}
+                                            <span class="metric">TAO-Score: {{ "%.1f"|format(subnet['TAO-Score']) }}</span>
+                                            {% endif %}
+                                            {% if subnet['Stake Quality'] is defined %}
+                                            <span class="metric">Stake Quality: {{ "%.1f"|format(subnet['Stake Quality']) }}</span>
+                                            {% endif %}
+                                        </div>
+                                    {% else %}
+                                        <div class="subnet-name">{{ subnet }}</div>
+                                    {% endif %}
                                 </div>
                                 {% endfor %}
                                 {% if gpt_insights.healthy|length > 3 %}
@@ -245,7 +263,7 @@
                 </div>
                 
                 <div class="insights-footer">
-                    <a href="/dash/insights" class="insights-link">
+                    <a href="/dash/correlation" class="insights-link">
                         <span>View Full Analysis</span>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M5 12h14M12 5l7 7-7 7"/>
@@ -274,7 +292,7 @@
                     </div>
                 </div>
                 <div class="insights-footer">
-                    <a href="/dash/insights" class="insights-link">
+                    <a href="/dash/correlation" class="insights-link">
                         <span>View Full Analysis</span>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M5 12h14M12 5l7 7-7 7"/>

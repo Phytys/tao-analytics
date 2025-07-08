@@ -146,6 +146,7 @@ def create_dash(server):
                     html.A("Explorer", href="/dash/explorer", className="nav-link"),
                     html.A("Screener", href="/dash/screener", className="nav-link"),
                     html.A("Insights", href="/dash/insights", className="nav-link"),
+                    html.A("Correlation", href="/dash/correlation", className="nav-link"),
                     html.A("About", href="/about", className="nav-link", id="about-nav-link"),
                     html.A("System Info", href="/dash/system-info", className="nav-link", id="system-info-nav-link"),
                     html.A("Back to Home", href="/", className="nav-link")
@@ -167,10 +168,12 @@ def create_dash(server):
     from dash_app.pages.explorer import register_callbacks as register_explorer_callbacks
     from dash_app.pages.system_info import register_callbacks as register_system_info_callbacks
     from dash_app.pages.subnet_detail import register_callbacks as register_subnet_detail_callbacks
+    from dash_app.pages.correlation import register_callbacks as register_correlation_callbacks
     
     register_explorer_callbacks(app)
     register_system_info_callbacks(app)
     register_subnet_detail_callbacks(app)
+    register_correlation_callbacks(app)
     
     # Mobile menu toggle callback
     @app.callback(
@@ -227,6 +230,10 @@ def create_dash(server):
         
         if pathname == "/dash/insights":
             return insights_layout()
+        
+        if pathname == "/dash/correlation":
+            from dash_app.pages.correlation import layout
+            return layout()
         
         else:
             return html.Div([

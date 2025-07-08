@@ -18,7 +18,7 @@ from models import MetricsSnap, SubnetMeta
 from sqlalchemy import func, desc, and_, or_, text
 import json
 import os
-from services.correlation_analysis import correlation_service
+
 from services.cache_utils import cache_get, cache_set
 
 def get_time_series_data(days_back=30, limit=5000):
@@ -366,100 +366,7 @@ def create_improvement_tracker(df, days_back=30):
     
     return fig
 
-def create_correlation_matrix(df):
-    """Create correlation matrix for comprehensive metrics analysis."""
-    if df.empty:
-        return go.Figure().add_annotation(
-            text="No data available", 
-            xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False
-        )
-    
-    # Get latest data for each subnet
-    latest = df.loc[df.groupby('netuid')['timestamp'].idxmax()]
-    
-    # Enhanced numeric columns for correlation analysis
-    # Core performance metrics
-    core_metrics = ['tao_score', 'stake_quality', 'buy_signal', 'emission_roi']
-    
-    # Market dynamics
-    market_metrics = ['market_cap_tao', 'price_7d_change', 'price_1d_change', 'flow_24h', 
-                     'buy_sell_ratio', 'total_volume_tao_1d', 'fdv_tao']
-    
-    # Network health & activity
-    network_metrics = ['active_validators', 'validator_util_pct', 'consensus_alignment', 
-                      'active_stake_ratio', 'uid_count', 'max_validators']
-    
-    # Stake distribution & quality
-    stake_metrics = ['total_stake_tao', 'stake_hhi', 'gini_coeff_top_100', 'hhi']
-    
-    # Token flow & momentum
-    flow_metrics = ['reserve_momentum', 'tao_in', 'alpha_circ', 'alpha_prop', 'root_prop']
-    
-    # Performance & ranking
-    performance_metrics = ['stake_quality_rank_pct', 'momentum_rank_pct', 
-                          'realized_pnl_tao', 'unrealized_pnl_tao']
-    
-    # Combine all metric categories
-    all_metrics = (core_metrics + market_metrics + network_metrics + 
-                  stake_metrics + flow_metrics + performance_metrics)
-    
-    # Filter to columns that exist in the data
-    available_cols = [col for col in all_metrics if col in latest.columns]
-    
-    if len(available_cols) < 2:
-        return go.Figure().add_annotation(
-            text="Insufficient data for correlation analysis", 
-            xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False
-        )
-    
-    # Calculate correlation matrix
-    corr_matrix = latest[available_cols].corr()
-    
-    # Create heatmap with enhanced styling
-    fig = go.Figure(data=go.Heatmap(
-        z=corr_matrix.values,
-        x=corr_matrix.columns,
-        y=corr_matrix.columns,
-        colorscale='RdBu',
-        zmid=0,
-        zmin=-1,
-        zmax=1,
-        hovertemplate='<b>%{y} vs %{x}</b><br>Correlation: %{z:.3f}<extra></extra>',
-        text=corr_matrix.values.round(3),
-        texttemplate="%{text}",
-        textfont={"size": 10},
-        showscale=True
-    ))
-    
-    fig.update_layout(
-        title={
-            'text': "📊 Comprehensive Metric Correlation Matrix",
-            'x': 0.5,
-            'xanchor': 'center',
-            'font': {'size': 18, 'color': '#2c3e50'}
-        },
-        height=700,
-        xaxis_title="Metrics",
-        yaxis_title="Metrics",
-        margin=dict(l=50, r=50, t=80, b=50),
-        font=dict(size=10),
-        plot_bgcolor='white',
-        paper_bgcolor='white',
-        autosize=True
-    )
-    
-    # Update axes for better readability
-    fig.update_xaxes(
-        tickangle=45,
-        tickfont=dict(size=9),
-        showgrid=False
-    )
-    fig.update_yaxes(
-        tickfont=dict(size=9),
-        showgrid=False
-    )
-    
-    return fig
+
 
 
 
@@ -518,7 +425,9 @@ def layout():
                 html.P([
                     "Comprehensive time series analytics leveraging our rich metrics database. ",
                     "Track network trends, subnet performance, and discover investment opportunities ",
-                    "with interactive charts and dynamic filtering."
+                    "with interactive charts and dynamic filtering. ",
+                    html.A("Correlation analysis and GPT insights", href="/dash/correlation", className="text-primary"),
+                    " are now available on a dedicated page."
                 ], className="text-muted mb-0")
             ])
         ], className="mb-4"),
@@ -790,86 +699,7 @@ def layout():
             ])
         ], className="mb-4"),
         
-        # SECTION 6: Correlation Analysis with GPT Insights
-        dbc.Card([
-            dbc.CardHeader([
-                html.H4("🔗 Metric Correlations", className="mb-0"),
-                html.I(className="bi bi-diagram-3 ms-2", id="correlation-tooltip")
-            ]),
-            dbc.CardBody([
-                html.P("Correlation matrix showing relationships between different metrics:", className="text-muted mb-3"),
-                dcc.Graph(id="correlation-matrix", config={'displayModeBar': False}),
-                
-                # GPT Analysis Section
-                html.Hr(className="my-4"),
-                html.H5([
-                    "🤖 GPT-4o Correlation Analysis",
-                    html.I(
-                        className="bi bi-info-circle ms-2",
-                        id="gpt-analysis-tooltip",
-                        style={"cursor": "pointer"}
-                    )
-                ], className="mb-3"),
-                html.P([
-                    "Get AI-powered insights on finding undervalued subnets, detecting scams, and identifying healthy networks. ",
-                    "Analysis is cached for 24 hours to optimize performance."
-                ], className="text-muted mb-3"),
-                
-                # Tooltip for GPT Analysis
-                dbc.Tooltip(
-                    """
-                    **Statistical Outlier Detection**: Subnets listed as "scam flags" are statistical outliers – e.g., 
-                    exceptionally high market-cap vs TAO-Score, or extremely low stake-quality.
-                    
-                    ⚠️ **Important**: A flag ≠ scam. Large, capital-intensive projects (like Chutes) can surface here 
-                    simply because they sit in the top 1% of market-caps. Use this list for deeper due-diligence, 
-                    not as an automatic blacklist.
-                    
-                    **Correlation Analysis**: Only statistically significant correlations (|r| ≥ 0.5, p < 0.05) are shown.
-                    """,
-                    target="gpt-analysis-tooltip",
-                    placement="top",
-                    style={"fontSize": "14px", "maxWidth": "450px"}
-                ),
-                
-                dbc.Row([
-                    dbc.Col([
-                        dbc.Button([
-                            html.I(className="bi bi-robot me-2"),
-                            "Generate GPT Analysis"
-                        ], 
-                        id="gpt-analysis-btn",
-                        color="primary",
-                        className="mb-3",
-                        n_clicks=0
-                        ),
-                        html.Div(id="gpt-analysis-status", className="text-muted small mb-2")
-                    ], width=6),
-                    dbc.Col([
-                        html.Div(id="last-analysis-time", className="text-muted small")
-                    ], width=6, className="text-end")
-                ]),
-                
-                # Analysis Display Area
-                html.Div(id="gpt-analysis-content", className="mt-3"),
-                
-                # Loading Spinner (hidden by default)
-                html.Div([
-                    dbc.Spinner(
-                        html.Div([
-                            html.H5("🤖 Generating Enhanced Analysis...", className="text-center mb-3"),
-                            html.P([
-                                "Analyzing correlations with statistical rigor...",
-                                html.Br(),
-                                "Detecting outliers and generating insights...",
-                                html.Br(),
-                                "This may take 30-60 seconds."
-                            ], className="text-muted text-center")
-                        ], className="p-4")
-                    )
-                ], id="analysis-loading", style={"display": "none"})
-            ])
-        ], className="mb-4"),
+
         
         # Enhanced Tooltips with Detailed Information
         dbc.Tooltip(
@@ -928,14 +758,7 @@ def layout():
             placement="top",
             style={"fontSize": "14px", "maxWidth": "400px"}
         ),
-        dbc.Tooltip(
-            "🔗 Metric Correlations: Heatmap showing relationships between different metrics. Red indicates positive "
-            "correlation, blue indicates negative correlation. Helps understand which factors influence each other "
-            "and identify potential arbitrage opportunities or risk factors.",
-            target="correlation-tooltip",
-            placement="top",
-            style={"fontSize": "14px", "maxWidth": "400px"}
-        ),
+
         
         # Individual metric card tooltips
         dbc.Tooltip(
@@ -1263,162 +1086,7 @@ def update_fixed_trends(shared_data):
     
     return stake_quality_trend, market_cap_trend, flow_trend
 
-# Callbacks for SECTION 6: Correlation Analysis
-@callback(
-    Output("correlation-matrix", "figure"),
-    Input("shared-data-store", "data")
-)
-def update_correlation_matrix(shared_data):
-    """Update correlation matrix using shared data."""
-    if not shared_data or 'data' not in shared_data or not shared_data['data']:
-        return go.Figure().add_annotation(text="No data available", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
-    
-    df = pd.DataFrame(shared_data['data'])
-    
-    # Ensure timestamp is properly converted to datetime
-    if 'timestamp' in df.columns:
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
-    
-    return create_correlation_matrix(df)
 
-# Callbacks for GPT Correlation Analysis
-@callback(
-    Output("gpt-analysis-content", "children"),
-    Output("gpt-analysis-status", "children"),
-    Output("last-analysis-time", "children"),
-    Output("analysis-loading", "style"),
-    Output("gpt-analysis-btn", "disabled"),
-    Output("gpt-analysis-btn", "children"),
-    Input("gpt-analysis-btn", "n_clicks"),
-    Input("shared-data-store", "data"),
-    Input("url", "pathname")
-)
-def generate_gpt_analysis(n_clicks, shared_data, pathname):
-    """Generate GPT analysis of correlation matrix."""
-    # Check if we're on the insights page
-    if pathname != '/dash/insights':
-        return "", "", "", {"display": "none"}, False, [html.I(className="bi bi-robot me-2"), "Generate GPT Analysis"]
-    
-    # If no button click, try to load cached analysis
-    if not n_clicks:
-        if not shared_data or 'data' not in shared_data:
-            return "", "", "", {"display": "none"}, False, [html.I(className="bi bi-robot me-2"), "Generate GPT Analysis"]
-        
-        # Try to load cached analysis
-        result = correlation_service.get_analysis()
-        if result['success'] and result['status'] == 'Cached':
-            formatted_result = _format_analysis_display(result)
-            return formatted_result[0], formatted_result[1], formatted_result[2], {"display": "none"}, False, [html.I(className="bi bi-robot me-2"), "Generate GPT Analysis"]
-        return "", "", "", {"display": "none"}, False, [html.I(className="bi bi-robot me-2"), "Generate GPT Analysis"]
-    
-    # Button was clicked, generate new analysis
-    if not shared_data or 'data' not in shared_data:
-        return "", "No data available for analysis", "", {"display": "none"}, False, [html.I(className="bi bi-robot me-2"), "Generate GPT Analysis"]
-    
-    try:
-        df = pd.DataFrame(shared_data['data'])
-        if df.empty:
-            return "", "No data available for analysis", "", {"display": "none"}, False, [html.I(className="bi bi-robot me-2"), "Generate GPT Analysis"]
-        
-        # Show loading state immediately
-        loading_state = {"display": "block"}
-        button_disabled = True
-        button_text = [html.I(className="bi bi-hourglass-split me-2"), "Generating Analysis..."]
-        
-        # Generate analysis using the service
-        result = correlation_service.get_analysis()
-        
-        if not result['success']:
-            return "", result['error'], "", {"display": "none"}, False, [html.I(className="bi bi-robot me-2"), "Generate GPT Analysis"]
-        
-        # Show results and hide loading
-        formatted_result = _format_analysis_display(result)
-        return formatted_result[0], formatted_result[1], formatted_result[2], {"display": "none"}, False, [html.I(className="bi bi-robot me-2"), "Generate GPT Analysis"]
-        
-    except Exception as e:
-        return "", f"❌ Error generating analysis: {str(e)}", "", {"display": "none"}, False, [html.I(className="bi bi-robot me-2"), "Generate GPT Analysis"]
-
-def _format_analysis_display(result):
-    """Format analysis result for display."""
-    analysis = result['analysis']
-    
-    # Get status from service result
-    status_map = {
-        'Cached': f"✅ Using cached analysis",
-        'Generated': "🔄 Generated new analysis",
-        'Rate limited': "⏰ Rate limit exceeded",
-        'No data': "📊 No data available",
-        'Generation failed': "❌ Analysis failed",
-        'Error': "❌ Analysis error"
-    }
-    status = status_map.get(result['status'], result['status'])
-    
-    # Format analysis for display
-    analysis_lines = analysis.split('\n')
-    formatted_analysis = []
-    
-    for line in analysis_lines:
-        if line.startswith('##'):
-            formatted_analysis.append(html.H4(line[3:].strip(), className="mt-3 mb-2"))
-        elif line.startswith('###'):
-            # Add tooltip for scam detection section
-            if 'scam' in line.lower() or 'red flag' in line.lower():
-                formatted_analysis.append(html.H5([
-                    line[4:].strip(),
-                    html.I(
-                        className="bi bi-exclamation-triangle ms-2 text-warning",
-                        id="scam-flags-tooltip",
-                        style={"cursor": "pointer"}
-                    )
-                ], className="mt-3 mb-2"))
-            else:
-                formatted_analysis.append(html.H5(line[4:].strip(), className="mt-3 mb-2"))
-        elif line.startswith('**') and line.endswith('**'):
-            formatted_analysis.append(html.Strong(line[2:-2], className="d-block mb-2"))
-        elif line.startswith('•'):
-            formatted_analysis.append(html.Li(line[2:], className="mb-1"))
-        elif line.startswith('*') and line.endswith('*'):
-            formatted_analysis.append(html.Small(line[1:-1], className="text-muted d-block mt-2"))
-        elif line.strip():
-            formatted_analysis.append(html.P(line.strip(), className="mb-2"))
-    
-    # Add tooltip for scam flags section
-    scam_tooltip = dbc.Tooltip(
-        """
-        ⚠️ **Statistical Outliers, Not Verdicts**
-        
-        Subnets listed here are statistical anomalies – e.g., 
-        exceptionally high market-cap vs TAO-Score, or 
-        extremely low stake-quality.
-        
-        **Large, trusted projects** (like Chutes) can appear here 
-        simply because they're in the top 1% of market-caps.
-        
-        Use this list for deeper due-diligence, not as an 
-        automatic blacklist.
-        """,
-        target="scam-flags-tooltip",
-        placement="top",
-        style={"fontSize": "14px", "maxWidth": "400px"}
-    )
-    
-    # Create analysis display
-    analysis_display = dbc.Card([
-        dbc.CardBody([
-            html.Div(formatted_analysis, className="gpt-analysis-content"),
-            scam_tooltip  # Include the tooltip
-        ])
-    ], className="border-primary")
-    
-    # Get last analysis time from service
-    cache_info = result.get('cache_info', {})
-    if cache_info.get('last_update'):
-        last_time = datetime.fromisoformat(cache_info['last_update'])
-        last_time_str = f"Last updated: {last_time.strftime('%Y-%m-%d %H:%M')}"
-    else:
-        last_time_str = "No previous analysis"
-    
-    return analysis_display, status, last_time_str
 
 
 
