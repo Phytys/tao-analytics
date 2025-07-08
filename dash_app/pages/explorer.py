@@ -383,6 +383,11 @@ def render_kpis(json_df):
         html.Span(f"🏷️ {cats} Categories", className="kpi-badge"),
     ]
     
+    # Add note about TAO score filtering
+    badges.append(
+        html.Span("with valid TAO score", className="kpi-badge kpi-note", style={"fontSize": "0.8em", "color": "#666"})
+    )
+    
     # Add a helpful message if filters are applied
     if total < 125:  # Assuming 125 is the total number of subnets
         badges.append(
