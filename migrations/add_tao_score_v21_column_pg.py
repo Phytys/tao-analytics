@@ -2,8 +2,12 @@
 """
 Migration: Add tao_score_v21 column to metrics_snap table (Postgres/Heroku compatible)
 """
+import os
 from sqlalchemy import create_engine, text
-from config import DB_URL
+
+# Read DB URL from environment variable
+DB_URL = os.environ.get("DATABASE_URL")
+print(f"Using DB_URL: {DB_URL}")
 
 def migrate():
     engine = create_engine(DB_URL)
