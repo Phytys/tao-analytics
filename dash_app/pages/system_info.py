@@ -9,6 +9,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 from services.metrics import metrics_service
 from services.cache import cache_stats
+from services.db import get_db
+from models import MetricsSnap
 import pandas as pd
 from datetime import datetime, timedelta
 from services.tao_metrics import tao_metrics_service
@@ -101,6 +103,12 @@ layout = dbc.Container([
         dbc.Col([
             html.Div(id="cache-stats", className="chart-container")
         ], md=6),
+    ], className="mb-4"),
+    
+    # TAO Score Monitoring Section
+    html.Div([
+        html.H3("TAO Score Monitoring", className="mb-3"),
+        html.Div(id="tao-score-status", className="mb-4"),
     ], className="mb-4"),
     
     # Top Subnets Table
@@ -391,6 +399,245 @@ def render_cache_stats(data):
     ])
 
 @callback(
+    Output("tao-score-status", "children"),
+    Input("system-data", "data")
+)
+def render_tao_score_status(data):
+    """Render TAO Score monitoring status."""
+    try:
+        session = get_db()
+        
+        # Get current TAO score statistics
+        latest_metrics = session.query(MetricsSnap).filter(
+            MetricsSnap.tao_score.isnot(None)
+        ).order_by(MetricsSnap.timestamp.desc()).limit(1).first()
+        
+        if not latest_metrics:
+            return html.Div("No TAO score data available", className="alert alert-warning")
+        
+        # Get TAO score distribution
+        all_scores = session.query(MetricsSnap.tao_score).filter(
+            MetricsSnap.tao_score.isnot(None),
+            MetricsSnap.timestamp >= latest_metrics.timestamp - timedelta(hours=1)
+        ).all()
+        
+        scores = [score[0] for score in all_scores if score[0] is not None]
+        
+        if not scores:
+            return html.Div("No recent TAO score data", className="alert alert-warning")
+        
+        # Calculate statistics for v1.1
+        score_stats = {
+            'count': len(scores),
+            'mean': sum(scores) / len(scores),
+            'min': min(scores),
+            'max': max(scores),
+            'last_updated': latest_metrics.timestamp,
+            'formula_version': 'v1.1 (Legacy)'
+        }
+        
+        # Get v2.1 scores if available
+        v21_scores = session.query(MetricsSnap.tao_score_v21).filter(
+            MetricsSnap.tao_score_v21.isnot(None),
+            MetricsSnap.timestamp >= latest_metrics.timestamp - timedelta(hours=1)
+        ).all()
+        
+        v21_score_list = [score[0] for score in v21_scores if score[0] is not None]
+        
+        if v21_score_list:
+            v21_stats = {
+                'count': len(v21_score_list),
+                'mean': sum(v21_score_list) / len(v21_score_list),
+                'min': min(v21_score_list),
+                'max': max(v21_score_list),
+                'formula_version': 'v2.1 (Production)'
+            }
+        else:
+            v21_stats = None
+        
+        # Check for recent score changes (last 24 hours)
+        yesterday = latest_metrics.timestamp - timedelta(days=1)
+        recent_changes = session.query(MetricsSnap).filter(
+            MetricsSnap.timestamp >= yesterday,
+            MetricsSnap.tao_score.isnot(None)
+        ).order_by(MetricsSnap.netuid, MetricsSnap.timestamp.desc()).all()
+        
+        # Group by netuid and check for significant changes
+        significant_changes = []
+        seen_netuids = set()
+        
+        for metric in recent_changes:
+            if metric.netuid in seen_netuids:
+                continue
+            seen_netuids.add(metric.netuid)
+            
+            # Get previous score (24h ago)
+            prev_metric = session.query(MetricsSnap).filter(
+                MetricsSnap.netuid == metric.netuid,
+                MetricsSnap.timestamp < yesterday,
+                MetricsSnap.tao_score.isnot(None)
+            ).order_by(MetricsSnap.timestamp.desc()).first()
+            
+            if prev_metric and abs(metric.tao_score - prev_metric.tao_score) > 15:
+                significant_changes.append({
+                    'netuid': metric.netuid,
+                    'subnet_name': metric.subnet_name,
+                    'old_score': prev_metric.tao_score,
+                    'new_score': metric.tao_score,
+                    'change': metric.tao_score - prev_metric.tao_score,
+                    'price_7d': metric.price_7d_change
+                })
+        
+        session.close()
+        
+        # Create status cards for v1.1
+        v11_cards = [
+            dbc.Card([
+                dbc.CardBody([
+                    html.H4(score_stats['formula_version'], className="card-title text-primary"),
+                    html.P("v1.1 Formula", className="card-text")
+                ])
+            ], className="text-center"),
+            dbc.Card([
+                dbc.CardBody([
+                    html.H4(f"{score_stats['count']}", className="card-title text-success"),
+                    html.P("v1.1 Subnets", className="card-text")
+                ])
+            ], className="text-center"),
+            dbc.Card([
+                dbc.CardBody([
+                    html.H4(f"{score_stats['mean']:.1f}", className="card-title text-info"),
+                    html.P("v1.1 Average", className="card-text")
+                ])
+            ], className="text-center"),
+            dbc.Card([
+                dbc.CardBody([
+                    html.H4(f"{score_stats['min']:.1f} - {score_stats['max']:.1f}", className="card-title text-warning"),
+                    html.P("v1.1 Range", className="card-text")
+                ])
+            ], className="text-center"),
+        ]
+        
+        # Create status cards for v2.1 if available
+        if v21_stats:
+            v21_cards = [
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H4(v21_stats['formula_version'], className="card-title text-primary"),
+                        html.P("v2.1 Formula", className="card-text")
+                    ])
+                ], className="text-center"),
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H4(f"{v21_stats['count']}", className="card-title text-success"),
+                        html.P("v2.1 Subnets", className="card-text")
+                    ])
+                ], className="text-center"),
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H4(f"{v21_stats['mean']:.1f}", className="card-title text-info"),
+                        html.P("v2.1 Average", className="card-text")
+                    ])
+                ], className="text-center"),
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H4(f"{v21_stats['min']:.1f} - {v21_stats['max']:.1f}", className="card-title text-warning"),
+                        html.P("v2.1 Range", className="card-text")
+                    ])
+                ], className="text-center"),
+            ]
+        else:
+            v21_cards = [
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H4("v2.1 Not Available", className="card-title text-muted"),
+                        html.P("Not calculated yet", className="card-text")
+                    ])
+                ], className="text-center"),
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H4("0", className="card-title text-muted"),
+                        html.P("v2.1 Subnets", className="card-text")
+                    ])
+                ], className="text-center"),
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H4("N/A", className="card-title text-muted"),
+                        html.P("v2.1 Average", className="card-text")
+                    ])
+                ], className="text-center"),
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H4("N/A", className="card-title text-muted"),
+                        html.P("v2.1 Range", className="card-text")
+                    ])
+                ], className="text-center"),
+            ]
+        
+        # Create alerts for significant changes
+        alerts = []
+        if significant_changes:
+            alert_content = []
+            for change in significant_changes[:5]:  # Show top 5
+                alert_content.append(html.Div([
+                    html.Strong(f"Subnet {change['netuid']} ({change['subnet_name']}): "),
+                    f"{change['old_score']:.1f} → {change['new_score']:.1f} ",
+                    html.Span(f"({change['change']:+.1f})", 
+                             className="text-danger" if change['change'] < 0 else "text-success"),
+                    f" | 7d: {change['price_7d']:+.1f}%" if change['price_7d'] else ""
+                ]))
+            
+            alerts.append(dbc.Alert([
+                html.H5("🚨 Significant Score Changes (24h)", className="alert-heading"),
+                html.Div(alert_content)
+            ], color="warning", className="mb-3"))
+        
+        # Create score distribution chart
+        score_df = pd.DataFrame({'score': scores})
+        fig = px.histogram(score_df, x='score', nbins=20, 
+                          title=f"TAO Score Distribution (Last Hour, {len(scores)} subnets)")
+        fig.update_layout(height=300)
+        
+        return html.Div([
+            # Production version indicator
+            dbc.Alert([
+                html.H5("🎯 Production Status", className="alert-heading"),
+                html.P("TAO Score v2.1 is currently used in production across all user-facing pages.", className="mb-0")
+            ], color="success", className="mb-3"),
+            
+            # v1.1 Status cards
+            html.H5("TAO Score v1.1 (Legacy - For Comparison)", className="mb-2"),
+            dbc.Row([dbc.Col(card, md=3) for card in v11_cards], className="mb-3"),
+            
+            # v2.1 Status cards
+            html.H5("TAO Score v2.1 (Production - Currently Used)", className="mb-2"),
+            dbc.Row([dbc.Col(card, md=3) for card in v21_cards], className="mb-3"),
+            
+            # Alerts
+            html.Div(alerts),
+            
+            # Distribution chart
+            dcc.Graph(figure=fig, className="mb-3"),
+            
+            # Correlation Analysis
+            html.Div([
+                html.H5("📊 Correlation Analysis", className="mb-3"),
+                html.Div(id="tao-score-correlation", children=[
+                    dbc.Spinner(html.Div("Loading correlation analysis..."), size="sm")
+                ])
+            ], className="mb-3"),
+            
+            # Last updated info
+            html.Div([
+                html.Small(f"Last updated: {score_stats['last_updated'].strftime('%Y-%m-%d %H:%M:%S')} UTC", 
+                          className="text-muted")
+            ])
+        ])
+        
+    except Exception as e:
+        return html.Div(f"Error loading TAO score data: {str(e)}", className="alert alert-danger")
+
+@callback(
     Output("top-subnets", "children"),
     Input("system-data", "data")
 )
@@ -618,6 +865,119 @@ def clear_gpt_correlation(n_clicks):
     except Exception as e:
         print(f"Error clearing GPT correlation analysis cache: {e}")
         return {}
+
+@callback(
+    Output("tao-score-correlation", "children"),
+    Input("system-data", "data")
+)
+def render_tao_score_correlation(data):
+    """Render TAO score correlation analysis."""
+    try:
+        from services.calc_metrics import calculate_tao_scores_comparison
+        import pandas as pd
+        
+        # Get historical data for predictive correlation analysis
+        with get_db() as session:
+            # Get data from yesterday and 7 days ago for predictive analysis
+            from datetime import datetime, timedelta
+            
+            today = datetime.now().date()
+            yesterday = today - timedelta(days=1)
+            seven_days_ago = today - timedelta(days=7)
+            
+                    # Get all records with both TAO scores and price changes
+        query = session.query(MetricsSnap).filter(
+            MetricsSnap.tao_score.isnot(None),
+            MetricsSnap.tao_score_v21.isnot(None),
+            MetricsSnap.price_1d_change.isnot(None),
+            MetricsSnap.price_7d_change.isnot(None)
+        ).order_by(MetricsSnap.timestamp.desc())
+        df = pd.read_sql(query.statement, session.bind)
+        
+        # Check if we have enough data and provide debugging info
+        data_info = f"Records with both TAO scores and price data: {len(df)}"
+        
+        if df.empty or len(df) < 10:
+            return html.Div([
+                html.Div("Insufficient data for correlation analysis", className="alert alert-warning"),
+                html.Small(data_info, className="text-muted d-block mt-2")
+            ])
+        
+        # Calculate correlations between TAO scores and price changes
+        correlations = {}
+        
+        # 1. TAO score vs 1-day price change
+        if 'price_1d_change' in df.columns:
+            try:
+                v11_corr_1d = float(df['tao_score'].corr(df['price_1d_change']))
+                v21_corr_1d = float(df['tao_score_v21'].corr(df['price_1d_change']))
+                if not pd.isna(v11_corr_1d) and not pd.isna(v21_corr_1d):
+                    correlations['1d'] = {
+                        'v11': v11_corr_1d,
+                        'v21': v21_corr_1d,
+                        'improvement': v21_corr_1d - v11_corr_1d
+                    }
+            except:
+                pass
+        
+        # 2. TAO score vs 7-day price change
+        if 'price_7d_change' in df.columns:
+            try:
+                v11_corr_7d = float(df['tao_score'].corr(df['price_7d_change']))
+                v21_corr_7d = float(df['tao_score_v21'].corr(df['price_7d_change']))
+                if not pd.isna(v11_corr_7d) and not pd.isna(v21_corr_7d):
+                    correlations['7d'] = {
+                        'v11': v11_corr_7d,
+                        'v21': v21_corr_7d,
+                        'improvement': v21_corr_7d - v11_corr_7d
+                    }
+            except:
+                pass
+        
+        # Create correlation cards
+        correlation_cards = []
+        for period, corr_data in correlations.items():
+            if corr_data['v11'] is not None and corr_data['v21'] is not None:
+                v11_color = "success" if corr_data['v11'] > 0.3 else "warning" if corr_data['v11'] > 0.1 else "danger"
+                v21_color = "success" if corr_data['v21'] > 0.3 else "warning" if corr_data['v21'] > 0.1 else "danger"
+                improvement_color = "success" if corr_data['improvement'] > 0 else "danger"
+                improvement_icon = "↗️" if corr_data['improvement'] > 0 else "↘️"
+                
+                correlation_cards.append(
+                    dbc.Col([
+                        dbc.Card([
+                            dbc.CardBody([
+                                html.H6(f"{period.upper()} Predictive Correlation", className="card-title"),
+                                html.Div([
+                                    html.Small("v1.1: ", className="text-muted"),
+                                    html.Span(f"{corr_data['v11']:.3f}", className=f"text-{v11_color} fw-bold")
+                                ], className="mb-1"),
+                                html.Div([
+                                    html.Small("v2.1: ", className="text-muted"),
+                                    html.Span(f"{corr_data['v21']:.3f}", className=f"text-{v21_color} fw-bold")
+                                ], className="mb-1"),
+                                html.Div([
+                                    html.Small("Improvement: ", className="text-muted"),
+                                    html.Span(f"{improvement_icon} {corr_data['improvement']:+.3f}", 
+                                             className=f"text-{improvement_color} fw-bold")
+                                ])
+                            ])
+                        ])
+                    ], md=6)
+                )
+        
+        if not correlation_cards:
+            return html.Div("Insufficient data for correlation analysis", className="alert alert-warning")
+        
+        return html.Div([
+            html.P("Correlation: TAO scores vs price changes", className="text-muted mb-3"),
+            dbc.Row(correlation_cards, className="mb-3"),
+            html.Small(f"Data: {data_info}", className="text-muted d-block"),
+            html.Small("1D: TAO score vs 1-day price change | 7D: TAO score vs 7-day price change", className="text-muted")
+        ])
+        
+    except Exception as e:
+        return html.Div(f"Error calculating correlations: {str(e)}", className="alert alert-danger")
 
 @callback(
     Output("warning-alert", "children"),

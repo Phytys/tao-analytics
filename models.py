@@ -119,7 +119,8 @@ class MetricsSnap(Base):
     momentum_rank_pct = Column(Integer)       # Top X% in category (0-100)
     validator_util_pct = Column(Integer)      # Validator utilization % (0-100)
     buy_sell_ratio = Column(Float)            # buy_vol / sell_vol ratio
-    tao_score = Column(Float)                 # TAO-Score (0-100)
+    tao_score = Column(Float)                 # TAO-Score v1.1 (0-100)
+    tao_score_v21 = Column(Float)             # TAO-Score v2.1 (0-100)
     buy_signal = Column(Integer)              # AI-generated buy signal (1-5)
     
     # NEW: Investor-focused fields

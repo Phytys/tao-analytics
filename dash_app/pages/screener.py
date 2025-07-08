@@ -412,7 +412,7 @@ layout = html.Div([
                         ], className="mb-3"),
                         html.Div([
                             html.H6("📈 TAO Score", className="text-primary"),
-                            html.P("Higher TAO scores indicate better investment potential. This comprehensive metric considers multiple factors including network health, stake quality, and market performance.")
+                            html.P("Higher TAO scores indicate better investment potential. Proprietary algorithm for evaluating subnet performance and potential.")
                         ], className="mb-3"),
                         html.Div([
                             html.H6("🧠 Dynamic Chart Axes", className="text-primary"),

@@ -227,7 +227,7 @@ def create_metrics_grid(netuid: int) -> dbc.Card:
         
         # Tooltips - Updated to match v1.1 spec exactly
         dbc.Tooltip(
-            "TAO-Score 0-100 – composite health index. 35% decentralisation, 20% validator-utilisation, 15% consensus integrity, 15% active-stake, 10% inflation sanity (8% target), 5% 7-day price momentum. Weights auto-rebalance if some data is missing. ≥70 green, 40-70 amber, <40 red.",
+            "TAO-Score 0-100 – proprietary algorithm for evaluating subnet performance and potential. ≥70 green, 40-70 amber, <40 red.",
             target="tao-score-label",
             placement="top"
         ),

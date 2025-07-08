@@ -68,6 +68,10 @@ htmlcov/
 *~
 notes.md
 
+# Backtest reports (generated content)
+backtest_reports/
+backtest_results_*.json
+
 # Node modules (if any frontend tools are used)
 node_modules/
 npm-debug.log* 

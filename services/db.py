@@ -105,7 +105,7 @@ def get_base_query():
         json_field(ScreenerRaw.raw_json, 'net_volume_tao_7d').label('net_volume_tao_7d'),
         json_field(ScreenerRaw.raw_json, 'github_repo').label('github_url'),
         json_field(ScreenerRaw.raw_json, 'subnet_url').label('website_url'),
-        func.coalesce(MetricsSnap.tao_score, 0).label('tao_score')
+        func.coalesce(MetricsSnap.tao_score_v21, 0).label('tao_score')
     ).select_from(
         SubnetMeta.__table__
         .outerjoin(ScreenerRaw.__table__, SubnetMeta.netuid == ScreenerRaw.netuid)
@@ -276,7 +276,7 @@ def load_screener_frame():
         MetricsSnap.emission_pct,
         MetricsSnap.alpha_emitted_pct,
         MetricsSnap.emission_roi,
-        MetricsSnap.tao_score,
+        MetricsSnap.tao_score_v21.label('tao_score'),
         MetricsSnap.stake_quality_rank_pct,
         MetricsSnap.momentum_rank_pct,
         # PnL and performance

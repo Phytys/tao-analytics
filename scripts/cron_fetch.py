@@ -327,6 +327,22 @@ class CronFetch:
                         yesterday_tao_in_lookup[netuid] = tao_in
                 
                 logger.info(f"Pre-fetched yesterday's data for {len(yesterday_tao_in_lookup)} subnets")
+                
+                # OPTIMIZATION: Pre-fetch yesterday's root_prop data for all subnets in a single query
+                logger.info("Pre-fetching yesterday's root_prop data for all subnets...")
+                yesterday_root_prop_data = session.query(MetricsSnap.netuid, MetricsSnap.root_prop)\
+                    .filter(MetricsSnap.netuid.in_(subnet_ids))\
+                    .filter(MetricsSnap.timestamp < snapshot_time)\
+                    .order_by(MetricsSnap.netuid, MetricsSnap.timestamp.desc())\
+                    .all()
+                
+                # Create lookup dictionary for yesterday's root_prop data
+                yesterday_root_prop_lookup = {}
+                for netuid, root_prop in yesterday_root_prop_data:
+                    if netuid not in yesterday_root_prop_lookup:  # Keep only the most recent
+                        yesterday_root_prop_lookup[netuid] = root_prop
+                
+                logger.info(f"Pre-fetched yesterday's root_prop data for {len(yesterday_root_prop_lookup)} subnets")
             
             # OPTIMIZATION: Pre-fetch all subnet metadata in a single query
             logger.info("Pre-fetching subnet metadata for all subnets...")
@@ -622,7 +638,7 @@ class CronFetch:
                     else:
                         calculated_metrics['emission_roi'] = None
                     
-                    # Calculate TAO-Score using all available metrics
+                    # Calculate TAO-Score v1.1 using all available metrics
                     from services.calc_metrics import calculate_tao_score
                     calculated_metrics['tao_score'] = calculate_tao_score(
                         stake_quality=calculated_metrics.get('stake_quality'),
@@ -633,6 +649,26 @@ class CronFetch:
                         validator_util_pct=calculated_metrics.get('validator_util_pct'),
                         inflation_pct=calculated_metrics.get('emission_pct'),  # Use emission_pct as inflation proxy
                         price_7d_change=screener_metrics.get('price_7d_change'),  # Use 7-day price change for momentum
+                        session=session
+                    )
+                    
+                    # Calculate TAO-Score v2.1 using expert-recommended formula
+                    from services.calc_metrics import calculate_tao_score_v21
+                    calculated_metrics['tao_score_v21'] = calculate_tao_score_v21(
+                        stake_quality=calculated_metrics.get('stake_quality'),
+                        active_validators=calculated_metrics.get('active_validators'),
+                        stake_hhi=calculated_metrics.get('stake_hhi'),
+                        market_cap_tao=calculated_metrics.get('market_cap_tao'),
+                        emission_pct=calculated_metrics.get('emission_pct'),
+                        flow_24h=screener_metrics.get('flow_24h'),
+                        root_prop=screener_metrics.get('root_prop'),
+                        price_30d_change=screener_metrics.get('price_30d_change'),
+                        total_volume_tao_1d=calculated_metrics.get('total_volume_tao_1d'),
+                        fdv_tao=calculated_metrics.get('fdv_tao'),
+                        total_emission_tao=calculated_metrics.get('total_emission_tao'),
+                        alpha_circ=screener_metrics.get('alpha_circ'),
+                        price_tao=calculated_metrics.get('price_tao'),
+                        root_prop_prev=yesterday_root_prop_lookup.get(netuid),
                         session=session
                     )
                     
@@ -699,6 +735,7 @@ class CronFetch:
                         emission_roi=calculated_metrics.get('emission_roi'),
                         validators_active=calculated_metrics.get('validators_active'),
                         tao_score=calculated_metrics.get('tao_score'),
+                        tao_score_v21=calculated_metrics.get('tao_score_v21'),
                         
                         # NEW: Investor-focused fields
                         fdv_tao=calculated_metrics.get('fdv_tao'),

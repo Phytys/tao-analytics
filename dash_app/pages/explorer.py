@@ -823,7 +823,7 @@ def render_cards(json_df, sort_mode):
             id=tao_score_id
         )
         tao_score_tooltip = dbc.Tooltip(
-            "TAO-Score: AI-generated ranking score (0-100) based on multiple metrics including stake quality, momentum, and validator utilization.",
+            "TAO-Score: Proprietary ranking algorithm (0-100) for evaluating subnet performance and potential.",
             target=tao_score_id,
             placement="auto"
         )

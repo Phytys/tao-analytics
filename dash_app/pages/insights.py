@@ -777,7 +777,7 @@ def layout():
         ),
         dbc.Tooltip(
             "📊 Average TAO-Score: Mean TAO-Score across all subnets (0-100 scale). "
-            "Higher scores indicate better overall network quality and performance.",
+            "Proprietary algorithm for evaluating subnet performance and potential.",
             target="tao-score-tooltip",
             placement="top",
             style={"fontSize": "14px", "maxWidth": "300px"}

@@ -611,3 +611,245 @@ def calculate_all_metrics(
     })
     
     return results 
+
+def calculate_tao_score_v21(
+    # Core metrics
+    stake_quality: Optional[float],
+    active_validators: Optional[int],
+    stake_hhi: Optional[float],
+    market_cap_tao: Optional[float],
+    emission_pct: Optional[float],
+    flow_24h: Optional[float],
+    root_prop: Optional[float],
+    price_30d_change: Optional[float],
+    total_volume_tao_1d: Optional[float],
+    
+    # Additional dependencies for calculated metrics
+    fdv_tao: Optional[float] = None,
+    total_emission_tao: Optional[float] = None,
+    alpha_circ: Optional[float] = None,
+    price_tao: Optional[float] = None,
+    
+    # Historical data for delta calculations
+    root_prop_prev: Optional[float] = None,
+    
+    # Scaling parameters
+    session = None
+) -> Optional[float]:
+    """
+    Calculate TAO-Score v2.1 using expert-recommended factor investing approach.
+    
+    Expert-recommended formula with forward-looking, risk-aware metrics:
+    - Network Health (35%): stake_quality, active_validators, stake_hhi
+    - Economic Health (40%): market_cap_tao, emission_efficiency, flow_velocity, root_prop_delta
+    - Market Performance (25%): sharpe_30d, total_volume_tao_1d
+    
+    Args:
+        stake_quality: Stake quality score (0-100)
+        active_validators: Number of active validators
+        stake_hhi: Herfindahl-Hirschman Index for stake concentration
+        market_cap_tao: Market capitalization in TAO
+        emission_pct: Emission percentage
+        flow_24h: 24-hour net volume flow
+        root_prop: Root proportion of total tokens
+        price_30d_change: 30-day price change percentage
+        total_volume_tao_1d: 24-hour total volume in TAO
+        fdv_tao: Fully diluted valuation in TAO
+        total_emission_tao: Total daily emission in TAO
+        alpha_circ: Circulating Alpha tokens
+        price_tao: Current price in TAO
+        root_prop_prev: Previous root proportion for delta calculation
+        
+    Returns:
+        TAO-Score v2.1 (0-100) or None if core metrics are missing
+    """
+    try:
+        # Core metrics are required
+        if any(metric is None for metric in [stake_quality, active_validators, stake_hhi, market_cap_tao]):
+            return None
+        
+        # Calculate expert-recommended derived metrics
+        
+        # 1. Emission Efficiency: TAO/Alpha emitted per $1 FDV (inverted for scoring)
+        emission_efficiency = None
+        if emission_pct is not None and fdv_tao is not None and fdv_tao > 0:
+            # Lower emission efficiency = better (stronger token sink)
+            emission_efficiency = emission_pct / fdv_tao if emission_pct > 0 else 0
+        
+        # 2. Flow Velocity: (24h Flow / Circulating Alpha)
+        flow_velocity = None
+        if flow_24h is not None and alpha_circ is not None and alpha_circ > 0:
+            # Higher flow velocity = better (more real user demand)
+            flow_velocity = abs(flow_24h) / alpha_circ
+        
+        # 3. Root Prop Delta: Month-over-month change in root proportion
+        root_prop_delta = None
+        if root_prop is not None and root_prop_prev is not None:
+            # Lower root prop delta = better (less concentration)
+            root_prop_delta = root_prop - root_prop_prev
+        
+        # 4. Sharpe-adjusted 30d Return: Risk-adjusted return
+        sharpe_30d = None
+        if price_30d_change is not None and price_tao is not None:
+            # Simple Sharpe approximation: return / volatility proxy
+            # For now, use price_30d_change as proxy (can be enhanced with actual volatility)
+            sharpe_30d = price_30d_change / 100  # Normalize to reasonable range
+        
+        # Apply expert-recommended scaling and normalization
+        
+        # Heavy-tailed metrics: log(1 + x) transformation
+        def log_transform(x):
+            if x is None or x <= 0:
+                return 0
+            return np.log(1 + abs(x))
+        
+        # Z-score normalization (simplified for now)
+        def z_score(x, mean=0, std=1):
+            if x is None:
+                return 0
+            return (x - mean) / std if std > 0 else 0
+        
+        # Apply gentler transformations for better scaling
+        sq = max(0, min(100, stake_quality or 0))  # Already 0-100
+        av = max(0, min(100, (active_validators or 0) / 256 * 100))  # Scale 0-256 to 0-100
+        
+        # Gentler transformations for heavy-tailed metrics
+        def sqrt_transform(x):
+            if x is None or x <= 0:
+                return 0
+            return np.sqrt(abs(x))
+        
+        # Normalized z-scores with reasonable ranges
+        def normalized_z_score(x, mean=0, std=1, min_val=-3, max_val=3):
+            if x is None:
+                return 0
+            z = (x - mean) / std if std > 0 else 0
+            # Clip to reasonable range and scale to 0-100
+            z_clipped = max(min_val, min(max_val, z))
+            return (z_clipped - min_val) / (max_val - min_val) * 100
+        
+        # Apply improved transformations
+        hhi = normalized_z_score(stake_hhi or 0, mean=5000, std=2000)  # HHI to 0-100
+        mcap = sqrt_transform(market_cap_tao or 0)  # Square root for heavy-tailed data
+        eff = sqrt_transform(emission_efficiency or 0)  # Square root for efficiency
+        fvel = sqrt_transform(flow_velocity or 0)  # Square root for velocity
+        rpd = normalized_z_score(root_prop_delta or 0, mean=0, std=0.1)  # Delta to 0-100
+        sharpe = normalized_z_score(sharpe_30d or 0, mean=0, std=0.2)  # Sharpe to 0-100
+        vol = sqrt_transform(total_volume_tao_1d or 0)  # Square root for volume
+        
+        # Normalize market cap, efficiency, velocity, and volume to 0-100 range
+        # Use reasonable maximums based on typical values
+        mcap_norm = min(100, (mcap / 1000) * 100) if mcap > 0 else 0  # Scale by 1000 TAO
+        eff_norm = min(100, (eff / 0.1) * 100) if eff > 0 else 0  # Scale by 0.1 efficiency
+        fvel_norm = min(100, (fvel / 0.5) * 100) if fvel > 0 else 0  # Scale by 0.5 velocity
+        vol_norm = min(100, (vol / 10000) * 100) if vol > 0 else 0  # Scale by 10k TAO volume
+        
+        # Expert-recommended v2.1 weights
+        weights = {
+            'sq': 0.18,      # stake_quality
+            'av': 0.10,      # active_validators
+            'hhi': 0.07,     # stake_hhi (inverted)
+            'mcap': 0.15,    # market_cap_tao
+            'eff': 0.10,     # emission_efficiency (inverted)
+            'fvel': 0.08,    # flow_velocity
+            'rpd': 0.07,     # root_prop_delta (inverted)
+            'sharpe': 0.15,  # sharpe_30d
+            'vol': 0.10      # total_volume_tao_1d
+        }
+        
+        # Calculate weighted score with proper scaling
+        tao_score_v21 = (
+            sq * weights['sq'] +
+            av * weights['av'] +
+            (100 - hhi) * weights['hhi'] +  # Invert: lower HHI = better
+            mcap_norm * weights['mcap'] +
+            (100 - eff_norm) * weights['eff'] +  # Invert: lower emission efficiency = better
+            fvel_norm * weights['fvel'] +
+            (100 - rpd) * weights['rpd'] +  # Invert: lower root prop delta = better
+            sharpe * weights['sharpe'] +
+            vol_norm * weights['vol']
+        )
+        
+        # Ensure final score is in 0-100 range
+        tao_score_v21 = max(0, min(100, tao_score_v21))
+        return round(tao_score_v21, 1)
+        
+    except Exception as e:
+        logger.error(f"Error calculating TAO-Score v2.1: {e}")
+        return None
+
+def calculate_tao_scores_comparison(
+    # Core metrics for v1.1
+    stake_quality: Optional[float],
+    consensus_alignment: Optional[float],
+    active_stake_ratio: Optional[float],
+    validator_util_pct: Optional[float],
+    emission_pct: Optional[float],
+    price_7d_change: Optional[float],
+    
+    # Additional metrics for v2.1
+    active_validators: Optional[int] = None,
+    stake_hhi: Optional[float] = None,
+    market_cap_tao: Optional[float] = None,
+    flow_24h: Optional[float] = None,
+    root_prop: Optional[float] = None,
+    price_30d_change: Optional[float] = None,
+    total_volume_tao_1d: Optional[float] = None,
+    fdv_tao: Optional[float] = None,
+    total_emission_tao: Optional[float] = None,
+    alpha_circ: Optional[float] = None,
+    price_tao: Optional[float] = None,
+    root_prop_prev: Optional[float] = None,
+    
+    session = None
+) -> Dict[str, Optional[float]]:
+    """
+    Calculate both TAO Score v1.1 and v2.1 for comparison.
+    
+    Returns:
+        Dictionary with 'tao_score_v11' and 'tao_score_v21' scores
+    """
+    try:
+        # Calculate v1.1 score
+        tao_score_v11 = calculate_tao_score(
+            stake_quality=stake_quality,
+            consensus_alignment=consensus_alignment,
+            active_stake_ratio=active_stake_ratio,
+            emission_roi=None,  # Not used in v1.1
+            reserve_momentum=None,  # Not used in v1.1
+            validator_util_pct=validator_util_pct,
+            inflation_pct=None,  # Not used in v1.1
+            price_7d_change=price_7d_change,
+            session=session
+        )
+        
+        # Calculate v2.1 score
+        tao_score_v21 = calculate_tao_score_v21(
+            stake_quality=stake_quality,
+            active_validators=active_validators,
+            stake_hhi=stake_hhi,
+            market_cap_tao=market_cap_tao,
+            emission_pct=emission_pct,
+            flow_24h=flow_24h,
+            root_prop=root_prop,
+            price_30d_change=price_30d_change,
+            total_volume_tao_1d=total_volume_tao_1d,
+            fdv_tao=fdv_tao,
+            total_emission_tao=total_emission_tao,
+            alpha_circ=alpha_circ,
+            price_tao=price_tao,
+            root_prop_prev=root_prop_prev,
+            session=session
+        )
+        
+        return {
+            'tao_score_v11': tao_score_v11,
+            'tao_score_v21': tao_score_v21
+        }
+        
+    except Exception as e:
+        logger.error(f"Error calculating TAO scores comparison: {e}")
+        return {
+            'tao_score_v11': None,
+            'tao_score_v21': None
+        } 
