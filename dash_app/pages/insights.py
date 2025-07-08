@@ -519,7 +519,9 @@ def layout():
                                 {"label": "All Available", "value": 365}
                             ],
                             value=30,
-                            clearable=False
+                            clearable=False,
+                            className="dd-compact",
+                            style={"width": "100%"},
                         )
                     ], width=4),
                 ])
@@ -544,7 +546,9 @@ def layout():
                             id="trend-metric",
                             options=[{"label": v, "value": k} for k, v in AVAILABLE_METRICS.items()],
                             value="tao_score",
-                            clearable=False
+                            clearable=False,
+                            className="dd-compact",
+                            style={"width": "100%"},
                         )
                     ], width=4),
                     dbc.Col([
@@ -560,7 +564,9 @@ def layout():
                                 {"label": "Median", "value": "median"}
                             ],
                             value="mean",
-                            clearable=False
+                            clearable=False,
+                            className="dd-compact",
+                            style={"width": "100%"},
                         )
                     ], width=4),
                     dbc.Col([
@@ -572,7 +578,9 @@ def layout():
                             id="trend-category-filter",
                             options=[{"label": "All Categories", "value": "All"}],
                             value="All",
-                            clearable=False
+                            clearable=False,
+                            className="dd-compact",
+                            style={"width": "100%"},
                         )
                     ], width=4),
                 ], className="mb-4"),
@@ -596,7 +604,9 @@ def layout():
                             id="category-metric",
                             options=[{"label": v, "value": k} for k, v in AVAILABLE_METRICS.items()],
                             value="tao_score",
-                            clearable=False
+                            clearable=False,
+                            className="dd-compact",
+                            style={"width": "100%"},
                         )
                     ], width=6),
                     dbc.Col([
@@ -605,7 +615,9 @@ def layout():
                             id="category-filter",
                             options=[{"label": "All Categories", "value": "All"}],
                             value="All",
-                            clearable=False
+                            clearable=False,
+                            className="dd-compact",
+                            style={"width": "100%"},
                         )
                     ], width=6),
                 ], className="mb-4"),
@@ -629,7 +641,9 @@ def layout():
                             id="performers-metric",
                             options=[{"label": v, "value": k} for k, v in AVAILABLE_METRICS.items()],
                             value="tao_score",
-                            clearable=False
+                            clearable=False,
+                            className="dd-compact",
+                            style={"width": "100%"},
                         )
                     ], width=6),
                     dbc.Col([
@@ -638,7 +652,9 @@ def layout():
                             id="performers-category-filter",
                             options=[{"label": "All Categories", "value": "All"}],
                             value="All",
-                            clearable=False
+                            clearable=False,
+                            className="dd-compact",
+                            style={"width": "100%"},
                         )
                     ], width=6),
                 ], className="mb-4"),

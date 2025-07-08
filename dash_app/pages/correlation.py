@@ -298,7 +298,8 @@ def layout():
                                     ],
                                     value=2,
                                     clearable=False,
-                                    className="mb-3"
+                                    className="dd-compact",
+                                    style={"width": "100%"},
                                 )
                             ], width=6),
                             dbc.Col([
@@ -309,7 +310,8 @@ def layout():
                                     value="all",
                                     clearable=False,
                                     placeholder="Loading subnets...",
-                                    className="mb-3"
+                                    className="dd-compact",
+                                    style={"width": "100%"},
                                 )
                             ], width=6)
                         ])

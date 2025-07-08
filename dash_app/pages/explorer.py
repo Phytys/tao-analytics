@@ -189,16 +189,14 @@ layout = dbc.Container(
                     dcc.Dropdown(
                         id="cat-drop",
                         options=[{"label": "All categories", "value": "All"}] + [
-                            {
-                                "label": c, 
-                                "value": c
-                            } for c in CATS if c != "All"
+                            {"label": c, "value": c} for c in CATS if c != "All"
                         ],
                         value="All",
                         clearable=False,
-                        style={"width": "100%"}
+                        className="dd-compact",
+                        style={"width": "100%"},
                     ),
-                ], xs=12, md=6, className="filter-col"),
+                ], xs=12, md=6, className="filter-col p-0"),
                 dbc.Col([
                     dcc.Input(
                         id="search-box",
@@ -208,8 +206,8 @@ layout = dbc.Container(
                         className="form-control"
                     ),
                     html.Div(id="refresh-stamp", className="text-muted minimal-last-updated"),
-                ], xs=12, md=6, className="filter-col"),
-            ], className="g-1 g-md-2"),
+                ], xs=12, md=6, className="filter-col p-0"),
+            ], className="g-0 gx-0 gy-0 align-items-center"),
         ], className="filter-controls compact-filter-controls"),
         
         # --- KPI strip ---

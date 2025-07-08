@@ -454,7 +454,9 @@ layout = html.Div([
                         options=axis_options,
                         value="price_7d_change",
                         clearable=False,
-                        placeholder="Select X-axis metric"
+                        placeholder="Select X-axis metric",
+                        className="dd-compact",
+                        style={"width": "100%"},
                     )
                 ], width=3),
                 dbc.Col([
@@ -464,7 +466,9 @@ layout = html.Div([
                         options=axis_options,
                         value="price_30d_change",
                         clearable=False,
-                        placeholder="Select Y-axis metric"
+                        placeholder="Select Y-axis metric",
+                        className="dd-compact",
+                        style={"width": "100%"},
                     )
                 ], width=3),
                 dbc.Col([
@@ -474,7 +478,9 @@ layout = html.Div([
                         options=category_options,
                         value="All",
                         clearable=False,
-                        placeholder="Category"
+                        placeholder="Category",
+                        className="dd-compact",
+                        style={"width": "100%"},
                     )
                 ], width=3),
                 dbc.Col([
@@ -523,7 +529,9 @@ layout = html.Div([
                         options=axis_options,
                         value="tao_score",
                         clearable=False,
-                        placeholder="Select X-axis metric"
+                        placeholder="Select X-axis metric",
+                        className="dd-compact",
+                        style={"width": "100%"},
                     )
                 ], width=3),
                 dbc.Col([
@@ -533,7 +541,9 @@ layout = html.Div([
                         options=axis_options,
                         value="flow_24h",
                         clearable=False,
-                        placeholder="Select Y-axis metric"
+                        placeholder="Select Y-axis metric",
+                        className="dd-compact",
+                        style={"width": "100%"},
                     )
                 ], width=3),
                 dbc.Col([
@@ -543,7 +553,9 @@ layout = html.Div([
                         options=category_options,
                         value="All",
                         clearable=False,
-                        placeholder="Category"
+                        placeholder="Category",
+                        className="dd-compact",
+                        style={"width": "100%"},
                     )
                 ], width=3),
                 dbc.Col([
@@ -588,7 +600,9 @@ layout = html.Div([
                         options=category_options,
                         value="All",
                         clearable=False,
-                        placeholder="Category"
+                        placeholder="Category",
+                        className="dd-compact",
+                        style={"width": "100%"},
                     )
                 ], width=6),
                 dbc.Col([
