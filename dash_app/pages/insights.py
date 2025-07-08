@@ -22,7 +22,7 @@ import os
 from services.cache_utils import cache_get, cache_set
 
 def get_time_series_data(days_back=30, limit=5000):
-    """Get time series data from metrics_snap table with highly optimized queries and caching."""
+    """Get time series data using the same data source as other charts for consistency."""
     cache_key = f'time_series_data_{days_back}_{limit}'
     
     # Try to get from cache first
@@ -30,53 +30,69 @@ def get_time_series_data(days_back=30, limit=5000):
     if cached_result is not None:
         return cached_result
     
-    session = get_db()
     try:
-        cutoff_date = datetime.now() - timedelta(days=days_back)
+        # Use the same data source as other charts for consistency
+        from services.db import load_screener_frame
         
-        # Use raw SQL for better performance with indexes
-        from sqlalchemy import text
+        # Get the same data that other charts use
+        df = load_screener_frame()
         
-        # Comprehensive query for correlation analysis with all available metrics
-        sql = text("""
-            SELECT 
-                netuid, subnet_name, category, timestamp,
-                -- Core performance metrics
-                tao_score, stake_quality, buy_signal, emission_roi,
-                -- Market dynamics
-                market_cap_tao, fdv_tao, price_7d_change, price_1d_change, 
-                flow_24h, buy_sell_ratio, total_volume_tao_1d,
-                -- Network health & activity
-                active_validators, validator_util_pct, consensus_alignment,
-                active_stake_ratio, uid_count, max_validators,
-                -- Stake distribution & quality
-                total_stake_tao, stake_hhi, gini_coeff_top_100, hhi,
-                -- Token flow & momentum
-                reserve_momentum, tao_in, alpha_circ, alpha_prop, root_prop,
-                -- Performance & ranking
-                stake_quality_rank_pct, momentum_rank_pct,
-                realized_pnl_tao, unrealized_pnl_tao
-            FROM metrics_snap 
-            WHERE timestamp >= :cutoff_date
-            ORDER BY timestamp DESC
-            LIMIT :limit
-        """)
+        # Since load_screener_frame() returns current data (not time series),
+        # we need to get historical data from metrics_snap for time series charts
+        # But we'll use the same column structure and TAO score approach
         
-        df = pd.read_sql(sql, session.bind, params={
-            'cutoff_date': cutoff_date,
-            'limit': limit
-        })
-        
-        # Ensure timestamp is properly converted to datetime
-        if 'timestamp' in df.columns:
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
-        
-        # Cache the result for 5 minutes
-        cache_set(cache_key, df, timeout=300)
-        
-        return df
-    finally:
-        session.close()
+        session = get_db()
+        try:
+            cutoff_date = datetime.now() - timedelta(days=days_back)
+            
+            # Use raw SQL for better performance with indexes
+            from sqlalchemy import text
+            
+            # Query using the same TAO score approach as load_screener_frame
+            sql = text("""
+                SELECT 
+                    netuid, subnet_name, primary_category as category, timestamp,
+                    -- Core performance metrics (use tao_score_v21 as tao_score)
+                    COALESCE(tao_score_v21, tao_score, 0) as tao_score, 
+                    stake_quality, buy_signal, emission_roi,
+                    -- Market dynamics
+                    market_cap_tao, fdv_tao, price_7d_change, price_1d_change, 
+                    flow_24h, buy_sell_ratio, total_volume_tao_1d,
+                    -- Network health & activity
+                    active_validators, validator_util_pct, consensus_alignment,
+                    active_stake_ratio, uid_count, max_validators,
+                    -- Stake distribution & quality
+                    total_stake_tao, stake_hhi, gini_coeff_top_100, hhi,
+                    -- Token flow & momentum
+                    reserve_momentum, tao_in, alpha_circ, alpha_prop, root_prop,
+                    -- Performance & ranking
+                    stake_quality_rank_pct, momentum_rank_pct,
+                    realized_pnl_tao, unrealized_pnl_tao
+                FROM metrics_snap 
+                WHERE timestamp >= :cutoff_date
+                ORDER BY timestamp DESC
+                LIMIT :limit
+            """)
+            
+            time_series_df = pd.read_sql(sql, session.bind, params={
+                'cutoff_date': cutoff_date,
+                'limit': limit
+            })
+            
+            # Ensure timestamp is properly converted to datetime
+            if 'timestamp' in time_series_df.columns:
+                time_series_df['timestamp'] = pd.to_datetime(time_series_df['timestamp'])
+            
+            # Cache the result for 5 minutes
+            cache_set(cache_key, time_series_df, timeout=300)
+            
+            return time_series_df
+        finally:
+            session.close()
+    except Exception as e:
+        print(f"Error in get_time_series_data: {e}")
+        # Return empty DataFrame if there's an error
+        return pd.DataFrame()
 
 def get_network_summary_stats():
     """Get comprehensive network summary statistics using the same data source as other pages."""
