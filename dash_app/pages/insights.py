@@ -512,13 +512,14 @@ def layout():
                         dcc.Dropdown(
                             id="shared-time-range",
                             options=[
+                                {"label": "Last 3 Days", "value": 3},
                                 {"label": "Last 7 Days", "value": 7},
                                 {"label": "Last 14 Days", "value": 14},
                                 {"label": "Last 30 Days", "value": 30},
                                 {"label": "Last 60 Days", "value": 60},
                                 {"label": "All Available", "value": 365}
                             ],
-                            value=30,
+                            value=3,
                             clearable=False,
                             className="dd-compact",
                             style={"width": "100%"},
