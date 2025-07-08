@@ -50,6 +50,10 @@ ACTIVE_DATABASE_URL = HEROKU_DATABASE_URL or DATABASE_URL
 if ACTIVE_DATABASE_URL.startswith("postgres://"):
     ACTIVE_DATABASE_URL = ACTIVE_DATABASE_URL.replace("postgres://", "postgresql://", 1)
 DB_URL = ACTIVE_DATABASE_URL
+
+# TAO Score Configuration - Admin configurable
+TAO_SCORE_COLUMN = os.getenv("TAO_SCORE_COLUMN", "tao_score_v21")  # Default to v21, admin can override
+
 OPENAI_MODEL = "gpt-4o"  # Optimal balance of quality and cost for enrichment
 
 # Granular primary categories for power-user analytics

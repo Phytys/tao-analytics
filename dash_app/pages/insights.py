@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from services.db import get_db, safe_query_execute
 from models import MetricsSnap, SubnetMeta
 from sqlalchemy import func, desc, and_, or_, text
+from config import TAO_SCORE_COLUMN
 import json
 import os
 
@@ -48,12 +49,12 @@ def get_time_series_data(days_back=30, limit=5000):
             # Use raw SQL for better performance with indexes
             from sqlalchemy import text
             
-            # Query using the same TAO score approach as load_screener_frame
-            sql = text("""
+            # Query using the configured TAO score column (exclude NULL values)
+            sql = text(f"""
                 SELECT 
                     netuid, subnet_name, category, timestamp,
-                    -- Core performance metrics (use tao_score_v21 as tao_score)
-                    COALESCE(tao_score_v21, tao_score, 0) as tao_score, 
+                    -- Core performance metrics (use configured TAO score, exclude NULL)
+                    {TAO_SCORE_COLUMN} as tao_score, 
                     stake_quality, buy_signal, emission_roi,
                     -- Market dynamics
                     market_cap_tao, fdv_tao, price_7d_change, price_1d_change, 
@@ -70,6 +71,7 @@ def get_time_series_data(days_back=30, limit=5000):
                     realized_pnl_tao, unrealized_pnl_tao
                 FROM metrics_snap 
                 WHERE timestamp >= :cutoff_date
+                AND {TAO_SCORE_COLUMN} IS NOT NULL
                 ORDER BY timestamp DESC
                 LIMIT :limit
             """)

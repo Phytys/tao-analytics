@@ -6,6 +6,7 @@ from sqlalchemy import create_engine, text, select, func, String, and_, Numeric,
 from sqlalchemy.orm import sessionmaker
 from .db_utils import json_field, get_database_type
 from models import SubnetMeta, ScreenerRaw
+from config import TAO_SCORE_COLUMN
 
 # Use HEROKU_DATABASE_URL for scripts that need to write to Heroku
 # Use DATABASE_URL for the main app (defaults to SQLite for development)
@@ -105,7 +106,7 @@ def get_base_query():
         json_field(ScreenerRaw.raw_json, 'net_volume_tao_7d').label('net_volume_tao_7d'),
         json_field(ScreenerRaw.raw_json, 'github_repo').label('github_url'),
         json_field(ScreenerRaw.raw_json, 'subnet_url').label('website_url'),
-        func.coalesce(MetricsSnap.tao_score_v21, 0).label('tao_score')
+        getattr(MetricsSnap, TAO_SCORE_COLUMN).label('tao_score')
     ).select_from(
         SubnetMeta.__table__
         .outerjoin(ScreenerRaw.__table__, SubnetMeta.netuid == ScreenerRaw.netuid)
@@ -121,6 +122,9 @@ def get_base_query():
                 )
             )
         )
+    ).where(
+        # Only include subnets with valid TAO scores
+        getattr(MetricsSnap, TAO_SCORE_COLUMN).isnot(None)
     )
     
     return query
@@ -276,7 +280,7 @@ def load_screener_frame():
         MetricsSnap.emission_pct,
         MetricsSnap.alpha_emitted_pct,
         MetricsSnap.emission_roi,
-        MetricsSnap.tao_score_v21.label('tao_score'),
+        getattr(MetricsSnap, TAO_SCORE_COLUMN).label('tao_score'),
         MetricsSnap.stake_quality_rank_pct,
         MetricsSnap.momentum_rank_pct,
         # PnL and performance

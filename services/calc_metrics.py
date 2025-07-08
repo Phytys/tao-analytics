@@ -772,7 +772,8 @@ def calculate_tao_score_v21(
         
         # Ensure final score is in 0-100 range
         tao_score_v21 = max(0, min(100, tao_score_v21))
-        return round(tao_score_v21, 1)
+        # Convert to Python float to avoid NumPy type issues with PostgreSQL
+        return float(round(tao_score_v21, 1))
         
     except Exception as e:
         logger.error(f"Error calculating TAO-Score v2.1: {e}")
