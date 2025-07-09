@@ -84,64 +84,124 @@ class CorrelationAnalysisService:
             cutoff_date = datetime.now() - timedelta(days=days_back)
             
             # Build query based on analysis type
+            # Use database-agnostic approach to avoid PostgreSQL parameter binding issues
+            from config import ACTIVE_DATABASE_URL
+            
             if selected_subnet and selected_subnet != "all":
                 # Per-subnet time-series analysis - get more data for meaningful correlations
-                sql = """
-                    SELECT 
-                        netuid, subnet_name, category, timestamp,
-                        -- Core metrics
-                        tao_score, stake_quality, buy_signal, emission_roi, trust_score,
-                        -- Market metrics
-                        market_cap_tao, fdv_tao, price_tao, price_1d_change, price_7d_change, 
-                        price_30d_change, price_1h_change, flow_24h, ath_60d, atl_60d,
-                        -- Volume metrics
-                        buy_volume_tao_1d, sell_volume_tao_1d, total_volume_tao_1d,
-                        buy_vol_tao_1d, sell_vol_tao_1d, buy_sell_ratio,
-                        net_volume_tao_1h, net_volume_tao_7d, total_volume_pct_change,
-                        -- Network metrics
-                        active_validators, validators_active, validator_util_pct, 
-                        total_stake_tao, max_validators, uid_count, active_stake_ratio,
-                        -- Stake metrics
-                        stake_hhi, gini_coeff_top_100, hhi, stake_quality_rank_pct,
-                        -- Flow metrics
-                        reserve_momentum, tao_in, alpha_circ, alpha_prop, root_prop,
-                        alpha_in, alpha_out, emission_pct, alpha_emitted_pct,
-                        -- Consensus metrics
-                        consensus_alignment, mean_consensus, pct_aligned, confidence,
-                        mean_incentive, p95_incentive,
-                        -- Emission metrics
-                        emission_owner, emission_miners, emission_validators,
-                        total_emission_tao, tao_in_emission, alpha_out_emission,
-                        realized_pnl_tao, unrealized_pnl_tao,
-                        -- Performance metrics
-                        momentum_rank_pct
-                    FROM metrics_snap 
-                    WHERE timestamp >= :cutoff_date
-                    AND netuid = :netuid
-                    ORDER BY timestamp DESC
-                    LIMIT 5000
-                """
-                df = pd.read_sql(sql, session.bind, params={
-                    'cutoff_date': cutoff_date,
-                    'netuid': int(selected_subnet)
-                })
+                if 'postgresql' in ACTIVE_DATABASE_URL:
+                    # PostgreSQL syntax with direct date arithmetic
+                    sql = f"""
+                        SELECT 
+                            netuid, subnet_name, category, timestamp,
+                            -- Core metrics
+                            tao_score, stake_quality, buy_signal, emission_roi, trust_score,
+                            -- Market metrics
+                            market_cap_tao, fdv_tao, price_tao, price_1d_change, price_7d_change, 
+                            price_30d_change, price_1h_change, flow_24h, ath_60d, atl_60d,
+                            -- Volume metrics
+                            buy_volume_tao_1d, sell_volume_tao_1d, total_volume_tao_1d,
+                            buy_vol_tao_1d, sell_vol_tao_1d, buy_sell_ratio,
+                            net_volume_tao_1h, net_volume_tao_7d, total_volume_pct_change,
+                            -- Network metrics
+                            active_validators, validators_active, validator_util_pct, 
+                            total_stake_tao, max_validators, uid_count, active_stake_ratio,
+                            -- Stake metrics
+                            stake_hhi, gini_coeff_top_100, hhi, stake_quality_rank_pct,
+                            -- Flow metrics
+                            reserve_momentum, tao_in, alpha_circ, alpha_prop, root_prop,
+                            alpha_in, alpha_out, emission_pct, alpha_emitted_pct,
+                            -- Consensus metrics
+                            consensus_alignment, mean_consensus, pct_aligned, confidence,
+                            mean_incentive, p95_incentive,
+                            -- Emission metrics
+                            emission_owner, emission_miners, emission_validators,
+                            total_emission_tao, tao_in_emission, alpha_out_emission,
+                            realized_pnl_tao, unrealized_pnl_tao,
+                            -- Performance metrics
+                            momentum_rank_pct
+                        FROM metrics_snap 
+                        WHERE timestamp >= NOW() - INTERVAL '{days_back} days'
+                        AND netuid = {int(selected_subnet)}
+                        ORDER BY timestamp DESC
+                        LIMIT 5000
+                    """
+                    df = pd.read_sql(sql, session.bind)
+                else:
+                    # SQLite syntax with parameters
+                    sql = """
+                        SELECT 
+                            netuid, subnet_name, category, timestamp,
+                            -- Core metrics
+                            tao_score, stake_quality, buy_signal, emission_roi, trust_score,
+                            -- Market metrics
+                            market_cap_tao, fdv_tao, price_tao, price_1d_change, price_7d_change, 
+                            price_30d_change, price_1h_change, flow_24h, ath_60d, atl_60d,
+                            -- Volume metrics
+                            buy_volume_tao_1d, sell_volume_tao_1d, total_volume_tao_1d,
+                            buy_vol_tao_1d, sell_vol_tao_1d, buy_sell_ratio,
+                            net_volume_tao_1h, net_volume_tao_7d, total_volume_pct_change,
+                            -- Network metrics
+                            active_validators, validators_active, validator_util_pct, 
+                            total_stake_tao, max_validators, uid_count, active_stake_ratio,
+                            -- Stake metrics
+                            stake_hhi, gini_coeff_top_100, hhi, stake_quality_rank_pct,
+                            -- Flow metrics
+                            reserve_momentum, tao_in, alpha_circ, alpha_prop, root_prop,
+                            alpha_in, alpha_out, emission_pct, alpha_emitted_pct,
+                            -- Consensus metrics
+                            consensus_alignment, mean_consensus, pct_aligned, confidence,
+                            mean_incentive, p95_incentive,
+                            -- Emission metrics
+                            emission_owner, emission_miners, emission_validators,
+                            total_emission_tao, tao_in_emission, alpha_out_emission,
+                            realized_pnl_tao, unrealized_pnl_tao,
+                            -- Performance metrics
+                            momentum_rank_pct
+                        FROM metrics_snap 
+                        WHERE timestamp >= :cutoff_date
+                        AND netuid = :netuid
+                        ORDER BY timestamp DESC
+                        LIMIT 5000
+                    """
+                    df = pd.read_sql(sql, session.bind, params={
+                        'cutoff_date': cutoff_date,
+                        'netuid': int(selected_subnet)
+                    })
             else:
                 # Network-wide analysis (latest data per subnet)
-                sql = """
-                    SELECT m1.*
-                    FROM metrics_snap m1
-                    INNER JOIN (
-                        SELECT netuid, MAX(timestamp) as max_timestamp
-                        FROM metrics_snap
-                        WHERE timestamp >= :cutoff_date
-                        GROUP BY netuid
-                    ) m2 ON m1.netuid = m2.netuid AND m1.timestamp = m2.max_timestamp
-                    ORDER BY m1.netuid
-                    LIMIT 200
-                """
-                df = pd.read_sql(sql, session.bind, params={
-                    'cutoff_date': cutoff_date
-                })
+                if 'postgresql' in ACTIVE_DATABASE_URL:
+                    # PostgreSQL syntax with direct date arithmetic
+                    sql = f"""
+                        SELECT m1.*
+                        FROM metrics_snap m1
+                        INNER JOIN (
+                            SELECT netuid, MAX(timestamp) as max_timestamp
+                            FROM metrics_snap
+                            WHERE timestamp >= NOW() - INTERVAL '{days_back} days'
+                            GROUP BY netuid
+                        ) m2 ON m1.netuid = m2.netuid AND m1.timestamp = m2.max_timestamp
+                        ORDER BY m1.netuid
+                        LIMIT 200
+                    """
+                    df = pd.read_sql(sql, session.bind)
+                else:
+                    # SQLite syntax with parameters
+                    sql = """
+                        SELECT m1.*
+                        FROM metrics_snap m1
+                        INNER JOIN (
+                            SELECT netuid, MAX(timestamp) as max_timestamp
+                            FROM metrics_snap
+                            WHERE timestamp >= :cutoff_date
+                            GROUP BY netuid
+                        ) m2 ON m1.netuid = m2.netuid AND m1.timestamp = m2.max_timestamp
+                        ORDER BY m1.netuid
+                        LIMIT 200
+                    """
+                    df = pd.read_sql(sql, session.bind, params={
+                        'cutoff_date': cutoff_date
+                    })
             
             # Ensure timestamp is properly converted
             if 'timestamp' in df.columns:
