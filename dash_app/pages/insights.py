@@ -129,15 +129,46 @@ def get_network_summary_stats():
             'total_stake_tao': df['total_stake_tao'].sum() if 'total_stake_tao' in df.columns and not df.empty else 0,
             'avg_tao_score': df['tao_score'].mean() if 'tao_score' in df.columns and not df.empty and len(df['tao_score'].dropna()) > 0 else 0,
             'avg_stake_quality': df['stake_quality'].mean() if 'stake_quality' in df.columns and not df.empty and len(df['stake_quality'].dropna()) > 0 else 0,
-            'high_performers': len(df[df['tao_score'] >= 70]) if 'tao_score' in df.columns and not df.empty else 0,
-            'improving_subnets': len(df[df['flow_24h'] > 0]) if 'flow_24h' in df.columns and not df.empty else 0,
-            'strong_buy_signals': len(df[df['buy_signal'] >= 4]) if 'buy_signal' in df.columns and not df.empty else 0,
+            'high_performers': 0,  # Will calculate safely below
+            'improving_subnets': 0,  # Will calculate safely below
+            'strong_buy_signals': 0,  # Will calculate safely below
             'total_validators': df['active_validators'].sum() if 'active_validators' in df.columns and not df.empty else 0,
             'avg_validator_util': df['validator_util_pct'].mean() if 'validator_util_pct' in df.columns and not df.empty and len(df['validator_util_pct'].dropna()) > 0 else 0,
             'categories': df['primary_category'].nunique() if 'primary_category' in df.columns and not df.empty else 0,
             'data_points': 'All active subnets' if not df.empty else 'No data available',
             'date_range': 'Current data' if not df.empty else 'No data available'
         }
+        
+        # Safely calculate comparison-based stats with proper type checking
+        if 'tao_score' in df.columns and not df.empty:
+            try:
+                # Convert to numeric, coercing errors to NaN
+                tao_scores = pd.to_numeric(df['tao_score'], errors='coerce')
+                # Count values >= 70, ignoring NaN
+                stats['high_performers'] = int((tao_scores >= 70).sum())
+            except Exception as e:
+                print(f"Warning: Error calculating high performers: {e}")
+                stats['high_performers'] = 0
+        
+        if 'flow_24h' in df.columns and not df.empty:
+            try:
+                # Convert to numeric, coercing errors to NaN
+                flow_24h = pd.to_numeric(df['flow_24h'], errors='coerce')
+                # Count values > 0, ignoring NaN
+                stats['improving_subnets'] = int((flow_24h > 0).sum())
+            except Exception as e:
+                print(f"Warning: Error calculating improving subnets: {e}")
+                stats['improving_subnets'] = 0
+        
+        if 'buy_signal' in df.columns and not df.empty:
+            try:
+                # Convert to numeric, coercing errors to NaN
+                buy_signals = pd.to_numeric(df['buy_signal'], errors='coerce')
+                # Count values >= 4, ignoring NaN
+                stats['strong_buy_signals'] = int((buy_signals >= 4).sum())
+            except Exception as e:
+                print(f"Warning: Error calculating strong buy signals: {e}")
+                stats['strong_buy_signals'] = 0
         
         # Ensure all numeric values are properly formatted
         for key in ['total_market_cap_tao', 'total_stake_tao', 'avg_tao_score', 'avg_stake_quality', 'avg_validator_util']:
