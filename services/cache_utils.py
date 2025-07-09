@@ -1,89 +1,190 @@
 """
-Safe caching utilities for handling Redis connection errors and serialization issues.
+Cache utilities with Redis fallback to in-memory caching.
+Handles Redis connection issues gracefully.
 """
 
-from flask import current_app
-import pickle
-import redis
+import os
+import time
+import json
 import logging
-import sys
-import gc
+from typing import Any, Optional
+import redis
+from flask_caching import Cache
+from flask import current_app
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
-# In-memory cache for fallback (when Redis is unavailable)
+# Global in-memory cache fallback
 _memory_cache = {}
-_cache_sizes = {}
+_cache_timestamps = {}
+_max_cache_size = 1000  # Maximum number of items in memory cache
+_max_memory_mb = 100    # Maximum memory usage in MB
 
-def _get_memory_usage():
-    """Get current memory usage in MB."""
-    try:
-        import psutil
-        process = psutil.Process()
-        return process.memory_info().rss / 1024 / 1024  # Convert to MB
-    except ImportError:
-        return 0
-
-def _cleanup_memory_cache(max_size_mb=100):
-    """Clean up memory cache if it gets too large."""
-    if not _memory_cache:
-        return
+def _cleanup_memory_cache():
+    """Clean up old cache entries to prevent memory bloat."""
+    current_time = time.time()
+    items_to_remove = []
     
-    current_memory = _get_memory_usage()
-    if current_memory > max_size_mb:
-        log.warning(f"Memory usage high ({current_memory:.1f}MB), clearing cache")
-        _memory_cache.clear()
-        _cache_sizes.clear()
-        gc.collect()  # Force garbage collection
-
-def cache_get(key):
-    """Safely get a value from cache, handling connection and serialization errors."""
-    cache = getattr(current_app, "cache", None)
-    if cache is None:
-        # Fallback to in-memory cache
-        return _memory_cache.get(key)
+    # Remove expired items
+    for key, timestamp in _cache_timestamps.items():
+        if current_time - timestamp > 300:  # 5 minutes
+            items_to_remove.append(key)
     
+    # Remove oldest items if we're over the limit
+    if len(_memory_cache) > _max_cache_size:
+        sorted_items = sorted(_cache_timestamps.items(), key=lambda x: x[1])
+        items_to_remove.extend([key for key, _ in sorted_items[:len(_memory_cache) - _max_cache_size]])
+    
+    # Remove items
+    for key in items_to_remove:
+        _memory_cache.pop(key, None)
+        _cache_timestamps.pop(key, None)
+
+def _get_memory_usage_mb():
+    """Get current memory cache usage in MB."""
+    total_size = 0
+    for key, value in _memory_cache.items():
+        try:
+            if isinstance(value, str):
+                total_size += len(value.encode('utf-8'))
+            else:
+                total_size += len(json.dumps(value).encode('utf-8'))
+        except:
+            total_size += 100  # Estimate for complex objects
+    return total_size / (1024 * 1024)
+
+def init_cache(app):
+    """Initialize cache with Redis SSL bypass for Heroku."""
     try:
-        obj = cache.get(key)
-        # Flask-Caching with Redis returns the object *unpickled* if you use
-        # the default serializer, but will return bytes if SERIALIZER=None.
-        if isinstance(obj, (bytes, bytearray)):
-            obj = pickle.loads(obj)
-        return obj
-    except Exception as e:
-        # Handle Redis, SSL certificate, and deserialization errors
-        if "certificate verify failed" in str(e) or "Redis" in str(e):
-            log.warning("Redis/SSL error → bypass cache (%s)", e)
-        else:
-            log.warning("Cache deserialisation failed → bypass (%s)", e)
-            try:
-                cache.delete(key)  # purge corrupt entry
-            except:
-                pass
+        # Get Redis URL from environment
+        redis_url = os.getenv("REDIS_TLS_URL") or os.getenv("REDIS_URL")
         
-        # Fallback to in-memory cache
-        return _memory_cache.get(key)
-
-def cache_set(key, value, timeout=300):
-    """Safely set a value in cache, handling connection errors silently."""
-    cache = getattr(current_app, "cache", None)
-    if cache is None:
-        # Fallback to in-memory cache
-        _memory_cache[key] = value
-        _cache_sizes[key] = sys.getsizeof(value) if hasattr(value, '__sizeof__') else 0
-        _cleanup_memory_cache(max_size_mb=100)  # Cleanup if memory usage is high
-        return
-    
-    try:
-        cache.set(key, value, timeout=timeout)
-    except Exception as e:
-        # Handle Redis, SSL certificate, and other cache errors silently
-        if "certificate verify failed" in str(e) or "Redis" in str(e):
-            log.debug("Redis/SSL error → fallback to memory cache (%s)", e)
-            # Fallback to in-memory cache
-            _memory_cache[key] = value
-            _cache_sizes[key] = sys.getsizeof(value) if hasattr(value, '__sizeof__') else 0
-            _cleanup_memory_cache(max_size_mb=100)  # Cleanup if memory usage is high
+        if redis_url:
+            # Build Redis client that ignores TLS verification (fixes Heroku SSL issue)
+            redis_client = redis.from_url(
+                redis_url,
+                ssl_cert_reqs=None,          # Bypass CA check for self-signed certs
+                socket_timeout=3,
+                socket_connect_timeout=3,
+                decode_responses=True
+            )
+            
+            # Test the connection
+            try:
+                redis_client.ping()
+                logger.info("Redis connection successful - using Redis cache")
+                
+                app.config['CACHE_TYPE'] = 'RedisCache'
+                app.config['CACHE_REDIS_CLIENT'] = redis_client
+                app.config['CACHE_DEFAULT_TIMEOUT'] = 300
+                
+                cache = Cache(app)
+                return cache
+                
+            except Exception as e:
+                logger.warning(f"Redis connection failed: {e} - falling back to in-memory cache")
+                _use_memory_cache = True
         else:
-            log.warning("Cache set failed (%s)", e)
-        pass  # silently ignore – app must keep working 
+            logger.info("No Redis URL found - using in-memory cache")
+            _use_memory_cache = True
+            
+    except Exception as e:
+        logger.warning(f"Redis initialization failed: {e} - falling back to in-memory cache")
+        _use_memory_cache = True
+    
+    # Fallback to in-memory cache
+    app.config['CACHE_TYPE'] = 'SimpleCache'
+    cache = Cache(app)
+    return cache
+
+def cache_get(key: str) -> Optional[Any]:
+    """Get value from cache with memory fallback."""
+    try:
+        # Try Redis first
+        cache = current_app.extensions['cache']
+        if cache.config['CACHE_TYPE'] == 'RedisCache':
+            return cache.get(key)
+    except Exception as e:
+        logger.debug(f"Redis get failed for {key}: {e}")
+    
+    # Fallback to memory cache
+    try:
+        if key in _memory_cache:
+            # Check if expired (5 minute TTL)
+            if time.time() - _cache_timestamps.get(key, 0) < 300:
+                return _memory_cache[key]
+            else:
+                # Remove expired item
+                _memory_cache.pop(key, None)
+                _cache_timestamps.pop(key, None)
+    except Exception as e:
+        logger.debug(f"Memory cache get failed for {key}: {e}")
+    
+    return None
+
+def cache_set(key: str, value: Any, timeout: int = 300) -> bool:
+    """Set value in cache with memory fallback."""
+    try:
+        # Try Redis first
+        cache = current_app.extensions['cache']
+        if cache.config['CACHE_TYPE'] == 'RedisCache':
+            cache.set(key, value, timeout=timeout)
+            return True
+    except Exception as e:
+        logger.debug(f"Redis set failed for {key}: {e}")
+    
+    # Fallback to memory cache
+    try:
+        # Cleanup before adding new item
+        _cleanup_memory_cache()
+        
+        # Check memory usage
+        current_memory = _get_memory_usage_mb()
+        if current_memory > _max_memory_mb:
+            logger.warning(f"Memory cache usage {current_memory:.1f}MB exceeds limit {_max_memory_mb}MB - cleaning up")
+            _cleanup_memory_cache()
+        
+        _memory_cache[key] = value
+        _cache_timestamps[key] = time.time()
+        return True
+        
+    except Exception as e:
+        logger.debug(f"Memory cache set failed for {key}: {e}")
+    
+    return False
+
+def get_cache_stats():
+    """Get cache statistics for monitoring."""
+    try:
+        cache = current_app.extensions['cache']
+        if cache.config['CACHE_TYPE'] == 'RedisCache':
+            try:
+                redis_client = cache.config['CACHE_REDIS_CLIENT']
+                info = redis_client.info()
+                return {
+                    'type': 'redis',
+                    'status': 'connected',
+                    'memory_usage_mb': info.get('used_memory_human', 'N/A'),
+                    'cache_entries': info.get('db0', {}).get('keys', 'N/A'),
+                    'hit_rate': 'N/A'  # Redis doesn't provide this by default
+                }
+            except Exception as e:
+                return {
+                    'type': 'redis',
+                    'status': f'error: {str(e)}',
+                    'memory_usage_mb': 'N/A',
+                    'cache_entries': 'N/A',
+                    'hit_rate': 'N/A'
+                }
+    except:
+        pass
+    
+    # Memory cache stats
+    memory_usage = _get_memory_usage_mb()
+    return {
+        'type': 'memory',
+        'status': 'active',
+        'memory_usage_mb': f"{memory_usage:.1f}MB",
+        'cache_entries': len(_memory_cache),
+        'hit_rate': 'N/A'
+    } 

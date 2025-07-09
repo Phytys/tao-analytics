@@ -367,14 +367,20 @@ def render_category_chart(data):
 def render_memory_cache_status(data):
     """Render memory and cache monitoring status."""
     try:
-        from services.cache_utils import _get_memory_usage, _memory_cache, _cache_sizes
+        from services.cache_utils import get_cache_stats
         
-        # Get memory usage
-        memory_mb = _get_memory_usage()
+        # Get cache statistics using new utility
+        cache_stats = get_cache_stats()
         
-        # Get cache statistics
-        cache_entries = len(_memory_cache)
-        cache_size_mb = sum(_cache_sizes.values()) / (1024 * 1024) if _cache_sizes else 0
+        # Parse memory usage
+        memory_usage = cache_stats.get('memory_usage_mb', 'N/A')
+        if isinstance(memory_usage, str) and memory_usage != 'N/A':
+            try:
+                memory_mb = float(memory_usage.replace('MB', ''))
+            except:
+                memory_mb = 0
+        else:
+            memory_mb = 0
         
         # Determine memory status
         if memory_mb > 400:  # 80% of 512MB dyno
@@ -387,14 +393,21 @@ def render_memory_cache_status(data):
             memory_status = "success"
             memory_icon = "🟢"
         
-        # Get Redis status from cache info
-        redis_status = "Unknown"
-        if data and 'cache_info' in data:
-            cache_info = data['cache_info']
-            if 'redis_available' in cache_info:
-                redis_status = "🟢 Available" if cache_info['redis_available'] else "🔴 SSL Error"
+        # Get cache type and status
+        cache_type = cache_stats.get('type', 'unknown')
+        cache_status = cache_stats.get('status', 'unknown')
+        cache_entries = cache_stats.get('cache_entries', 'N/A')
+        
+        # Format Redis status
+        if cache_type == 'redis':
+            if 'connected' in cache_status:
+                redis_status = "🟢 Connected"
+            elif 'error' in cache_status:
+                redis_status = "🔴 SSL Error"
             else:
-                redis_status = "⚪ Unknown"
+                redis_status = f"⚪ {cache_status}"
+        else:
+            redis_status = "🟡 Memory Only"
         
         return dbc.Card([
             dbc.CardBody([
@@ -420,8 +433,8 @@ def render_memory_cache_status(data):
                     dbc.Col([
                         dbc.Card([
                             dbc.CardBody([
-                                html.H4(f"{cache_size_mb:.2f}MB", className="text-warning"),
-                                html.P("Cache Size", className="card-text")
+                                html.H4(f"{cache_type.title()}", className="text-warning"),
+                                html.P("Cache Type", className="card-text")
                             ])
                         ], className="text-center")
                     ], width=3),
@@ -438,8 +451,8 @@ def render_memory_cache_status(data):
                 html.H6("Cache Details", className="mt-3"),
                 html.Div([
                     html.P(f"• Memory Usage: {memory_mb:.1f}MB"),
-                    html.P(f"• In-Memory Cache Entries: {cache_entries}"),
-                    html.P(f"• Cache Size: {cache_size_mb:.2f}MB"),
+                    html.P(f"• Cache Type: {cache_type.title()}"),
+                    html.P(f"• Cache Entries: {cache_entries}"),
                     html.P(f"• Redis Status: {redis_status}"),
                     html.P(f"• Auto-cleanup threshold: 100MB"),
                 ], className="text-muted small")

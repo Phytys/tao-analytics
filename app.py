@@ -37,32 +37,9 @@ def create_app():
     server.secret_key = os.getenv('SECRET_KEY', 'tao-analytics-secret-key-2024')
     server.config["JSONIFY_PRETTYPRINT_REGULAR"] = False
     
-    # Configure Redis caching
-    if os.getenv('REDIS_URL'):
-        redis_url = os.getenv('REDIS_URL')
-        cache_config = {
-            'CACHE_TYPE': 'RedisCache',
-            'CACHE_REDIS_URL': redis_url,
-            'CACHE_DEFAULT_TIMEOUT': 300,  # 5 minutes default
-            'CACHE_KEY_PREFIX': 'tao_analytics_'
-        }
-        
-        # Handle SSL certificates for Redis URLs starting with rediss://
-        if redis_url and redis_url.startswith('rediss://'):
-            # For Redis SSL connections, we need to handle certificate verification
-            # Flask-Caching will use the Redis URL as-is, and cache_utils.py handles errors gracefully
-            # The error will be logged but the app will continue working with fallback cache
-            pass
-    else:
-        # Use simple in-process cache for local development without Redis
-        cache_config = {
-            'CACHE_TYPE': 'SimpleCache',
-            'CACHE_DEFAULT_TIMEOUT': 300
-        }
-    
-    # Initialize cache
-    cache = Cache()
-    cache.init_app(server, config=cache_config)
+    # Initialize cache with SSL bypass for Heroku
+    from services.cache_utils import init_cache
+    cache = init_cache(server)
     
     # Make cache available globally
     server.cache = cache

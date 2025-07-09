@@ -1,26 +1,34 @@
 """
-Dynamic Insights Dashboard - Time Series Analytics for Bittensor Network
-Leverages rich metrics_snap data for comprehensive network analysis and trends.
+Dynamic Network Insights Dashboard
+Provides comprehensive time series analytics and network performance insights.
 """
 
-import dash
-from dash import html, dcc, Input, Output, callback, State
-from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
-import plotly.express as px
+from dash import html, dcc, Input, Output, callback
+from dash.exceptions import PreventUpdate
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+import plotly.express as px
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-from services.db import get_db, safe_query_execute
-from models import MetricsSnap, SubnetMeta
-from sqlalchemy import func, desc, and_, or_, text
-from config import TAO_SCORE_COLUMN
-import json
-import os
-
+from decimal import Decimal
 from services.cache_utils import cache_get, cache_set
+from services.db import get_db
+from config import TAO_SCORE_COLUMN
+
+# Set pandas to treat inf as na
+pd.options.mode.use_inf_as_na = True
+
+def _clean_numeric(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
+    """Clean numeric columns by converting Decimal to float and handling None/empty strings."""
+    for c in cols:
+        if c in df.columns:
+            # Cast Decimal → float first, coerce strings, force nan for None
+            df[c] = (df[c]
+                     .apply(lambda x: float(x) if isinstance(x, Decimal) else x)
+                     .replace({None: np.nan, '': np.nan}))
+            df[c] = pd.to_numeric(df[c], errors='coerce')
+    return df
 
 def get_time_series_data(days_back=30, limit=5000):
     """Get time series data using the same data source as other charts for consistency."""
@@ -111,6 +119,15 @@ def get_network_summary_stats():
         
         # Get the same data that other charts use
         df = load_screener_frame()
+        
+        # Clean numeric columns BEFORE any comparisons (fixes PostgreSQL vs SQLite issue)
+        numeric_cols = ['tao_score', 'market_cap_tao', 'total_stake_tao', 'stake_quality', 
+                       'flow_24h', 'buy_signal', 'active_validators', 'validator_util_pct']
+        df = _clean_numeric(df, numeric_cols)
+        
+        # Log dtypes for debugging
+        print(f"DEBUG: DataFrame dtypes after cleaning: {df.dtypes}")
+        print(f"DEBUG: DataFrame head: {df.head()}")
         
         # Add buy_signal column if not present (for Heroku compatibility)
         if 'buy_signal' not in df.columns:
@@ -321,6 +338,11 @@ def create_improvement_tracker(df, days_back=30):
             text="No data available", 
             xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False
         )
+    
+    # Clean numeric columns BEFORE any comparisons (fixes PostgreSQL vs SQLite issue)
+    numeric_cols = ['tao_score', 'market_cap_tao', 'total_stake_tao', 'stake_quality', 
+                   'flow_24h', 'buy_signal', 'active_validators', 'validator_util_pct']
+    df = _clean_numeric(df, numeric_cols)
     
     # Calculate improvement for each subnet
     improvements = []
