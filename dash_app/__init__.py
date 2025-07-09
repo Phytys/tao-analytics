@@ -149,7 +149,7 @@ def create_dash(server):
                     html.A("Correlation", href="/dash/correlation", className="nav-link"),
                     html.A("About", href="/about", className="nav-link", id="about-nav-link"),
                     html.A("System Info", href="/dash/system-info", className="nav-link", id="system-info-nav-link"),
-                    html.A("Back to Home", href="/", className="nav-link")
+                    html.A("Home", href="/", className="nav-link")
                 ], className="nav-links", id="nav-links")
             ], className="nav-container")
         ], className="navbar"),

@@ -280,6 +280,7 @@ def load_screener_frame():
         MetricsSnap.emission_pct,
         MetricsSnap.alpha_emitted_pct,
         MetricsSnap.emission_roi,
+        MetricsSnap.tao_in_emission,
         getattr(MetricsSnap, TAO_SCORE_COLUMN).label('tao_score'),
         MetricsSnap.stake_quality_rank_pct,
         MetricsSnap.momentum_rank_pct,
@@ -327,7 +328,7 @@ def load_screener_frame():
         'uid_count', 'active_validators', 'validators_active', 'max_validators',
         'stake_hhi', 'hhi', 'gini_coeff_top_100', 'reserve_momentum', 'stake_quality', 
         'validator_util_pct', 'active_stake_ratio', 'consensus_alignment', 'emission_pct', 
-        'alpha_emitted_pct', 'emission_roi', 'tao_score', 'stake_quality_rank_pct', 'momentum_rank_pct',
+        'alpha_emitted_pct', 'emission_roi', 'tao_in_emission', 'tao_score', 'stake_quality_rank_pct', 'momentum_rank_pct',
         'realized_pnl_tao', 'unrealized_pnl_tao', 'ath_60d', 'atl_60d',
         'alpha_in', 'alpha_out', 'alpha_circ', 'alpha_prop', 'root_prop'
     ]

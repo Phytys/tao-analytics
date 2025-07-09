@@ -417,7 +417,7 @@ def layout():
                     "Comprehensive time series analytics leveraging our rich metrics database. ",
                     "Track network trends, subnet performance, and discover investment opportunities ",
                     "with interactive charts and dynamic filtering. ",
-                    html.A("Correlation analysis and GPT insights", href="/dash/correlation", className="text-primary"),
+                    html.A("Correlation analysis", href="/dash/correlation", className="text-primary"),
                     " are now available on a dedicated page."
                 ], className="text-muted mb-0")
             ])

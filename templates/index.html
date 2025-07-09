@@ -144,135 +144,207 @@
                 {% endif %}
             </div>
             
-            <!-- GPT Analysis Insights Cards -->
-            {% if gpt_insights %}
+            <!-- Dynamic Landing Page Insights Cards -->
+            {% if landing_insights and landing_insights.data_available %}
             <div class="gpt-insights-section">
                 <h3 class="insights-title">
-                    🤖 AI-Powered Subnet Insights
+                    📊 Dynamic Network Insights
                     <span class="tooltip-icon" title="⚠️ DISCLAIMER: This analysis is for data transparency and educational purposes only. It is NOT financial advice. Always conduct your own research and due diligence before making any investment decisions.">ⓘ</span>
                 </h3>
                 <div style="background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; margin: 16px 0; font-size: 14px; color: #333;">
-                    <strong>📊 Analysis Methodology:</strong> "Low Stake Quality Alerts" show subnets with <strong>stake_quality < 20</strong>. This is a <em>statistical outlier</em> flag only. It does <strong>not</strong> evaluate code quality, custody risk, or validator honesty. Early-stage subnets often have low stake quality during dTAO liquidity bootstrapping.
+                    <strong>📊 Analysis Methodology:</strong> Insights are based on real-time correlation analysis and statistical outliers. Data is updated daily as new metrics become available. All metrics are calculated from on-chain data and market performance indicators.
                 </div>
-                <p class="insights-subtitle">Latest AI analysis of Bittensor network correlations and opportunities</p>
+                <p class="insights-subtitle">Latest network analysis based on correlation data and statistical insights</p>
                 
                 <div class="insights-cards">
-                    <!-- Undervalued Subnets Card -->
-                    <div class="insight-card undervalued">
+                    <!-- Hot Subnets Card -->
+                    <div class="insight-card hot-subnets">
                         <div class="card-header">
-                            <div class="card-icon">💎</div>
-                            <h4>Undervalued</h4>
+                            <div class="card-icon">🔥</div>
+                            <h4>Top 3 Hot Subnets</h4>
                         </div>
                         <div class="card-content">
-                            {% if gpt_insights.undervalued %}
-                                {% for subnet in gpt_insights.undervalued[:3] %}
+                            {% if landing_insights.hot_subnets %}
+                                {% for subnet in landing_insights.hot_subnets %}
                                 <div class="subnet-item">
-                                    {% if subnet is string %}
-                                        <div class="subnet-name">{{ subnet }}</div>
-                                    {% elif subnet.name is defined %}
-                                        <div class="subnet-name">{{ subnet.name }}</div>
-                                        <div class="subnet-metrics">
-                                            {% if subnet['TAO-Score'] is defined %}
-                                            <span class="metric">TAO-Score: {{ "%.1f"|format(subnet['TAO-Score']) }}</span>
-                                            {% endif %}
-                                            {% if subnet['Market Cap'] is defined %}
-                                            <span class="metric">Market Cap: {{ "{:,.0f}".format(subnet['Market Cap']) }} TAO</span>
-                                            {% endif %}
-                                        </div>
-                                    {% else %}
-                                        <div class="subnet-name">{{ subnet }}</div>
-                                    {% endif %}
+                                    <div class="subnet-name">{% if subnet.name %}{{ subnet.name }} (#{{ subnet.netuid }}){% else %}Subnet #{{ subnet.netuid }}{% endif %}</div>
+                                    <div class="subnet-metrics">
+                                        <span class="metric">TAO Score: {{ subnet.tao_score }}</span>
+                                        <span class="metric">7d: {{ subnet.price_change_7d }}%</span>
+                                        <span class="metric">Flow: {{ subnet.flow_24h }}</span>
+                                        <span class="metric">Score: {{ subnet.hot_score }}</span>
+                                    </div>
+                                    <div class="subnet-category">{{ subnet.category }}</div>
                                 </div>
                                 {% endfor %}
-                                {% if gpt_insights.undervalued|length > 3 %}
-                                <div class="more-items">+{{ gpt_insights.undervalued|length - 3 }} more</div>
-                                {% endif %}
                             {% else %}
-                                <div class="no-data">No undervalued subnets identified</div>
+                                <div class="no-data">No hot subnets identified</div>
                             {% endif %}
                         </div>
                     </div>
                     
-                    <!-- Low Stake Quality Alerts Card -->
-                    <div class="insight-card low-stake-alerts">
+                    <!-- Outliers Card -->
+                    <div class="insight-card outliers">
                         <div class="card-header">
-                            <div class="card-icon">⚠️</div>
-                            <h4>Low Stake Quality Alerts</h4>
+                            <div class="card-icon">📊</div>
+                            <h4>Top 3 Outliers</h4>
                         </div>
                         <div class="card-content">
-                            {% if gpt_insights.scam_flags %}
-                                {% for subnet in gpt_insights.scam_flags[:3] %}
+                            {% if landing_insights.outliers %}
+                                {% for subnet in landing_insights.outliers %}
                                 <div class="subnet-item">
-                                    {% if subnet is string %}
-                                        <div class="subnet-name">{{ subnet }}</div>
-                                    {% elif subnet.name is defined %}
-                                        <div class="subnet-name">{{ subnet.name }}</div>
-                                        <div class="subnet-metrics">
-                                            {% if subnet['Stake Quality'] is defined %}
-                                            <span class="metric">Stake Quality: {{ "%.1f"|format(subnet['Stake Quality']) }}</span>
-                                            {% endif %}
-                                            {% if subnet['Market Cap'] is defined %}
-                                            <span class="metric">Market Cap: {{ "{:,.0f}".format(subnet['Market Cap']) }}</span>
-                                            {% endif %}
-                                        </div>
-                                    {% else %}
-                                        <div class="subnet-name">{{ subnet }}</div>
-                                    {% endif %}
+                                    <div class="subnet-name">{% if subnet.name %}{{ subnet.name }} (#{{ subnet.netuid }}){% else %}Subnet #{{ subnet.netuid }}{% endif %}</div>
+                                    <div class="subnet-metrics">
+                                        <span class="metric">{{ subnet.metric }}: {{ subnet.value }}</span>
+                                        <span class="metric">Z-Score: {{ subnet.z_score }}</span>
+                                    </div>
+                                    <div class="subnet-reason">{{ subnet.reason }}</div>
+                                    <div class="subnet-category">{{ subnet.category }}</div>
                                 </div>
                                 {% endfor %}
-                                {% if gpt_insights.scam_flags|length > 3 %}
-                                <div class="more-items">+{{ gpt_insights.scam_flags|length - 3 }} more</div>
-                                {% endif %}
                             {% else %}
-                                <div class="no-data">No low stake quality alerts identified</div>
+                                <div class="no-data">No outliers identified</div>
                             {% endif %}
                         </div>
                     </div>
                     
-                    <!-- Healthy Subnets Card -->
-                    <div class="insight-card healthy">
+                    <!-- Price Momentum Card -->
+                    <div class="insight-card price-momentum">
+                        <div class="card-header">
+                            <div class="card-icon">📈</div>
+                            <h4>Top 3 Price Momentum</h4>
+                        </div>
+                        <div class="card-content">
+                            {% if landing_insights.price_momentum %}
+                                {% for subnet in landing_insights.price_momentum %}
+                                <div class="subnet-item">
+                                    <div class="subnet-name">{% if subnet.name %}{{ subnet.name }} (#{{ subnet.netuid }}){% else %}Subnet #{{ subnet.netuid }}{% endif %}</div>
+                                    <div class="subnet-metrics">
+                                        <span class="metric">7d: {{ subnet.price_change_7d }}%</span>
+                                        <span class="metric">Flow: {{ subnet.flow_24h }}</span>
+                                        <span class="metric">Momentum: {{ subnet.momentum_score }}</span>
+                                    </div>
+                                    <div class="subnet-category">{{ subnet.category }}</div>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="no-data">No momentum data available</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Hot Categories Card -->
+                    <div class="insight-card hot-categories">
                         <div class="card-header">
                             <div class="card-icon">🏆</div>
-                            <h4>Healthy Subnets</h4>
+                            <h4>
+                                Top 3 Hot Categories
+                                <span class="tooltip-icon" title="Multi-factor scoring: TAO Score (30%), 7d Price Change (30%), Flow Turnover (20%), Size Factor (20%). Size uses √count to reduce bias toward larger categories.">ⓘ</span>
+                            </h4>
+                            <div class="card-count">{{ landing_insights.hot_categories|length }}</div>
                         </div>
                         <div class="card-content">
-                            {% if gpt_insights.healthy %}
-                                {% for subnet in gpt_insights.healthy[:3] %}
+                            {% if landing_insights.hot_categories %}
+                                {% for category in landing_insights.hot_categories %}
                                 <div class="subnet-item">
-                                    {% if subnet is string %}
-                                        <div class="subnet-name">{{ subnet }}</div>
-                                    {% elif subnet.name is defined %}
-                                        <div class="subnet-name">{{ subnet.name }}</div>
-                                        <div class="subnet-metrics">
-                                            {% if subnet['TAO-Score'] is defined %}
-                                            <span class="metric">TAO-Score: {{ "%.1f"|format(subnet['TAO-Score']) }}</span>
-                                            {% endif %}
-                                            {% if subnet['Stake Quality'] is defined %}
-                                            <span class="metric">Stake Quality: {{ "%.1f"|format(subnet['Stake Quality']) }}</span>
-                                            {% endif %}
-                                        </div>
-                                    {% else %}
-                                        <div class="subnet-name">{{ subnet }}</div>
-                                    {% endif %}
+                                    <div class="subnet-name">{{ category.name }}</div>
+                                    <div class="subnet-metrics">
+                                        <span class="metric">Hot Score: {{ category.hot_score }}</span>
+                                        <span class="metric">{{ category.subnet_count }} subnets</span>
+                                    </div>
+                                    <div class="subnet-reason">
+                                        <strong>Performance:</strong>
+                                        Avg TAO Score: {{ category.avg_tao_score }} | 
+                                        7d Change: {{ category.avg_price_change_7d }}% | 
+                                        Turnover: {{ category.avg_flow_turnover }}
+                                    </div>
                                 </div>
                                 {% endfor %}
-                                {% if gpt_insights.healthy|length > 3 %}
-                                <div class="more-items">+{{ gpt_insights.healthy|length - 3 }} more</div>
-                                {% endif %}
                             {% else %}
-                                <div class="no-data">No top performers identified</div>
+                                <div class="no-data">No category data available</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Emission Farming Watchlist Card -->
+                    <div class="insight-card farmer-watchlist">
+                        <div class="card-header">
+                            <div class="card-icon">⚠️</div>
+                            <h4>
+                                Emission-Farmer Watch-List
+                                <span class="tooltip-icon" title="We label a subnet ‘Emission-farmer’ when at least five metrics (emission ROI, stake concentration, validator utilisation, flow turnover, 30-day price trend) exceed risk thresholds. This is not a claim of scam; it’s a quantitative risk signal.">ⓘ</span>
+                            </h4>
+                            <div class="card-count">{{ landing_insights.farmer_watchlist|length }}</div>
+                        </div>
+                        <div class="card-subheader">
+                            Subnets whose on-chain metrics resemble high-emission, low-utility patterns. Do your own research.
+                        </div>
+                        <div class="card-content">
+                            {% if landing_insights.farmer_watchlist %}
+                                {% for subnet in landing_insights.farmer_watchlist %}
+                                <div class="subnet-item">
+                                    <div class="subnet-name">{% if subnet.name %}{{ subnet.name }} (#{{ subnet.netuid }}){% else %}Subnet #{{ subnet.netuid }}{% endif %}</div>
+                                    <div class="subnet-metrics">
+                                        <span class="metric">Farmer Score: {{ subnet.farmer_score }}</span>
+                                        <span class="metric">{{ subnet.category }}</span>
+                                    </div>
+                                    <div class="subnet-reason">
+                                        <strong>Top concerns:</strong>
+                                        {% for metric in subnet.worst_metrics %}
+                                            {{ metric.metric }} ({{ metric.contribution }})
+                                            {% if not loop.last %}, {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="no-data">No emission farming patterns detected</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Emission Farming Red Flags Card -->
+                    <div class="insight-card farmer-redflags">
+                        <div class="card-header">
+                            <div class="card-icon">🚨</div>
+                            <h4>
+                                Red-Flag: Emission Farming Risk
+                                <span class="tooltip-icon" title="We label a subnet ‘Emission-farmer’ when at least five metrics (emission ROI, stake concentration, validator utilisation, flow turnover, 30-day price trend) exceed risk thresholds. This is not a claim of scam; it’s a quantitative risk signal.">ⓘ</span>
+                            </h4>
+                            <div class="card-count">{{ landing_insights.farmer_redflags|length }}</div>
+                        </div>
+                        <div class="card-subheader">
+                            Subnets whose on-chain metrics resemble high-emission, low-utility patterns. Do your own research.
+                        </div>
+                        <div class="card-content">
+                            {% if landing_insights.farmer_redflags %}
+                                {% for subnet in landing_insights.farmer_redflags %}
+                                <div class="subnet-item">
+                                    <div class="subnet-name">{% if subnet.name %}{{ subnet.name }} (#{{ subnet.netuid }}){% else %}Subnet #{{ subnet.netuid }}{% endif %}</div>
+                                    <div class="subnet-metrics">
+                                        <span class="metric">Farmer Score: {{ subnet.farmer_score }}</span>
+                                        <span class="metric">{{ subnet.category }}</span>
+                                    </div>
+                                    <div class="subnet-reason">
+                                        <strong>Critical issues:</strong>
+                                        {% for metric in subnet.worst_metrics %}
+                                            {{ metric.metric }} ({{ metric.contribution }})
+                                            {% if not loop.last %}, {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="no-data">No red flag patterns detected</div>
                             {% endif %}
                         </div>
                     </div>
                 </div>
                 
                 <div class="insights-footer">
-                    <a href="/dash/correlation" class="insights-link">
-                        <span>View Full Analysis</span>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M5 12h14M12 5l7 7-7 7"/>
-                        </svg>
-                    </a>
+                    <div class="insights-timestamp">
+                        <small>Last updated: {{ landing_insights.last_updated }}</small>
+                    </div>
                     <div class="insights-disclaimer">
                         <p>⚠️ <strong>Disclaimer:</strong> This analysis is for data transparency and educational purposes only. It is NOT financial advice. Always conduct your own research and due diligence before making any investment decisions.</p>
                     </div>
@@ -281,7 +353,7 @@
             {% else %}
             <div class="gpt-insights-section">
                 <h3 class="insights-title">
-                    🤖 AI-Powered Subnet Insights
+                    📊 Dynamic Network Insights
                     <span class="tooltip-icon" title="⚠️ DISCLAIMER: This analysis is for data transparency and educational purposes only. It is NOT financial advice. Always conduct your own research and due diligence before making any investment decisions.">ⓘ</span>
                 </h3>
                 <div class="insights-cards">
@@ -291,17 +363,11 @@
                             <h4>Analysis Unavailable</h4>
                         </div>
                         <div class="card-content">
-                            <div class="no-data">GPT analysis data is currently unavailable. Please check back later or visit the Insights page for the latest analysis.</div>
+                            <div class="no-data">Dynamic analysis data is currently unavailable. Please check back later or visit the Insights page for the latest analysis.</div>
                         </div>
                     </div>
                 </div>
                 <div class="insights-footer">
-                    <a href="/dash/correlation" class="insights-link">
-                        <span>View Full Analysis</span>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M5 12h14M12 5l7 7-7 7"/>
-                        </svg>
-                    </a>
                 </div>
             </div>
             {% endif %}

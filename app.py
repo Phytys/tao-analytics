@@ -82,60 +82,26 @@ def create_app():
             network_data = None
             data_available = False
         
-        # Get GPT analysis insights for landing page
+        # Get dynamic landing page insights
         try:
-            from services.correlation_analysis import correlation_service
-            gpt_result = correlation_service.get_analysis()
-            if gpt_result['success'] and gpt_result['status'] in ['Cached', 'Generated']:
-                # Extract the JSON data from the analysis
-                analysis_text = gpt_result['analysis']
-                # Look for JSON in the analysis text - try multiple patterns
-                import re
-                import json
-                
-                # Try to find JSON with more flexible pattern
-                # Look for complete JSON object at the end of the analysis
-                json_patterns = [
-                    # Look for JSON at the end of the text (most common case)
-                    r'(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})\s*$',
-                    # Look for JSON with the specific keys we expect
-                    r'(\{[^{}]*"undervalued"[^{}]*(?:\{[^{}]*\}[^{}]*)*"scam_flags"[^{}]*(?:\{[^{}]*\}[^{}]*)*"healthy"[^{}]*(?:\{[^{}]*\}[^{}]*)*\})',
-                    # Fallback: look for any JSON object with our expected keys
-                    r'(\{[^{}]*"undervalued"[^{}]*\})',
-                ]
-                
-                gpt_insights = None
-                for pattern in json_patterns:
-                    json_match = re.search(pattern, analysis_text, re.DOTALL)
-                    if json_match:
-                        try:
-                            # Use the first capture group if it exists, otherwise use the whole match
-                            json_str = json_match.group(1) if json_match.groups() else json_match.group()
-                            gpt_insights = json.loads(json_str)
-                            logger.info(f"Successfully extracted GPT insights from analysis")
-                            break
-                        except json.JSONDecodeError as e:
-                            logger.debug(f"JSON decode error with pattern {pattern}: {e}")
-                            continue
-                
-                if not gpt_insights:
-                    logger.warning("Could not extract JSON from GPT analysis text")
-                    # For debugging, let's see what the analysis text looks like
-                    logger.debug(f"Analysis text preview: {analysis_text[:500]}...")
-                    
-                    # No fallback data - show missing data instead
-                    gpt_insights = None
-            else:
-                logger.warning(f"GPT analysis not available: {gpt_result.get('status', 'unknown')}")
-                gpt_insights = None
+            from services.landing_page_insights import landing_page_insights_service
+            landing_insights = landing_page_insights_service.get_landing_page_insights()
+            logger.debug("Successfully loaded landing page insights")
         except Exception as e:
-            logger.error(f"Error loading GPT analysis for landing page: {e}")
-            gpt_insights = None
+            logger.error(f"Error loading landing page insights: {e}")
+            landing_insights = {
+                'hot_subnets': [],
+                'outliers': [],
+                'price_momentum': [],
+                'hot_categories': [],
+                'last_updated': datetime.now().strftime('%Y-%m-%d %H:%M UTC'),
+                'data_available': False
+            }
         
         return render_template("index.html", 
                              network_data=network_data, 
                              data_available=data_available,
-                             gpt_insights=gpt_insights)
+                             landing_insights=landing_insights)
 
     @server.route("/about")
     @limiter.limit("100 per hour")
