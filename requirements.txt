@@ -31,3 +31,4 @@ Flask-Limiter>=3.5.0      # rate limiting
 # --- caching ---
 Flask-Caching>=2.1.0      # Redis caching for performance
 redis>=5.0.0              # Redis client
+psutil>=5.9.0             # memory monitoring for cache management

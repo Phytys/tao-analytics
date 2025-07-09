@@ -105,6 +105,12 @@ layout = dbc.Container([
         ], md=6),
     ], className="mb-4"),
     
+    # Memory & Cache Monitoring Section
+    html.Div([
+        html.H3("Memory & Cache Monitoring", className="mb-3"),
+        html.Div(id="memory-cache-status", className="mb-4"),
+    ], className="mb-4"),
+    
     # TAO Score Monitoring Section
     html.Div([
         html.H3("TAO Score Monitoring", className="mb-3"),
@@ -353,6 +359,94 @@ def render_category_chart(data):
     fig.update_traces(textposition='outside')
     
     return dcc.Graph(figure=fig, config={'displayModeBar': False})
+
+@callback(
+    Output("memory-cache-status", "children"),
+    Input("system-data", "data")
+)
+def render_memory_cache_status(data):
+    """Render memory and cache monitoring status."""
+    try:
+        from services.cache_utils import _get_memory_usage, _memory_cache, _cache_sizes
+        
+        # Get memory usage
+        memory_mb = _get_memory_usage()
+        
+        # Get cache statistics
+        cache_entries = len(_memory_cache)
+        cache_size_mb = sum(_cache_sizes.values()) / (1024 * 1024) if _cache_sizes else 0
+        
+        # Determine memory status
+        if memory_mb > 400:  # 80% of 512MB dyno
+            memory_status = "danger"
+            memory_icon = "🔴"
+        elif memory_mb > 300:  # 60% of 512MB dyno
+            memory_status = "warning"
+            memory_icon = "🟡"
+        else:
+            memory_status = "success"
+            memory_icon = "🟢"
+        
+        # Get Redis status from cache info
+        redis_status = "Unknown"
+        if data and 'cache_info' in data:
+            cache_info = data['cache_info']
+            if 'redis_available' in cache_info:
+                redis_status = "🟢 Available" if cache_info['redis_available'] else "🔴 SSL Error"
+            else:
+                redis_status = "⚪ Unknown"
+        
+        return dbc.Card([
+            dbc.CardBody([
+                html.H5("Memory & Cache Status", className="card-title"),
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Card([
+                            dbc.CardBody([
+                                html.H4(f"{memory_icon} {memory_mb:.1f}MB", 
+                                       className=f"text-{memory_status}"),
+                                html.P("Memory Usage", className="card-text")
+                            ])
+                        ], className="text-center")
+                    ], width=3),
+                    dbc.Col([
+                        dbc.Card([
+                            dbc.CardBody([
+                                html.H4(f"{cache_entries}", className="text-info"),
+                                html.P("Cache Entries", className="card-text")
+                            ])
+                        ], className="text-center")
+                    ], width=3),
+                    dbc.Col([
+                        dbc.Card([
+                            dbc.CardBody([
+                                html.H4(f"{cache_size_mb:.2f}MB", className="text-warning"),
+                                html.P("Cache Size", className="card-text")
+                            ])
+                        ], className="text-center")
+                    ], width=3),
+                    dbc.Col([
+                        dbc.Card([
+                            dbc.CardBody([
+                                html.H4(redis_status, className="text-secondary"),
+                                html.P("Redis Status", className="card-text")
+                            ])
+                        ], className="text-center")
+                    ], width=3),
+                ]),
+                html.Hr(),
+                html.H6("Cache Details", className="mt-3"),
+                html.Div([
+                    html.P(f"• Memory Usage: {memory_mb:.1f}MB"),
+                    html.P(f"• In-Memory Cache Entries: {cache_entries}"),
+                    html.P(f"• Cache Size: {cache_size_mb:.2f}MB"),
+                    html.P(f"• Redis Status: {redis_status}"),
+                    html.P(f"• Auto-cleanup threshold: 100MB"),
+                ], className="text-muted small")
+            ])
+        ])
+    except Exception as e:
+        return dbc.Alert(f"Error loading memory status: {e}", color="danger")
 
 @callback(
     Output("cache-stats", "children"),

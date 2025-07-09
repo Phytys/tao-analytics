@@ -328,20 +328,30 @@ def create_improvement_tracker(df, days_back=30):
     for netuid in df['netuid'].unique():
         subnet_data = df[df['netuid'] == netuid].sort_values('timestamp')
         if len(subnet_data) >= 2:
-            first_score = subnet_data.iloc[0]['tao_score']
-            last_score = subnet_data.iloc[-1]['tao_score']
-            improvement = last_score - first_score
-            
-            if abs(improvement) >= 0.1:  # Minimum change threshold
-                improvements.append({
-                    'netuid': netuid,
-                    'subnet_name': subnet_data.iloc[0]['subnet_name'],
-                    'category': subnet_data.iloc[0]['category'],
-                    'improvement': improvement,
-                    'start_score': first_score,
-                    'end_score': last_score,
-                    'days_tracked': (subnet_data.iloc[-1]['timestamp'] - subnet_data.iloc[0]['timestamp']).days
-                })
+            try:
+                # Safely convert tao_score to numeric
+                first_score = pd.to_numeric(subnet_data.iloc[0]['tao_score'], errors='coerce')
+                last_score = pd.to_numeric(subnet_data.iloc[-1]['tao_score'], errors='coerce')
+                
+                # Skip if either score is NaN
+                if pd.isna(first_score) or pd.isna(last_score):
+                    continue
+                    
+                improvement = last_score - first_score
+                
+                if abs(improvement) >= 0.1:  # Minimum change threshold
+                    improvements.append({
+                        'netuid': netuid,
+                        'subnet_name': subnet_data.iloc[0]['subnet_name'],
+                        'category': subnet_data.iloc[0]['category'],
+                        'improvement': improvement,
+                        'start_score': first_score,
+                        'end_score': last_score,
+                        'days_tracked': (subnet_data.iloc[-1]['timestamp'] - subnet_data.iloc[0]['timestamp']).days
+                    })
+            except Exception as e:
+                print(f"Warning: Error calculating improvement for subnet {netuid}: {e}")
+                continue
     
     if not improvements:
         return go.Figure().add_annotation(
@@ -358,7 +368,7 @@ def create_improvement_tracker(df, days_back=30):
         x=top_improvers['improvement'],
         y=[f"{row['subnet_name']} ({row['netuid']})" for _, row in top_improvers.iterrows()],
         orientation='h',
-        marker_color=['#28a745' if x > 0 else '#dc3545' for x in top_improvers['improvement']],
+        marker_color=['#28a745' if float(x) > 0 else '#dc3545' for x in top_improvers['improvement']],
         hovertemplate='<b>%{y}</b><br>Improvement: %{x:.1f} points<br>From: %{customdata[0]:.1f} → To: %{customdata[1]:.1f}<br>Days: %{customdata[2]}<extra></extra>',
         customdata=list(zip(top_improvers['start_score'], top_improvers['end_score'], top_improvers['days_tracked']))
     ))
