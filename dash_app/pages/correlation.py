@@ -38,29 +38,58 @@ def get_time_series_data(days_back=2, limit=5000):
         from sqlalchemy import text
         
         # Optimized query for correlation analysis - reduced data load for Heroku
-        sql = text("""
-            SELECT 
-                netuid, subnet_name, category, timestamp,
-                -- Core performance metrics (most important for correlations)
-                tao_score, stake_quality, buy_signal, emission_roi,
-                -- Market dynamics (key metrics)
-                market_cap_tao, fdv_tao, price_7d_change, flow_24h,
-                -- Network health (essential metrics)
-                active_validators, validator_util_pct, total_stake_tao,
-                -- Stake distribution (important for analysis)
-                stake_hhi, gini_coeff_top_100,
-                -- Token flow (key indicators)
-                reserve_momentum, tao_in, alpha_circ
-            FROM metrics_snap 
-            WHERE timestamp >= :cutoff_date
-            ORDER BY timestamp DESC
-            LIMIT :limit
-        """)
+        # Use database-agnostic approach to avoid PostgreSQL parameter binding issues
+        from config import ACTIVE_DATABASE_URL
         
-        df = pd.read_sql(sql, session.bind, params={
-            'cutoff_date': cutoff_date,
-            'limit': limit
-        })
+        if 'postgresql' in ACTIVE_DATABASE_URL:
+            # PostgreSQL syntax with direct date arithmetic
+            sql = text(f"""
+                SELECT 
+                    netuid, subnet_name, category, timestamp,
+                    -- Core performance metrics (most important for correlations)
+                    tao_score, stake_quality, buy_signal, emission_roi,
+                    -- Market dynamics (key metrics)
+                    market_cap_tao, fdv_tao, price_7d_change, flow_24h,
+                    -- Network health (essential metrics)
+                    active_validators, validator_util_pct, total_stake_tao,
+                    -- Stake distribution (important for analysis)
+                    stake_hhi, gini_coeff_top_100,
+                    -- Token flow (key indicators)
+                    reserve_momentum, tao_in, alpha_circ
+                FROM metrics_snap 
+                WHERE timestamp >= NOW() - INTERVAL '{days_back} days'
+                ORDER BY timestamp DESC
+                LIMIT {limit}
+            """)
+        else:
+            # SQLite syntax with parameters
+            sql = text("""
+                SELECT 
+                    netuid, subnet_name, category, timestamp,
+                    -- Core performance metrics (most important for correlations)
+                    tao_score, stake_quality, buy_signal, emission_roi,
+                    -- Market dynamics (key metrics)
+                    market_cap_tao, fdv_tao, price_7d_change, flow_24h,
+                    -- Network health (essential metrics)
+                    active_validators, validator_util_pct, total_stake_tao,
+                    -- Stake distribution (important for analysis)
+                    stake_hhi, gini_coeff_top_100,
+                    -- Token flow (key indicators)
+                    reserve_momentum, tao_in, alpha_circ
+                FROM metrics_snap 
+                WHERE timestamp >= :cutoff_date
+                ORDER BY timestamp DESC
+                LIMIT :limit
+            """)
+        
+        # Execute with appropriate parameters
+        if 'postgresql' in ACTIVE_DATABASE_URL:
+            df = pd.read_sql(sql, session.bind)
+        else:
+            df = pd.read_sql(sql, session.bind, params={
+                'cutoff_date': cutoff_date,
+                'limit': limit
+            })
         
         # Ensure timestamp is properly converted to datetime
         if 'timestamp' in df.columns:
