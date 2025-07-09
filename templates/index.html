@@ -271,29 +271,35 @@
                         <div class="card-header">
                             <div class="card-icon">⚠️</div>
                             <h4>
-                                Emission-Farmer Watch-List
-                                <span class="tooltip-icon" title="We label a subnet ‘Emission-farmer’ when at least five metrics (emission ROI, stake concentration, validator utilisation, flow turnover, 30-day price trend) exceed risk thresholds. This is not a claim of scam; it’s a quantitative risk signal.">ⓘ</span>
+                                Emission-Farmer Watch-List ({{ landing_insights.farmer_watchlist|length }})
+                                <span class="tooltip-icon" title="On-chain metrics resemble high-emission, low-utility patterns. HHI=0-1, Quality=0-100, Util=%. DYOR." class="tooltip-icon">ⓘ</span>
                             </h4>
-                            <div class="card-count">{{ landing_insights.farmer_watchlist|length }}</div>
                         </div>
                         <div class="card-subheader">
-                            Subnets whose on-chain metrics resemble high-emission, low-utility patterns. Do your own research.
+                            DYOR.
                         </div>
                         <div class="card-content">
                             {% if landing_insights.farmer_watchlist %}
                                 {% for subnet in landing_insights.farmer_watchlist %}
                                 <div class="subnet-item">
                                     <div class="subnet-name">{% if subnet.name %}{{ subnet.name }} (#{{ subnet.netuid }}){% else %}Subnet #{{ subnet.netuid }}{% endif %}</div>
+                                    <div class="subnet-category">{{ subnet.category|replace('/', '/') }}</div>
                                     <div class="subnet-metrics">
-                                        <span class="metric">Farmer Score: {{ subnet.farmer_score }}</span>
-                                        <span class="metric">{{ subnet.category }}</span>
-                                    </div>
-                                    <div class="subnet-reason">
-                                        <strong>Top concerns:</strong>
+                                        <span class="metric">Farmer Score {{ "%.2f"|format(subnet.farmer_score) }}</span>
+                                        <span class="metric">— Top concerns:
                                         {% for metric in subnet.worst_metrics %}
-                                            {{ metric.metric }} ({{ metric.contribution }})
+                                            {% if metric.metric == 'Stake HHI' %}
+                                                HHI {{ "%.2f"|format(metric.contribution) }}
+                                            {% elif metric.metric == 'Stake Quality' %}
+                                                Quality {{ "%.2f"|format(metric.contribution) }}
+                                            {% elif metric.metric == 'Validator Util' %}
+                                                Util {{ "%.2f"|format(metric.contribution) }}
+                                            {% else %}
+                                                {{ metric.metric }} {{ "%.2f"|format(metric.contribution) }}
+                                            {% endif %}
                                             {% if not loop.last %}, {% endif %}
                                         {% endfor %}
+                                        </span>
                                     </div>
                                 </div>
                                 {% endfor %}
@@ -308,29 +314,35 @@
                         <div class="card-header">
                             <div class="card-icon">🚨</div>
                             <h4>
-                                Red-Flag: Emission Farming Risk
-                                <span class="tooltip-icon" title="We label a subnet ‘Emission-farmer’ when at least five metrics (emission ROI, stake concentration, validator utilisation, flow turnover, 30-day price trend) exceed risk thresholds. This is not a claim of scam; it’s a quantitative risk signal.">ⓘ</span>
+                                Red-Flag: Emission Farming Risk ({{ landing_insights.farmer_redflags|length }})
+                                <span class="tooltip-icon" title="On-chain metrics resemble high-emission, low-utility patterns. HHI=0-1, Quality=0-100, Util=%. DYOR.">ⓘ</span>
                             </h4>
-                            <div class="card-count">{{ landing_insights.farmer_redflags|length }}</div>
                         </div>
                         <div class="card-subheader">
-                            Subnets whose on-chain metrics resemble high-emission, low-utility patterns. Do your own research.
+                            DYOR.
                         </div>
                         <div class="card-content">
                             {% if landing_insights.farmer_redflags %}
                                 {% for subnet in landing_insights.farmer_redflags %}
                                 <div class="subnet-item">
                                     <div class="subnet-name">{% if subnet.name %}{{ subnet.name }} (#{{ subnet.netuid }}){% else %}Subnet #{{ subnet.netuid }}{% endif %}</div>
+                                    <div class="subnet-category">{{ subnet.category|replace('/', '/') }}</div>
                                     <div class="subnet-metrics">
-                                        <span class="metric">Farmer Score: {{ subnet.farmer_score }}</span>
-                                        <span class="metric">{{ subnet.category }}</span>
-                                    </div>
-                                    <div class="subnet-reason">
-                                        <strong>Critical issues:</strong>
+                                        <span class="metric">Farmer Score {{ "%.2f"|format(subnet.farmer_score) }}</span>
+                                        <span class="metric">— Top concerns:
                                         {% for metric in subnet.worst_metrics %}
-                                            {{ metric.metric }} ({{ metric.contribution }})
+                                            {% if metric.metric == 'Stake HHI' %}
+                                                HHI {{ "%.2f"|format(metric.contribution) }}
+                                            {% elif metric.metric == 'Stake Quality' %}
+                                                Quality {{ "%.2f"|format(metric.contribution) }}
+                                            {% elif metric.metric == 'Validator Util' %}
+                                                Util {{ "%.2f"|format(metric.contribution) }}
+                                            {% else %}
+                                                {{ metric.metric }} {{ "%.2f"|format(metric.contribution) }}
+                                            {% endif %}
                                             {% if not loop.last %}, {% endif %}
                                         {% endfor %}
+                                        </span>
                                     </div>
                                 </div>
                                 {% endfor %}
