@@ -812,8 +812,9 @@ def update_metrics_grid(search):
             else:
                 progress_formatted = "--"
             
-            # Format TAO-Score with color coding
-            tao_score = latest_metrics.tao_score
+            # Format TAO-Score with color coding (using configured column)
+            from config import TAO_SCORE_COLUMN
+            tao_score = getattr(latest_metrics, TAO_SCORE_COLUMN, None)
             if tao_score is not None:
                 # Color coding: green if >70, amber 40-70, red <40
                 if tao_score > 70:

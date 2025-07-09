@@ -11,7 +11,7 @@ from openai import OpenAI
 
 from .db import get_db
 from models import GptInsights, MetricsSnap, SubnetMeta, CategoryStats
-from config import OPENAI_KEY
+from config import OPENAI_KEY, TAO_SCORE_COLUMN
 
 logger = logging.getLogger(__name__)
 
@@ -205,7 +205,7 @@ def get_subnet_metrics_for_insight(netuid: int) -> Dict[str, Any]:
                 'price_1d_pct': round(latest_metrics.price_1d_change, 1) if latest_metrics.price_1d_change else None,
                 'price_7d_pct': round(latest_metrics.price_7d_change, 1) if latest_metrics.price_7d_change else None,
                 'price_30d_pct': round(latest_metrics.price_30d_change, 1) if latest_metrics.price_30d_change else None,
-                'tao_score': round(latest_metrics.tao_score, 1) if latest_metrics.tao_score else None,
+                'tao_score': round(getattr(latest_metrics, TAO_SCORE_COLUMN, None), 1) if getattr(latest_metrics, TAO_SCORE_COLUMN, None) else None,
                 'momentum_rank_pct': latest_metrics.momentum_rank_pct if hasattr(latest_metrics, 'momentum_rank_pct') else None,
                 'stake_rank_pct': latest_metrics.stake_quality_rank_pct if hasattr(latest_metrics, 'stake_quality_rank_pct') else None
             }
