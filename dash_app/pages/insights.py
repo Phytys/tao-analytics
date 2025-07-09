@@ -97,7 +97,7 @@ def get_time_series_data(days_back=30, limit=5000):
         return pd.DataFrame()
 
 def get_network_summary_stats():
-    """Get comprehensive network summary statistics using the same data source as other pages."""
+    """Get comprehensive network summary statistics using the same data source as other charts for consistency."""
     cache_key = 'network_summary_stats'
     
     # Try to get from cache first
@@ -106,28 +106,45 @@ def get_network_summary_stats():
         return cached_result
     
     try:
-        # Use the same data source as the screener page for consistency
+        # Use the same data source as other charts for consistency
         from services.db import load_screener_frame
         
-        # Get the same data that the screener page uses
+        # Get the same data that other charts use
         df = load_screener_frame()
         
-        # Calculate summary stats from the complete dataset
+        # Add buy_signal column if not present (for Heroku compatibility)
+        if 'buy_signal' not in df.columns:
+            try:
+                from services.gpt_insight import get_buy_signal_for_subnet
+                df['buy_signal'] = df['netuid'].apply(get_buy_signal_for_subnet)
+            except Exception as e:
+                print(f"Warning: Could not load buy signals: {e}")
+                # Set default buy signal values to avoid errors
+                df['buy_signal'] = 0
+        
+        # Calculate summary stats from the complete dataset with safe defaults
         stats = {
-            'total_subnets': len(df),
-            'total_market_cap_tao': df['market_cap_tao'].sum() if 'market_cap_tao' in df.columns else 0,
-            'total_stake_tao': df['total_stake_tao'].sum() if 'total_stake_tao' in df.columns else 0,
-            'avg_tao_score': df['tao_score'].mean() if 'tao_score' in df.columns else 0,
-            'avg_stake_quality': df['stake_quality'].mean() if 'stake_quality' in df.columns else 0,
-            'high_performers': len(df[df['tao_score'] >= 70]) if 'tao_score' in df.columns else 0,
-            'improving_subnets': len(df[df['flow_24h'] > 0]) if 'flow_24h' in df.columns else 0,
-            'strong_buy_signals': len(df[df['buy_signal'] >= 4]) if 'buy_signal' in df.columns else 0,
-            'total_validators': df['active_validators'].sum() if 'active_validators' in df.columns else 0,
-            'avg_validator_util': df['validator_util_pct'].mean() if 'validator_util_pct' in df.columns else 0,
-            'categories': df['primary_category'].nunique() if 'primary_category' in df.columns else 0,
-            'data_points': 'All active subnets',
-            'date_range': 'Current data'
+            'total_subnets': len(df) if not df.empty else 0,
+            'total_market_cap_tao': df['market_cap_tao'].sum() if 'market_cap_tao' in df.columns and not df.empty else 0,
+            'total_stake_tao': df['total_stake_tao'].sum() if 'total_stake_tao' in df.columns and not df.empty else 0,
+            'avg_tao_score': df['tao_score'].mean() if 'tao_score' in df.columns and not df.empty and len(df['tao_score'].dropna()) > 0 else 0,
+            'avg_stake_quality': df['stake_quality'].mean() if 'stake_quality' in df.columns and not df.empty and len(df['stake_quality'].dropna()) > 0 else 0,
+            'high_performers': len(df[df['tao_score'] >= 70]) if 'tao_score' in df.columns and not df.empty else 0,
+            'improving_subnets': len(df[df['flow_24h'] > 0]) if 'flow_24h' in df.columns and not df.empty else 0,
+            'strong_buy_signals': len(df[df['buy_signal'] >= 4]) if 'buy_signal' in df.columns and not df.empty else 0,
+            'total_validators': df['active_validators'].sum() if 'active_validators' in df.columns and not df.empty else 0,
+            'avg_validator_util': df['validator_util_pct'].mean() if 'validator_util_pct' in df.columns and not df.empty and len(df['validator_util_pct'].dropna()) > 0 else 0,
+            'categories': df['primary_category'].nunique() if 'primary_category' in df.columns and not df.empty else 0,
+            'data_points': 'All active subnets' if not df.empty else 'No data available',
+            'date_range': 'Current data' if not df.empty else 'No data available'
         }
+        
+        # Ensure all numeric values are properly formatted
+        for key in ['total_market_cap_tao', 'total_stake_tao', 'avg_tao_score', 'avg_stake_quality', 'avg_validator_util']:
+            if isinstance(stats[key], (int, float)):
+                stats[key] = float(stats[key])
+            else:
+                stats[key] = 0.0
         
         result = (stats, df)
         
@@ -135,10 +152,26 @@ def get_network_summary_stats():
         cache_set(cache_key, result, timeout=300)
         
         return result
+        
     except Exception as e:
         print(f"Error in get_network_summary_stats: {e}")
-        # Return empty stats if there's an error
-        return ({'total_subnets': 0, 'total_market_cap_tao': 0, 'avg_tao_score': 0, 'high_performers': 0, 'strong_buy_signals': 0, 'categories': 0, 'data_points': 'Error loading data', 'date_range': 'N/A'}, pd.DataFrame())
+        # Return safe defaults if there's an error
+        fallback_stats = {
+            'total_subnets': 0,
+            'total_market_cap_tao': 0,
+            'total_stake_tao': 0,
+            'avg_tao_score': 0,
+            'avg_stake_quality': 0,
+            'high_performers': 0,
+            'improving_subnets': 0,
+            'strong_buy_signals': 0,
+            'total_validators': 0,
+            'avg_validator_util': 0,
+            'categories': 0,
+            'data_points': 'Error loading data',
+            'date_range': 'Error loading data'
+        }
+        return (fallback_stats, pd.DataFrame())
 
 def create_metric_trend_chart(df, metric, title, color='#3e6ae1', aggregation='mean'):
     """Create a trend chart for any metric with flexible aggregation."""
