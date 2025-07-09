@@ -856,7 +856,7 @@ def load_overview_data(pathname):
         
         result = {
             'stats': stats,
-            'categories': sorted(latest_df['primary_category'].unique().tolist()) if latest_df is not None and not latest_df.empty and 'primary_category' in latest_df.columns else []
+            'categories': sorted(latest_df['primary_category'].dropna().unique().tolist()) if latest_df is not None and not latest_df.empty and 'primary_category' in latest_df.columns else []
         }
         return result
     except Exception as e:
