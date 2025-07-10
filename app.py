@@ -39,10 +39,7 @@ def create_app():
     
     # Initialize cache with SSL bypass for Heroku
     from services.cache_utils import init_cache
-    cache = init_cache(server)
-    
-    # Make cache available globally
-    server.cache = cache
+    init_cache(server)
 
     # Security headers
     Talisman(server, 
