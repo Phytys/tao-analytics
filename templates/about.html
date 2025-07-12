@@ -14,6 +14,23 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap" rel="stylesheet">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ request.url }}">
+    <meta property="og:title" content="About Bittensor - TAO Analytics">
+    <meta property="og:description" content="Learn about Bittensor, the decentralized AI network, and how subnets work. Educational content about the future of AI and blockchain.">
+    <meta property="og:image" content="{{ url_for('static', filename='favicon.png', _external=True) }}">
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="{{ request.url }}">
+    <meta property="twitter:title" content="About Bittensor - TAO Analytics">
+    <meta property="twitter:description" content="Learn about Bittensor, the decentralized AI network, and how subnets work. Educational content about the future of AI and blockchain.">
+    <meta property="twitter:image" content="{{ url_for('static', filename='favicon.png', _external=True) }}">
+    
+    <!-- Canonical URL -->
+    <link rel="canonical" href="{{ request.url }}">
 </head>
 <body>
     <div class="hero-section">
@@ -305,6 +322,69 @@
                 }
             });
         });
+    </script>
+    
+    <!-- Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": "About Bittensor - Understanding the Decentralized AI Network",
+        "description": "Learn about Bittensor, the decentralized AI network, and how subnets work. Educational content about the future of AI and blockchain.",
+        "author": {
+            "@type": "Organization",
+            "name": "TAO Analytics"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "TAO Analytics",
+            "logo": {
+                "@type": "ImageObject",
+                "url": "{{ url_for('static', filename='favicon.png', _external=True) }}"
+            }
+        },
+        "datePublished": "2024-01-01",
+        "dateModified": "2024-01-15",
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "{{ request.url }}"
+        },
+        "keywords": "Bittensor, decentralized AI, subnets, blockchain, AI network, TAO token, cryptocurrency, artificial intelligence"
+    }
+    </script>
+    
+    <!-- FAQ Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+            {
+                "@type": "Question",
+                "name": "What is Bittensor?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Bittensor is a decentralized network that incentivizes the development and deployment of AI models. It creates a marketplace where AI developers can monetize their models while users can access a diverse range of AI services."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "How do subnets work?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Subnets are specialized networks within Bittensor that focus on specific AI tasks or domains. Each subnet has its own set of validators and miners who compete to provide the best AI services."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What is TAO Analytics?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "TAO Analytics provides comprehensive insights into the Bittensor network, helping users make informed decisions about subnet participation and investment opportunities through data-driven metrics and analysis."
+                }
+            }
+        ]
+    }
     </script>
 </body>
 </html> 

@@ -166,6 +166,12 @@ def create_app():
             logger.error(f"Search error: {e}")
             return jsonify({'results': [], 'error': 'Search failed'})
 
+    @server.route('/sitemap.xml')
+    def sitemap():
+        """Serve sitemap.xml."""
+        from flask import send_file
+        return send_file('sitemap.xml', mimetype='application/xml')
+
     @server.route('/admin/system-info')
     @require_admin
     @limiter.limit("30 per minute")

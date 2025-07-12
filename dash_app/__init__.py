@@ -8,7 +8,6 @@ import dash_bootstrap_components as dbc
 from dash_app.pages.explorer import layout as explorer_layout
 from dash_app.pages.system_info import layout as system_info_layout
 from dash_app.pages.subnet_detail import layout as subnet_detail_layout
-from dash_app.pages.sdk_poc import layout as sdk_poc_layout
 from dash_app.pages.screener import layout as screener_layout
 from dash_app.pages.insights import layout as insights_layout
 
@@ -27,7 +26,8 @@ def create_dash(server):
             "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap",
             "https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap",
             "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css",
-            "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css"
+            "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css",
+            "/assets/breadcrumb.css"
         ],
         suppress_callback_exceptions=True,
         title="Bittensor Subnet Explorer - TAO Analytics",
@@ -65,6 +65,11 @@ def create_dash(server):
             <!-- Canonical URL -->
             <link rel="canonical" href="{{ request.url }}">
             
+            <!-- Resource hints for performance -->
+            <link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link rel="preload" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" as="style">
+            
             {%favicon%}
             {%css%}
         </head>
@@ -77,29 +82,94 @@ def create_dash(server):
             </footer>
             
             <script>
-                // Update page title based on current URL
-                function updatePageTitle() {
+                // Update page title and meta tags based on current URL
+                function updatePageSEO() {
                     const pathname = window.location.pathname;
+                    const search = window.location.search;
+                    
+                    // Update title and meta tags based on page
                     if (pathname === '/dash/system-info') {
                         document.title = 'System Information - TAO Analytics';
+                        updateMetaTags('System Information - TAO Analytics', 'Administrative dashboard for system performance and data quality monitoring.');
                     } else if (pathname === '/dash/explorer' || pathname === '/dash/') {
                         document.title = 'Bittensor Subnet Explorer - TAO Analytics';
+                        updateMetaTags('Bittensor Subnet Explorer - TAO Analytics', 'Discover and explore AI subnets on the Bittensor network with comprehensive analytics and filtering.');
+                    } else if (pathname === '/dash/screener') {
+                        document.title = 'Bittensor Subnet Screener - TAO Analytics';
+                        updateMetaTags('Bittensor Subnet Screener - TAO Analytics', 'Advanced screening and filtering tools for Bittensor subnets with momentum analysis and buy signals.');
+                    } else if (pathname === '/dash/insights') {
+                        document.title = 'Bittensor Network Insights - TAO Analytics';
+                        updateMetaTags('Bittensor Network Insights - TAO Analytics', 'Comprehensive time series analytics and network performance insights for Bittensor subnets.');
+                    } else if (pathname === '/dash/correlation') {
+                        document.title = 'Bittensor Correlation Analysis - TAO Analytics';
+                        updateMetaTags('Bittensor Correlation Analysis - TAO Analytics', 'Statistical correlation analysis between Bittensor subnet metrics and performance indicators.');
+                    } else if (pathname.startsWith('/dash/subnet-detail')) {
+                        const netuid = new URLSearchParams(search).get('netuid');
+                        document.title = `Subnet ${netuid} - TAO Analytics`;
+                        updateMetaTags(`Subnet ${netuid} - TAO Analytics`, `Detailed analytics and insights for Bittensor subnet ${netuid}.`);
                     } else {
                         document.title = 'TAO Analytics Dashboard';
+                        updateMetaTags('TAO Analytics Dashboard', 'Comprehensive analytics and insights for the Bittensor decentralized AI network.');
                     }
                 }
                 
-                // Update title on page load
-                updatePageTitle();
+                // Update meta tags dynamically
+                function updateMetaTags(title, description) {
+                    // Update meta description
+                    let metaDesc = document.querySelector('meta[name="description"]');
+                    if (!metaDesc) {
+                        metaDesc = document.createElement('meta');
+                        metaDesc.name = 'description';
+                        document.head.appendChild(metaDesc);
+                    }
+                    metaDesc.content = description;
+                    
+                    // Update Open Graph tags
+                    let ogTitle = document.querySelector('meta[property="og:title"]');
+                    if (!ogTitle) {
+                        ogTitle = document.createElement('meta');
+                        ogTitle.setAttribute('property', 'og:title');
+                        document.head.appendChild(ogTitle);
+                    }
+                    ogTitle.content = title;
+                    
+                    let ogDesc = document.querySelector('meta[property="og:description"]');
+                    if (!ogDesc) {
+                        ogDesc = document.createElement('meta');
+                        ogDesc.setAttribute('property', 'og:description');
+                        document.head.appendChild(ogDesc);
+                    }
+                    ogDesc.content = description;
+                    
+                    // Update Twitter tags
+                    let twitterTitle = document.querySelector('meta[property="twitter:title"]');
+                    if (!twitterTitle) {
+                        twitterTitle = document.createElement('meta');
+                        twitterTitle.setAttribute('property', 'twitter:title');
+                        document.head.appendChild(twitterTitle);
+                    }
+                    twitterTitle.content = title;
+                    
+                    let twitterDesc = document.querySelector('meta[property="twitter:description"]');
+                    if (!twitterDesc) {
+                        twitterDesc = document.createElement('meta');
+                        twitterDesc.setAttribute('property', 'twitter:description');
+                        document.head.appendChild(twitterDesc);
+                    }
+                    twitterDesc.content = description;
+                }
                 
-                // Update title when URL changes (for SPA navigation)
-                window.addEventListener('popstate', updatePageTitle);
+                // Update SEO on page load
+                updatePageSEO();
+                
+                // Update SEO when URL changes (for SPA navigation)
+                window.addEventListener('popstate', updatePageSEO);
                 
                 // Monitor for URL changes in Dash
                 const observer = new MutationObserver(function(mutations) {
                     mutations.forEach(function(mutation) {
                         if (mutation.type === 'childList') {
-                            updatePageTitle();
+                            updatePageSEO();
                         }
                     });
                 });
@@ -153,6 +223,9 @@ def create_dash(server):
                 ], className="nav-links", id="nav-links")
             ], className="nav-container")
         ], className="navbar"),
+        
+        # Breadcrumb navigation
+        html.Div(id="breadcrumb-container", className="breadcrumb-container", style={"display": "none"}),
         
         # Page content
         html.Div(id="page-content"),
@@ -222,9 +295,6 @@ def create_dash(server):
         if pathname == "/dash/subnet-detail":
             return subnet_detail_layout
         
-        if pathname == "/dash/sdk-poc":
-            return sdk_poc_layout()
-        
         if pathname == "/dash/screener":
             return screener_layout
         
@@ -252,6 +322,83 @@ def create_dash(server):
             return {"display": "block"}
         else:
             return {"display": "none"}
+    
+    # Breadcrumb navigation callback
+    @app.callback(
+        dash.Output("breadcrumb-container", "children"),
+        dash.Output("breadcrumb-container", "style"),
+        dash.Input("url", "pathname"),
+        dash.Input("url", "search")
+    )
+    def update_breadcrumb(pathname, search):
+        if not pathname or pathname == "/":
+            return [], {"display": "none"}
+        
+        breadcrumb_items = []
+        
+        # Home link
+        breadcrumb_items.append(
+            html.Li([
+                html.A("Home", href="/", className="breadcrumb-link")
+            ], className="breadcrumb-item")
+        )
+        
+        # Page-specific breadcrumbs
+        if pathname.startswith("/dash/"):
+            breadcrumb_items.append(
+                html.Li([
+                    html.A("Dashboard", href="/dash/explorer", className="breadcrumb-link")
+                ], className="breadcrumb-item")
+            )
+            
+            if pathname == "/dash/explorer":
+                breadcrumb_items.append(
+                    html.Li("Explorer", className="breadcrumb-item breadcrumb-current")
+                )
+            elif pathname == "/dash/screener":
+                breadcrumb_items.append(
+                    html.Li("Screener", className="breadcrumb-item breadcrumb-current")
+                )
+            elif pathname == "/dash/insights":
+                breadcrumb_items.append(
+                    html.Li("Insights", className="breadcrumb-item breadcrumb-current")
+                )
+            elif pathname == "/dash/correlation":
+                breadcrumb_items.append(
+                    html.Li("Correlation", className="breadcrumb-item breadcrumb-current")
+                )
+            elif pathname == "/dash/subnet-detail":
+                # Extract netuid from search parameters
+                netuid = None
+                if search and 'netuid=' in search:
+                    try:
+                        netuid = search.split('netuid=')[1].split('&')[0]
+                    except:
+                        netuid = None
+                
+                if netuid:
+                    breadcrumb_items.append(
+                        html.Li([
+                            html.A("Explorer", href="/dash/explorer", className="breadcrumb-link")
+                        ], className="breadcrumb-item")
+                    )
+                    breadcrumb_items.append(
+                        html.Li(f"Subnet {netuid}", className="breadcrumb-item breadcrumb-current")
+                    )
+                else:
+                    breadcrumb_items.append(
+                        html.Li("Subnet Detail", className="breadcrumb-item breadcrumb-current")
+                    )
+            elif pathname == "/dash/system-info":
+                breadcrumb_items.append(
+                    html.Li("System Info", className="breadcrumb-item breadcrumb-current")
+                )
+        elif pathname == "/about":
+            breadcrumb_items.append(
+                html.Li("About", className="breadcrumb-item breadcrumb-current")
+            )
+        
+        return html.Ol(breadcrumb_items, className="breadcrumb"), {"display": "block"}
     
     # Global search callback
     @app.callback(
@@ -366,4 +513,5 @@ def create_dash(server):
         finally:
             session.close()
     
+    return app 
     return app 

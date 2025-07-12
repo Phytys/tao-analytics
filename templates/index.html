@@ -31,6 +31,8 @@
     <!-- Favicon configuration -->
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}?v=2">
     <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}?v=2">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='favicon.png') }}">
+    <meta name="theme-color" content="#3e6ae1">
     
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -690,7 +692,34 @@
             "@type": "Organization",
             "name": "TAO Analytics"
         },
-        "keywords": "Bittensor, TAO, subnet analytics, decentralized AI, blockchain analytics"
+        "keywords": "Bittensor, TAO, subnet analytics, decentralized AI, blockchain analytics",
+        "featureList": [
+            "Real-time subnet analytics",
+            "AI-powered insights",
+            "Market cap tracking",
+            "Network health monitoring",
+            "Correlation analysis"
+        ],
+        "screenshot": "{{ url_for('static', filename='favicon.png', _external=True) }}",
+        "softwareVersion": "1.0",
+        "datePublished": "2024-01-01",
+        "dateModified": "{{ network_data.last_updated if network_data and network_data.last_updated else '2024-01-15' }}"
+    }
+    </script>
+    
+    <!-- Additional structured data for organization -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "TAO Analytics",
+        "url": "{{ request.url_root }}",
+        "logo": "{{ url_for('static', filename='favicon.png', _external=True) }}",
+        "description": "Comprehensive analytics and insights for the Bittensor decentralized AI network",
+        "sameAs": [
+            "https://www.linkedin.com/in/glenn-landgren/?originalSubdomain=se",
+            "https://x.com/_landgren_"
+        ]
     }
     </script>
 </body>

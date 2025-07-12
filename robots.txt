@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /dash/system-info
+Disallow: /dash/sdk-poc
+Disallow: /api/
+
+# Allow static assets
+Allow: /static/
+Allow: /assets/
+
+# Sitemap location
+Sitemap: https://www.taoanalytics.app/sitemap.xml 
