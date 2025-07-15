@@ -113,29 +113,7 @@
                         <span class="tooltip-icon">ⓘ</span>
                     </span>
                 </div>
-                <div class="stat-item" data-tooltip="Current price of TAO token in US dollars">
-                    <span class="stat-number">${{ "%.2f"|format(network_data.tao_price_usd) }}</span>
-                    <span class="stat-label">
-                        TAO Price (USD)
-                        <span class="tooltip-icon">ⓘ</span>
-                    </span>
-                </div>
-                <div class="stat-item" data-tooltip="Number of subnets with valid TAO scores and positive 24-hour net volume (more TAO flowing in than out)">
-                    <span class="stat-number">{{ network_data.positive_flow_count }}</span>
-                    <span class="stat-label">
-                        Positive Flow
-                        <span class="tooltip-icon">ⓘ</span>
-                    </span>
-                    <span class="stat-note" style="font-size: 0.7em; color: #666; display: block; margin-top: 2px;">with valid TAO score</span>
-                </div>
-                <div class="stat-item" data-tooltip="Percentage of subnets with valid TAO scores that have positive 24-hour net volume. Higher percentage indicates more subnets are experiencing net inflows">
-                    <span class="stat-number">{{ "%.1f"|format(network_data.positive_flow_percentage) }}%</span>
-                    <span class="stat-label">
-                        Positive Flow %
-                        <span class="tooltip-icon">ⓘ</span>
-                    </span>
-                    <span class="stat-note" style="font-size: 0.7em; color: #666; display: block; margin-top: 2px;">with valid TAO score</span>
-                </div>
+
                 {% else %}
                 <div class="data-error-message">
                     <div class="error-icon">⚠️</div>
